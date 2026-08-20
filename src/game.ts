@@ -9,7 +9,7 @@ import {
   type UndoAction,
   type UndoStack,
 } from './game/commanderDamage';
-import { PassTurnControl } from './ui/controls';
+import { PassTurnControl, UndoControl } from './ui/controls';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -95,15 +95,30 @@ class ArrayUndoStack implements UndoStack {
   push(action: UndoAction): void {
     this.actions.push(action);
   }
+
+  /** Pops and invokes the most recent action's undo(). Returns false if the stack was empty. */
+  undo(): boolean {
+    const action = this.actions.pop();
+    if (!action) {
+      return false;
+    }
+    action.undo();
+    return true;
+  }
+
+  canUndo(): boolean {
+    return this.actions.length > 0;
+  }
 }
 
 export class Game {
   readonly playerCount: number;
   private turnState: TurnState = createTurnState();
   private readonly control = new PassTurnControl();
+  private readonly undoControl = new UndoControl();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
-  private readonly stack: UndoStack = new ArrayUndoStack();
+  private readonly stack = new ArrayUndoStack();
   private readonly popupsList: DeltaPopup[] = [];
   private height = 0;
   private hold: HoldState | undefined;
@@ -154,6 +169,11 @@ export class Game {
     return this.popupsList;
   }
 
+  /** True when there is at least one action to undo. */
+  get canUndo(): boolean {
+    return this.stack.canUndo();
+  }
+
   /** True once the game has ended, manually or automatically. */
   get ended(): boolean {
     return this.endedFlag;
@@ -179,6 +199,16 @@ export class Game {
   /** True when (x, y) — in the same coordinate space passed to resize — is over the shared center control. */
   isOverControl(x: number, y: number): boolean {
     return this.control.containsPoint(x, y);
+  }
+
+  /** True when (x, y) — in the same coordinate space passed to resize — is over the undo icon beside the shared center control. */
+  isOverUndoControl(x: number, y: number): boolean {
+    return this.undoControl.containsPoint(x, y);
+  }
+
+  /** Reverts the most recent life or commander-damage change. No-op if nothing to undo. */
+  undo(): void {
+    this.stack.undo();
   }
 
   /** Ends the game, e.g. from a long-press on the shared center control. No-op once already ended. */
@@ -241,9 +271,15 @@ export class Game {
   resize(width: number, height: number): void {
     this.height = height;
     this.control.reflow(width, height);
+    this.undoControl.reflow(width, height);
   }
 
   onTap(x: number, y: number): void {
+    if (this.undoControl.containsPoint(x, y)) {
+      this.undo();
+      return;
+    }
+
     if (this.control.containsPoint(x, y)) {
       this.turnState = advanceTurn(this.turnState, this.playerCount);
       return;
@@ -287,7 +323,7 @@ export class Game {
 
   /** Returns the id of the player zone under (x, y), or null over the shared control or outside any zone. */
   onLongPress(x: number, y: number): string | null {
-    if (this.control.containsPoint(x, y)) {
+    if (this.control.containsPoint(x, y) || this.undoControl.containsPoint(x, y)) {
       return null;
     }
     return this.playerIdAt(x, y);
@@ -367,6 +403,7 @@ export class Game {
     this.drawZones(ctx, width, height);
     this.drawPopups(ctx);
     this.control.draw(ctx);
+    this.undoControl.draw(ctx, this.canUndo);
   }
 
   private drawPopups(ctx: CanvasRenderingContext2D): void {
