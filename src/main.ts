@@ -1,5 +1,6 @@
 import { computeOverlaySafeArea, Game, type GameConfig } from './game';
-import { attachTapAndLongPress, DamagePanel } from './ui/damagePanel';
+import { attachTapAndLongPress } from './ui/damagePanel';
+import { AttackMenu } from './ui/attackMenu';
 import { SetupScreen } from './ui/setupScreen';
 import { StatsScreen } from './ui/statsScreen';
 import { WebAudioSoundPlayer } from './audio/webAudioSoundPlayer';
@@ -15,7 +16,7 @@ function resize(): void {
   canvas.height = Math.round(window.innerHeight * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Drives the --overlay-max-h CSS var read by setupScreen/damagePanel/
+  // Drives the --overlay-max-h CSS var read by setupScreen/attackMenu/
   // statsScreen so they can't grow taller than the (possibly short,
   // landscape) viewport and bury the game behind them. See issue #45.
   const { maxHeight } = computeOverlaySafeArea(window.innerWidth, window.innerHeight);
@@ -33,7 +34,7 @@ function startGame(config: GameConfig): void {
   cleanupGame?.();
 
   const game = new Game(config, sound);
-  const damagePanel = new DamagePanel({
+  const attackMenu = new AttackMenu({
     root: document.body,
     players: game.players,
     damageState: game.damageState,
@@ -45,36 +46,62 @@ function startGame(config: GameConfig): void {
   canvas.style.display = 'block';
 
   const isOverAnyControl = (event: PointerEvent): boolean =>
-    game.isOverControl(event.clientX, event.clientY) || game.isOverUndoControl(event.clientX, event.clientY);
+    game.isOverControl(event.clientX, event.clientY) ||
+    game.isOverUndoControl(event.clientX, event.clientY) ||
+    game.isOverEndControl(event.clientX, event.clientY);
+
+  // Tracks where the current press started so onTap (pointerup) can tell a
+  // plain tap from a zone-to-zone drag: released in the same zone (or a
+  // control) it's a tap, released in a different zone it's a drag-attack.
+  let pressStart: { x: number; y: number } | null = null;
 
   const detachGesture = attachTapAndLongPress(canvas, {
     onPressStart: (event) => {
       // Zone taps apply on pointerdown so a held press can ramp across
-      // animation frames; a later long-press reverts this via cancelTap().
-      // Control taps stay deferred to onTap (pointerup) since they never
-      // ramp, which also keeps a long-press from passing the turn early.
-      if (!isOverAnyControl(event)) {
-        game.onTap(event.clientX, event.clientY);
+      // animation frames; a drag or long-press reverts this via
+      // cancelTap(). Control taps stay deferred to onTap (pointerup) since
+      // they never ramp, which also keeps a long-press from passing the
+      // turn early.
+      if (isOverAnyControl(event)) {
+        pressStart = null;
+        return;
       }
+      pressStart = { x: event.clientX, y: event.clientY };
+      game.onTap(event.clientX, event.clientY);
     },
     onTap: (event) => {
       if (isOverAnyControl(event)) {
+        // Revert the optimistic zone tap from onPressStart (if any) before
+        // running the control's action: a press that started in a player's
+        // zone but released over a shared control is a drag onto that
+        // control, not a zone tap followed by a control tap. Without this,
+        // releasing an attack-drag over undo/end-game/pass-turn silently
+        // left the pending zone life change in place, or (worse) let it
+        // coincide with ending the game. See PR #53 review.
+        game.cancelTap();
         game.onTap(event.clientX, event.clientY);
+        return;
+      }
+      if (!pressStart) {
+        return;
+      }
+      const drag = game.resolveZoneDrag(pressStart.x, pressStart.y, event.clientX, event.clientY);
+      if (drag) {
+        game.cancelTap();
+        attackMenu.open(drag.fromPlayerId, drag.toPlayerId);
       }
     },
     onLongPress: (event) => {
       if (game.isOverControl(event.clientX, event.clientY)) {
-        game.endGame();
-        return;
+        game.passTurn();
       }
-      game.cancelTap();
-      const playerId = game.onLongPress(event.clientX, event.clientY);
-      if (playerId) {
-        damagePanel.open(playerId);
-      }
+      // Zone long-presses now just continue the tap-and-hold ramp already
+      // armed by onPressStart — commander-damage/poison assignment moved to
+      // the zone-to-zone drag gesture handled by onTap above.
     },
     onPressEnd: () => {
       game.onTapEnd();
+      pressStart = null;
     },
   });
 
@@ -96,7 +123,7 @@ function startGame(config: GameConfig): void {
   cleanupGame = (): void => {
     cancelAnimationFrame(rafId);
     detachGesture();
-    damagePanel.close();
+    attackMenu.close();
     canvas.style.display = 'none';
   };
 

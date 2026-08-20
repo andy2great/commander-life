@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PassTurnControl, RADIUS_RATIO, UndoControl, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './controls';
+import { EndGameControl, PassTurnControl, RADIUS_RATIO, UndoControl, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './controls';
 
 // Common phone widths this app must stay comfortably tappable on, per #31/#38.
 const PHONE_WIDTHS = [360, 390, 414, 430];
@@ -16,6 +16,12 @@ describe('touch target sizing', () => {
   });
 
   it.each(PHONE_WIDTHS)('UndoControl hit-circle meets the minimum touch target at %ipx width', (width) => {
+    expect(UNDO_RADIUS_RATIO * width * 2).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
+  });
+
+  // EndGameControl (issue #48) reuses UndoControl's sizing ratios, mirrored
+  // to the opposite side of the center control, so it meets the same target.
+  it.each(PHONE_WIDTHS)('EndGameControl hit-circle meets the minimum touch target at %ipx width', (width) => {
     expect(UNDO_RADIUS_RATIO * width * 2).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
   });
 
@@ -77,5 +83,24 @@ describe('shared control layout', () => {
     // real margin rather than a token separation.
     const gapPx = width * UNDO_GAP_RATIO;
     expect(gapPx).toBeGreaterThanOrEqual(16);
+  });
+
+  it.each(PHONE_WIDTHS)('keeps the end-game icon fully on-canvas and separated from the pass-turn control at %ipx width (issue #48)', (width) => {
+    const height = width * 2;
+    const control = new PassTurnControl();
+    const endControl = new EndGameControl();
+    control.reflow(width, height, height / 2);
+    endControl.reflow(width, height, height / 2);
+
+    const mainRadius = width * RADIUS_RATIO;
+    const endRadius = width * UNDO_RADIUS_RATIO;
+    const gap = width * UNDO_GAP_RATIO;
+    const endCenterX = width / 2 - mainRadius - gap - endRadius;
+
+    // Right edge of the end-game hit-circle never touches the main control's
+    // hit-circle: the gap is added between them by construction.
+    expect(endCenterX + endRadius).toBeLessThan(width / 2 - mainRadius);
+    // Left edge of the end-game hit-circle stays within the canvas.
+    expect(endCenterX - endRadius).toBeGreaterThanOrEqual(0);
   });
 });

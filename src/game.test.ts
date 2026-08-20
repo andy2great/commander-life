@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
+import { Game, RAMP_DELAY_S, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
 import { applyPoisonDelta } from './game/poison';
 import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
@@ -20,6 +20,14 @@ function undoControlCenter(width: number, height: number): { x: number; y: numbe
   return { x: width / 2 + mainRadius + shortSide * UNDO_GAP_RATIO + undoRadius, y: height / 2 };
 }
 
+/** Mirrors EndGameControl's reflow math (opposite side of the center control from UndoControl). */
+function endControlCenter(width: number, height: number): { x: number; y: number } {
+  const shortSide = Math.min(width, height);
+  const mainRadius = shortSide * RADIUS_RATIO;
+  const endRadius = shortSide * UNDO_RADIUS_RATIO;
+  return { x: width / 2 - mainRadius - shortSide * UNDO_GAP_RATIO - endRadius, y: height / 2 };
+}
+
 describe('clamp', () => {
   it('returns the value when inside the range', () => {
     expect(clamp(5, 0, 10)).toBe(5);
@@ -35,13 +43,23 @@ describe('clamp', () => {
 });
 
 describe('Game', () => {
-  it('advances the active player when the center control is tapped', () => {
+  it('advances the active player when passTurn() is called (e.g. long-pressing the center control)', () => {
     const game = new Game();
     game.resize(400, 800);
 
-    game.onTap(200, 400);
+    game.passTurn();
 
     expect(game.activeIndex).toBe(1);
+  });
+
+  it('no longer advances the active player on a plain tap of the center control (issue #48)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+
+    expect(game.isOverControl(200, 400)).toBe(true);
+    game.onTap(200, 400);
+
+    expect(game.activeIndex).toBe(0);
   });
 
   it('ignores taps outside the control', () => {
@@ -58,7 +76,7 @@ describe('Game', () => {
     game.resize(400, 800);
 
     for (let i = 0; i < game.playerCount; i += 1) {
-      game.onTap(200, 400);
+      game.passTurn();
     }
 
     expect(game.activeIndex).toBe(0);
@@ -151,7 +169,7 @@ describe('Game', () => {
     expect(player.life).toBe(39);
   });
 
-  it('does not change any life total when tapping the shared center control', () => {
+  it('does not change any life total or active player when tapping the shared center control', () => {
     const game = new Game();
     game.resize(400, 800);
     const livesBefore = game.players.map((player) => player.life);
@@ -159,7 +177,7 @@ describe('Game', () => {
     game.onTap(200, 400);
 
     expect(game.players.map((player) => player.life)).toEqual(livesBefore);
-    expect(game.activeIndex).toBe(1);
+    expect(game.activeIndex).toBe(0);
   });
 
   it('undoes a turn pass, restoring the previous active player and turn count', () => {
@@ -168,7 +186,7 @@ describe('Game', () => {
     const livesBefore = game.players.map((player) => player.life);
 
     for (let i = 0; i < game.playerCount; i += 1) {
-      game.onTap(200, 400);
+      game.passTurn();
     }
     expect(game.activeIndex).toBe(0);
     expect(game.turnCount).toBe(1);
@@ -188,7 +206,7 @@ describe('Game', () => {
 
     game.onTap(50, zoneHeight + 10); // life: 40 -> 41
     game.onTapEnd();
-    game.onTap(200, 400); // pass turn: activeIndex 0 -> 1
+    game.passTurn(); // pass turn: activeIndex 0 -> 1
     game.onTap(50, zoneHeight + 10); // life: 41 -> 42
     game.onTapEnd();
 
@@ -295,6 +313,137 @@ describe('Game', () => {
     const undoCenter = undoControlCenter(400, 800);
 
     expect(game.onLongPress(undoCenter.x, undoCenter.y)).toBeNull();
+  });
+
+  it('tapping the end-game icon ends the game (issue #48)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const endCenter = endControlCenter(400, 800);
+
+    expect(game.isOverEndControl(endCenter.x, endCenter.y)).toBe(true);
+    expect(game.ended).toBe(false);
+
+    game.onTap(endCenter.x, endCenter.y);
+
+    expect(game.ended).toBe(true);
+  });
+
+  it('does not resolve a zone-to-zone target over the end-game icon', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const endCenter = endControlCenter(400, 800);
+
+    expect(game.onLongPress(endCenter.x, endCenter.y)).toBeNull();
+  });
+
+  describe('resolveZoneDrag (issue #48)', () => {
+    it('resolves a drag from one zone to a different zone, without itself changing any total', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const livesBefore = game.players.map((player) => player.life);
+
+      const drag = game.resolveZoneDrag(50, zoneHeight + 10, 50, zoneHeight * 2 + 10);
+
+      expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[2].id });
+      expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+      expect(game.damageState[game.players[2].id][game.players[0].id]).toBe(0);
+    });
+
+    it('returns null when the drag starts and ends in the same zone', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      expect(game.resolveZoneDrag(50, 10, 70, zoneHeight - 10)).toBeNull();
+    });
+
+    it('returns null when either end is outside every player zone', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      expect(game.resolveZoneDrag(200, 400, 50, zoneHeight + 10)).toBeNull(); // starts over the center control
+      expect(game.resolveZoneDrag(50, zoneHeight + 10, 200, 400)).toBeNull(); // ends over the center control
+    });
+  });
+
+  describe('drag release onto a shared control (PR #53 review)', () => {
+    // main.ts applies a zone tap optimistically on pointerdown (so a held
+    // press can ramp), then reverts it with cancelTap() if the press
+    // resolves as something other than a plain zone tap — a zone-to-zone
+    // drag, or (per this fix) a release over a shared control. This mirrors
+    // main.ts's onTap(pointerup) handler for the isOverAnyControl branch:
+    // cancelTap() runs before the control's own action.
+    function simulatePressReleasedOverControl(
+      game: Game,
+      press: { x: number; y: number },
+      release: { x: number; y: number },
+    ): void {
+      game.onTap(press.x, press.y); // onPressStart's optimistic zone tap
+      game.cancelTap(); // main.ts's onTap handler reverts it first
+      game.onTap(release.x, release.y); // then runs the control's action
+      game.onTapEnd();
+    }
+
+    it('leaves life and popups untouched when a drag from a zone releases on the center control', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const livesBefore = game.players.map((player) => player.life);
+
+      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, { x: 200, y: 400 });
+
+      expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+      expect(game.popups).toHaveLength(0);
+    });
+
+    it('leaves life untouched when a drag from a zone releases on the end-game icon (the icon itself still ends the game, as a genuine tap there would)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const livesBefore = game.players.map((player) => player.life);
+      const endCenter = endControlCenter(400, 800);
+
+      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, endCenter);
+
+      expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+      expect(game.ended).toBe(true);
+    });
+
+    it('leaves life untouched, and does not silently consume an unrelated undo, when a drag from a zone releases on the undo icon', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const undoCenter = undoControlCenter(400, 800);
+
+      // An unrelated action already sits on top of the undo stack.
+      game.passTurn();
+      const activeIndexBeforeUndo = game.activeIndex;
+
+      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, undoCenter);
+
+      expect(game.players[0].life).toBe(40);
+      // The undo icon undoes the real last action (the turn pass), not a
+      // pending zone tap that happened to also be sitting on the stack.
+      expect(game.activeIndex).not.toBe(activeIndexBeforeUndo);
+    });
+  });
+
+  it('cancelTap fully reverts a hold even after the ramp has ticked (needed so a slow zone-to-zone drag leaves no residual life change)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight + 10); // life: 40 -> 41
+    game.update(RAMP_DELAY_S + 0.25); // ramp ticks at least once more
+    expect(player.life).toBeGreaterThan(41);
+
+    game.cancelTap();
+
+    expect(player.life).toBe(40);
+    expect(game.popups).toHaveLength(0);
   });
 
   it('ramps repeated life changes while a zone tap is held, accelerating after ~600ms', () => {
@@ -495,14 +644,24 @@ describe('sound triggers', () => {
     expect(sound.events).toEqual(['lifeUp', 'lifeDown']);
   });
 
-  it('plays turnPass when the shared center control is tapped', () => {
+  it('plays turnPass when passTurn() is called (e.g. long-pressing the shared center control)', () => {
+    const sound = new MockSoundPlayer();
+    const game = new Game(undefined, sound);
+    game.resize(400, 800);
+
+    game.passTurn();
+
+    expect(sound.events).toEqual(['turnPass']);
+  });
+
+  it('plays no sound when the shared center control is merely tapped (issue #48)', () => {
     const sound = new MockSoundPlayer();
     const game = new Game(undefined, sound);
     game.resize(400, 800);
 
     game.onTap(200, 400);
 
-    expect(sound.events).toEqual(['turnPass']);
+    expect(sound.events).toEqual([]);
   });
 
   it('plays eliminate exactly once when a player newly drops out, not again on later frames', () => {
@@ -677,7 +836,7 @@ describe('end of game', () => {
     const rects = computeZoneRects(3, 400, 900);
 
     game.update(2); // Alara active for 2s
-    game.onTap(200, 450); // pass turn to Kess (shared control center; see Game.resize())
+    game.passTurn(); // pass turn to Kess
     game.update(3); // Kess active for 3s
 
     game.onTap(rects[0].x + 50, rects[0].y + 10); // eliminate Alara

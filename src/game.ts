@@ -10,7 +10,7 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
-import { PassTurnControl, UndoControl } from './ui/controls';
+import { EndGameControl, PassTurnControl, UndoControl } from './ui/controls';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 
 export function clamp(value: number, min: number, max: number): number {
@@ -144,6 +144,8 @@ interface HoldState {
   delta: 1 | -1;
   heldFor: number;
   sinceLastTick: number;
+  /** Number of applyLifeDelta calls made by this hold so far (initial tap + each ramp tick), each of which pushed one undo-stack entry; lets cancelTap() pop exactly those entries to fully and cleanly revert a long hold. */
+  pushCount: number;
 }
 
 interface DeltaPopup {
@@ -181,6 +183,7 @@ export class Game {
   private turnState: TurnState = createTurnState();
   private readonly control = new PassTurnControl();
   private readonly undoControl = new UndoControl();
+  private readonly endControl = new EndGameControl();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
@@ -286,6 +289,11 @@ export class Game {
     return this.undoControl.containsPoint(x, y);
   }
 
+  /** True when (x, y) — in the same coordinate space passed to resize — is over the end-game icon beside the shared center control. */
+  isOverEndControl(x: number, y: number): boolean {
+    return this.endControl.containsPoint(x, y);
+  }
+
   /** Reverts the most recent life or commander-damage change. No-op if nothing to undo. */
   undo(): void {
     this.stack.undo();
@@ -347,6 +355,7 @@ export class Game {
     while (this.hold.sinceLastTick >= interval) {
       this.hold.sinceLastTick -= interval;
       this.applyLifeDelta(this.hold.playerId, this.hold.delta);
+      this.hold.pushCount += 1;
     }
   }
 
@@ -361,6 +370,7 @@ export class Game {
     const controlCenterY = height / 2;
     this.control.reflow(width, height, controlCenterY);
     this.undoControl.reflow(width, height, controlCenterY);
+    this.endControl.reflow(width, height, controlCenterY);
   }
 
   onTap(x: number, y: number): void {
@@ -369,15 +379,14 @@ export class Game {
       return;
     }
 
+    if (this.endControl.containsPoint(x, y)) {
+      this.endGame();
+      return;
+    }
+
     if (this.control.containsPoint(x, y)) {
-      const previousTurnState = this.turnState;
-      this.turnState = advanceTurn(this.turnState, this.playerCount);
-      this.sound.play('turnPass');
-      this.stack.push({
-        undo: (): void => {
-          this.turnState = previousTurnState;
-        },
-      });
+      // Tapping the center control no longer passes the turn — a long-press
+      // does instead (see passTurn()), so plain taps here are a no-op.
       return;
     }
 
@@ -389,7 +398,19 @@ export class Game {
     const delta = zone.half === 'upper' ? 1 : -1;
     this.applyLifeDelta(zone.playerId, delta);
     this.popupsList.push({ playerId: zone.playerId, x, y, delta, age: 0 });
-    this.hold = { playerId: zone.playerId, delta, heldFor: 0, sinceLastTick: 0 };
+    this.hold = { playerId: zone.playerId, delta, heldFor: 0, sinceLastTick: 0, pushCount: 1 };
+  }
+
+  /** Advances the active player, e.g. from a long-press on the shared center control. */
+  passTurn(): void {
+    const previousTurnState = this.turnState;
+    this.turnState = advanceTurn(this.turnState, this.playerCount);
+    this.sound.play('turnPass');
+    this.stack.push({
+      undo: (): void => {
+        this.turnState = previousTurnState;
+      },
+    });
   }
 
   /** Call on pointerup/pointercancel/pointerleave to stop any in-progress ramp. */
@@ -399,30 +420,65 @@ export class Game {
 
   /**
    * Reverts the life change from the current zone tap and disarms its ramp.
-   * Call when a long-press on the same press supersedes the paired tap
-   * (e.g. before opening the commander-damage panel), so the tap that had to
-   * fire on pointerdown to support tap-and-hold ramping leaves no trace.
-   * No-op if the current press isn't a zone hold.
+   * Call when a drag or a control action on the same press supersedes the
+   * paired tap (e.g. before opening the commander-damage panel, or before a
+   * release lands on a shared control), so the tap that had to fire on
+   * pointerdown to support tap-and-hold ramping leaves no trace — including
+   * on the undo stack, so a follow-up undo() still targets whatever action
+   * actually precedes it rather than this reverted tap. No-op if the current
+   * press isn't a zone hold.
    */
   cancelTap(): void {
     if (!this.hold) {
       return;
     }
-    const { playerId, delta } = this.hold;
+    const { playerId, delta, pushCount } = this.hold;
     this.hold = undefined;
-    this.applyLifeDelta(playerId, -delta);
+    for (let i = 0; i < pushCount; i += 1) {
+      this.stack.undo();
+    }
+    this.checkEndConditions();
     const lastPopup = this.popupsList[this.popupsList.length - 1];
     if (lastPopup && lastPopup.playerId === playerId && lastPopup.delta === delta) {
       this.popupsList.pop();
     }
   }
 
-  /** Returns the id of the player zone under (x, y), or null over the shared control or outside any zone. */
+  /**
+   * Returns the id of the player zone under (x, y), or null over a shared
+   * control or outside any zone. Used both to target a long-press and, by
+   * resolveZoneDrag() below, to resolve either end of a zone-to-zone drag.
+   */
   onLongPress(x: number, y: number): string | null {
-    if (this.control.containsPoint(x, y) || this.undoControl.containsPoint(x, y)) {
+    if (this.control.containsPoint(x, y) || this.undoControl.containsPoint(x, y) || this.endControl.containsPoint(x, y)) {
       return null;
     }
     return this.playerIdAt(x, y);
+  }
+
+  /**
+   * Resolves a zone-to-zone drag gesture: `from`/`to` are the pointer-down
+   * and pointer-up positions, in the same coordinate space as resize().
+   * Returns the attacking and target player ids when the press started in
+   * one player's zone and released in a *different* player's zone; returns
+   * null when it starts and ends in the same zone, either end is outside
+   * every zone, or either end is over a shared control. Never itself
+   * changes any life or damage total — the caller applies the confirmed
+   * damage via applyCommanderDamageDelta/applyPoisonDelta once the dragging
+   * player picks a damage type.
+   */
+  resolveZoneDrag(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+  ): { fromPlayerId: string; toPlayerId: string } | null {
+    const fromPlayerId = this.onLongPress(fromX, fromY);
+    const toPlayerId = this.onLongPress(toX, toY);
+    if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) {
+      return null;
+    }
+    return { fromPlayerId, toPlayerId };
   }
 
   private seatAt(x: number, y: number): number {
@@ -521,6 +577,7 @@ export class Game {
     this.drawPopups(ctx);
     this.control.draw(ctx);
     this.undoControl.draw(ctx, this.canUndo);
+    this.endControl.draw(ctx);
   }
 
   private drawPopups(ctx: CanvasRenderingContext2D): void {
