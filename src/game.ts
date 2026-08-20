@@ -42,11 +42,23 @@ const RAMP_START_INTERVAL_S = 0.2;
 const RAMP_MIN_INTERVAL_S = 0.05;
 const RAMP_ACCEL_S = 1;
 
+// Delta popup: floats upward and fades out over ~500ms using eased alpha, per docs/concept.md.
+const POPUP_DURATION_S = 0.5;
+const POPUP_RISE_PX = 46;
+
 interface HoldState {
   playerId: string;
   delta: 1 | -1;
   heldFor: number;
   sinceLastTick: number;
+}
+
+interface DeltaPopup {
+  playerId: string;
+  x: number;
+  y: number;
+  delta: number;
+  age: number;
 }
 
 class ArrayUndoStack implements UndoStack {
@@ -70,6 +82,7 @@ export class Game {
     this.playersList.map((player) => player.id),
   );
   private readonly stack: UndoStack = new ArrayUndoStack();
+  private readonly popupsList: DeltaPopup[] = [];
   private height = 0;
   private hold: HoldState | undefined;
   private animTime = 0;
@@ -94,8 +107,19 @@ export class Game {
     return this.stack;
   }
 
+  get popups(): DeltaPopup[] {
+    return this.popupsList;
+  }
+
   update(dt: number): void {
     this.animTime += dt;
+
+    for (let i = this.popupsList.length - 1; i >= 0; i -= 1) {
+      this.popupsList[i].age += dt;
+      if (this.popupsList[i].age >= POPUP_DURATION_S) {
+        this.popupsList.splice(i, 1);
+      }
+    }
 
     if (!this.hold) {
       return;
@@ -139,6 +163,7 @@ export class Game {
 
     const delta = zone.half === 'upper' ? 1 : -1;
     this.applyLifeDelta(zone.playerId, delta);
+    this.popupsList.push({ playerId: zone.playerId, x, y, delta, age: 0 });
     this.hold = { playerId: zone.playerId, delta, heldFor: 0, sinceLastTick: 0 };
   }
 
@@ -197,7 +222,37 @@ export class Game {
     ctx.clearRect(0, 0, width, height);
 
     this.drawZones(ctx, width, height);
+    this.drawPopups(ctx);
     this.control.draw(ctx);
+  }
+
+  private drawPopups(ctx: CanvasRenderingContext2D): void {
+    const zoneHeight = this.height / this.playerCount;
+    for (const popup of this.popupsList) {
+      const seat = this.playersList.findIndex((player) => player.id === popup.playerId);
+      if (seat < 0) {
+        continue;
+      }
+      const isTopRow = seat < this.playerCount / 2;
+      const progress = clamp(popup.age / POPUP_DURATION_S, 0, 1);
+      const eased = 1 - (1 - progress) * (1 - progress);
+
+      ctx.save();
+      ctx.translate(popup.x, popup.y);
+      if (isTopRow) {
+        ctx.rotate(Math.PI);
+      }
+      ctx.globalAlpha = 1 - eased;
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `800 ${Math.round(zoneHeight * 0.16)}px "Arial Black", system-ui, sans-serif`;
+      ctx.fillText(popup.delta > 0 ? `+${popup.delta}` : `${popup.delta}`, 0, -POPUP_RISE_PX * eased);
+      ctx.restore();
+    }
   }
 
   private drawZones(ctx: CanvasRenderingContext2D, width: number, height: number): void {
