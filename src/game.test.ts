@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Game, clamp } from './game';
+import { Game, clamp, computeZoneRects } from './game';
 import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
 
 /** Mirrors UndoControl's reflow math so tests can tap the icon by coordinate. */
@@ -104,9 +104,9 @@ describe('Game', () => {
     const game = new Game();
     game.resize(400, 800);
     const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
+    const rect = computeZoneRects(game.playerCount, 400, 800)[0];
 
-    game.onTap(50, zoneHeight - 10);
+    game.onTap(rect.x + 10, rect.y + rect.height - 10);
 
     expect(player.life).toBe(39);
   });
@@ -345,24 +345,48 @@ describe('Game', () => {
     expect(tooMany.playerCount).toBe(6);
   });
 
-  it.each([3, 5])(
-    'keeps the shared control off the middle zone center in a %i-player game, so taps there still reach that zone',
+  it.each([3, 4, 5, 6])(
+    'keeps the shared control off every zone center in a %i-player game, so taps there still reach that zone',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
+      const width = 400;
       const height = 900;
-      game.resize(400, height);
-      const zoneHeight = height / playerCount;
-      const middleSeat = Math.floor(playerCount / 2);
-      const middleZoneCenterY = middleSeat * zoneHeight + zoneHeight / 2;
+      game.resize(width, height);
+      const rects = computeZoneRects(playerCount, width, height);
 
-      expect(game.isOverControl(200, middleZoneCenterY)).toBe(false);
+      rects.forEach((rect, seat) => {
+        const centerX = rect.x + rect.width / 2;
+        const centerY = rect.y + rect.height / 2;
 
-      const middlePlayer = game.players[middleSeat];
-      game.onTap(200, middleZoneCenterY - 1); // upper half of the middle zone's own center
+        expect(game.isOverControl(centerX, centerY)).toBe(false);
 
-      expect(middlePlayer.life).toBe(41);
+        const player = game.players[seat];
+        const lifeBefore = player.life;
+        game.onTap(centerX, centerY - 1); // upper half of this zone's own center
+        expect(player.life).toBe(lifeBefore + 1);
+      });
     },
   );
+
+  it.each([3, 4, 5, 6])('lays out %i players in the table-like grid from docs/concept.md', (playerCount) => {
+    const game = new Game({ playerCount, startingLife: 40, players: [] });
+    game.resize(400, 900);
+    const rects = computeZoneRects(playerCount, 400, 900);
+
+    rects.forEach((rect, seat) => {
+      // Upper half of each zone increments, lower half decrements — regardless
+      // of the zone's row (rotation only affects rendering, not hit-testing).
+      // Taps land a quarter-height into each half, well clear of the shared
+      // control disc that sits where the two rows meet.
+      const player = game.players[seat];
+
+      game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.25);
+      expect(player.life).toBe(41);
+
+      game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.75);
+      expect(player.life).toBe(40);
+    });
+  });
 });
 
 describe('end of game', () => {
@@ -389,22 +413,22 @@ describe('end of game', () => {
     const game = makeThreePlayerGame(40);
     game.resize(400, 900);
 
-    // For 3 players, the control snaps to the boundary between seat 0 and
-    // seat 1 (300) rather than the geometric center (450), which would sit
-    // on top of seat 1's life total. See Game.resize().
-    expect(game.isOverControl(200, 300)).toBe(true);
+    // The grid is always two rows filling half the canvas height each, so
+    // the control sits at the boundary between them (450) for every player
+    // count. See Game.resize().
+    expect(game.isOverControl(200, 450)).toBe(true);
     expect(game.isOverControl(0, 0)).toBe(false);
   });
 
   it('ends automatically when only one player remains above 0 life, recording elimination order', () => {
     const game = makeThreePlayerGame(1);
     game.resize(400, 900);
-    const zoneHeight = 900 / 3;
+    const rects = computeZoneRects(3, 400, 900);
 
-    game.onTap(50, zoneHeight - 10); // Alara: 1 -> 0
+    game.onTap(rects[0].x + 50, rects[0].y + rects[0].height - 10); // Alara: 1 -> 0 (lower half)
     expect(game.ended).toBe(false);
 
-    game.onTap(50, zoneHeight * 2 - 10); // Kess: 1 -> 0, only Yorion remains
+    game.onTap(rects[1].x + 50, rects[1].y + rects[1].height - 10); // Kess: 1 -> 0 (lower half), only Yorion remains
     expect(game.ended).toBe(true);
 
     expect(game.stats?.winnerId).toBe(game.players[2].id);
@@ -417,9 +441,9 @@ describe('end of game', () => {
   it('drops a player from eliminationOrder once undo restores their life above 0', () => {
     const game = makeThreePlayerGame(1);
     game.resize(400, 900);
-    const zoneHeight = 900 / 3;
+    const rects = computeZoneRects(3, 400, 900);
 
-    game.onTap(50, zoneHeight - 10); // Alara: 1 -> 0, recorded as eliminated
+    game.onTap(rects[0].x + 50, rects[0].y + rects[0].height - 10); // Alara: 1 -> 0, recorded as eliminated
     expect(game.stats).toBeNull();
 
     game.undo(); // Alara: 0 -> 1
@@ -456,14 +480,14 @@ describe('end of game', () => {
   it('accumulates time-as-active-player and freezes match duration once ended', () => {
     const game = makeThreePlayerGame(1);
     game.resize(400, 900);
-    const zoneHeight = 900 / 3;
+    const rects = computeZoneRects(3, 400, 900);
 
     game.update(2); // Alara active for 2s
-    game.onTap(200, 300); // pass turn to Kess (control center for 3 players; see Game.resize())
+    game.onTap(200, 450); // pass turn to Kess (shared control center; see Game.resize())
     game.update(3); // Kess active for 3s
 
-    game.onTap(50, zoneHeight - 10); // eliminate Alara
-    game.onTap(50, zoneHeight * 2 - 10); // eliminate Kess, Yorion wins
+    game.onTap(rects[0].x + 50, rects[0].y + rects[0].height - 10); // eliminate Alara
+    game.onTap(rects[1].x + 50, rects[1].y + rects[1].height - 10); // eliminate Kess, Yorion wins
 
     const stats = game.stats;
     expect(stats).not.toBeNull();
