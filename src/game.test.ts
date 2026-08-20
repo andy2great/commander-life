@@ -16,16 +16,38 @@ describe('clamp', () => {
 });
 
 describe('Game', () => {
-  it('counts taps in the score', () => {
+  it('advances the active player when the center control is tapped', () => {
     const game = new Game();
+    game.resize(400, 800);
+
+    game.onTap(200, 400);
+
+    expect(game.activeIndex).toBe(1);
+  });
+
+  it('ignores taps outside the control', () => {
+    const game = new Game();
+    game.resize(400, 800);
+
     game.onTap(0, 0);
-    game.onTap(10, 10);
-    expect(game.score).toBe(2);
+
+    expect(game.activeIndex).toBe(0);
+  });
+
+  it('wraps from the last seat to the first and increments the turn counter once per lap', () => {
+    const game = new Game();
+    game.resize(400, 800);
+
+    for (let i = 0; i < game.playerCount; i += 1) {
+      game.onTap(200, 400);
+    }
+
+    expect(game.activeIndex).toBe(0);
+    expect(game.turnCount).toBe(1);
   });
 
   it('updates without throwing', () => {
     const game = new Game();
     game.update(0.016);
-    expect(game.score).toBe(0);
   });
 });
