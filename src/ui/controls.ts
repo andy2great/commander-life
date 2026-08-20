@@ -57,7 +57,9 @@ export class PassTurnControl {
 // Small undo icon beside the shared center control, per docs/concept.md
 // controls section: tap reverts the most recent undo-stack action, dimmed
 // when there is nothing to undo.
-export const UNDO_RADIUS_RATIO = 0.045;
+// 0.065 keeps the hit-circle diameter at/above the ~44-48px touch-target
+// minimum down to the smallest supported phone width (~360px); see #31.
+export const UNDO_RADIUS_RATIO = 0.065;
 export const UNDO_GAP_RATIO = 0.03;
 
 export class UndoControl {
@@ -99,7 +101,7 @@ export class UndoControl {
     ctx.fillStyle = '#e8ecf5';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `${Math.round(radius * 1.3)}px system-ui, sans-serif`;
+    ctx.font = `${Math.round(radius)}px system-ui, sans-serif`;
     ctx.fillText('↺', centerX, centerY);
 
     ctx.restore();
