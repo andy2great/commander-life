@@ -4,7 +4,11 @@
 // control's shape, and a draw() that only ever receives a context passed in
 // by the caller, matching the "only main.ts touches the canvas element" rule.
 
-export const RADIUS_RATIO = 0.07;
+// 0.085 keeps the hit-circle diameter around ~56-64px (comfortably above the
+// bare 44-48px platform minimum) down to the smallest supported phone width
+// (~360px); see #38, which raised this from the #31 bare-minimum sizing
+// after playtesters kept mis-tapping the center controls.
+export const RADIUS_RATIO = 0.085;
 
 interface ControlLayout {
   centerX: number;
@@ -49,7 +53,10 @@ export class PassTurnControl {
     ctx.fillStyle = '#e8ecf5';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `${Math.round(radius)}px system-ui, sans-serif`;
+    // Floor (not round) so the glyph never renders larger than the
+    // hit-circle radius — rounding up could push it outside the tappable
+    // area again, the #31 bug (#38).
+    ctx.font = `${Math.floor(radius)}px system-ui, sans-serif`;
     ctx.fillText('⟳', centerX, centerY);
   }
 }
@@ -57,10 +64,12 @@ export class PassTurnControl {
 // Small undo icon beside the shared center control, per docs/concept.md
 // controls section: tap reverts the most recent undo-stack action, dimmed
 // when there is nothing to undo.
-// 0.065 keeps the hit-circle diameter at/above the ~44-48px touch-target
-// minimum down to the smallest supported phone width (~360px); see #31.
-export const UNDO_RADIUS_RATIO = 0.065;
-export const UNDO_GAP_RATIO = 0.03;
+// 0.079 keeps the hit-circle diameter around ~56-64px, matching the
+// PassTurnControl bump above; see #38. The gap ratio was widened from 0.03
+// to 0.055 so an errant tap near the boundary between the two controls
+// doesn't land on the wrong one.
+export const UNDO_RADIUS_RATIO = 0.079;
+export const UNDO_GAP_RATIO = 0.055;
 
 export class UndoControl {
   private layout: ControlLayout = { centerX: 0, centerY: 0, radius: 0 };
@@ -101,7 +110,10 @@ export class UndoControl {
     ctx.fillStyle = '#e8ecf5';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `${Math.round(radius)}px system-ui, sans-serif`;
+    // Floor (not round) so the glyph never renders larger than the
+    // hit-circle radius — rounding up could push it outside the tappable
+    // area again, the #31 bug (#38).
+    ctx.font = `${Math.floor(radius)}px system-ui, sans-serif`;
     ctx.fillText('↺', centerX, centerY);
 
     ctx.restore();
