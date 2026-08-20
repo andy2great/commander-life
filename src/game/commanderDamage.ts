@@ -6,6 +6,7 @@ export interface Player {
   id: string;
   name: string;
   life: number;
+  color?: string;
 }
 
 /** state[targetId][fromOpponentId] = commander damage targetId has taken from fromOpponentId. */
