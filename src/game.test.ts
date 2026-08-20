@@ -152,4 +152,58 @@ describe('Game', () => {
     game.update(1);
     expect(player.life).toBe(afterRelease);
   });
+
+  it('spawns a delta popup at the tap location when a zone tap changes life', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10);
+
+    expect(game.popups).toHaveLength(1);
+    expect(game.popups[0]).toMatchObject({
+      playerId: game.players[0].id,
+      x: 50,
+      y: zoneHeight / 2 - 10,
+      delta: 1,
+    });
+  });
+
+  it('does not spawn a popup when tapping the shared center control', () => {
+    const game = new Game();
+    game.resize(400, 800);
+
+    game.onTap(200, 400);
+
+    expect(game.popups).toHaveLength(0);
+  });
+
+  it('fades a popup out and removes it after ~500ms', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10);
+    expect(game.popups).toHaveLength(1);
+
+    game.update(0.4);
+    expect(game.popups).toHaveLength(1);
+
+    game.update(0.2);
+    expect(game.popups).toHaveLength(0);
+  });
+
+  it('supports multiple concurrent popups from rapid taps without error', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTapEnd();
+    game.onTap(60, zoneHeight - 10);
+    game.onTapEnd();
+
+    expect(game.popups).toHaveLength(2);
+    expect(() => game.update(0.016)).not.toThrow();
+  });
 });
