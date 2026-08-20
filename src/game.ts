@@ -377,7 +377,8 @@ export class Game {
   }
 
   /**
-   * Records newly-eliminated players (life at or below 0) and ends the game
+   * Records newly-eliminated players (life at or below 0), clears the record
+   * for anyone since restored above 0 life (e.g. via undo), and ends the game
    * automatically once only one player remains above 0 life, per
    * docs/concept.md step 6.
    */
@@ -386,8 +387,13 @@ export class Game {
       return;
     }
     for (const player of this.playersList) {
-      if (player.life <= 0 && !this.eliminationOrderList.some((entry) => entry.playerId === player.id)) {
-        this.eliminationOrderList.push({ playerId: player.id, turnCount: this.turnState.turnCount });
+      const eliminatedIndex = this.eliminationOrderList.findIndex((entry) => entry.playerId === player.id);
+      if (player.life <= 0) {
+        if (eliminatedIndex === -1) {
+          this.eliminationOrderList.push({ playerId: player.id, turnCount: this.turnState.turnCount });
+        }
+      } else if (eliminatedIndex !== -1) {
+        this.eliminationOrderList.splice(eliminatedIndex, 1);
       }
     }
     const alive = this.playersList.filter((player) => player.life > 0);
