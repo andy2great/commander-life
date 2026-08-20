@@ -71,6 +71,14 @@ function startGame(config: GameConfig): void {
     },
     onTap: (event) => {
       if (isOverAnyControl(event)) {
+        // Revert the optimistic zone tap from onPressStart (if any) before
+        // running the control's action: a press that started in a player's
+        // zone but released over a shared control is a drag onto that
+        // control, not a zone tap followed by a control tap. Without this,
+        // releasing an attack-drag over undo/end-game/pass-turn silently
+        // left the pending zone life change in place, or (worse) let it
+        // coincide with ending the game. See PR #53 review.
+        game.cancelTap();
         game.onTap(event.clientX, event.clientY);
         return;
       }

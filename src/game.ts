@@ -144,8 +144,8 @@ interface HoldState {
   delta: 1 | -1;
   heldFor: number;
   sinceLastTick: number;
-  /** Net life change applied so far by this press (initial tap + any ramp ticks); lets cancelTap() fully revert a long hold. */
-  totalApplied: number;
+  /** Number of applyLifeDelta calls made by this hold so far (initial tap + each ramp tick), each of which pushed one undo-stack entry; lets cancelTap() pop exactly those entries to fully and cleanly revert a long hold. */
+  pushCount: number;
 }
 
 interface DeltaPopup {
@@ -355,7 +355,7 @@ export class Game {
     while (this.hold.sinceLastTick >= interval) {
       this.hold.sinceLastTick -= interval;
       this.applyLifeDelta(this.hold.playerId, this.hold.delta);
-      this.hold.totalApplied += this.hold.delta;
+      this.hold.pushCount += 1;
     }
   }
 
@@ -398,7 +398,7 @@ export class Game {
     const delta = zone.half === 'upper' ? 1 : -1;
     this.applyLifeDelta(zone.playerId, delta);
     this.popupsList.push({ playerId: zone.playerId, x, y, delta, age: 0 });
-    this.hold = { playerId: zone.playerId, delta, heldFor: 0, sinceLastTick: 0, totalApplied: delta };
+    this.hold = { playerId: zone.playerId, delta, heldFor: 0, sinceLastTick: 0, pushCount: 1 };
   }
 
   /** Advances the active player, e.g. from a long-press on the shared center control. */
@@ -420,20 +420,24 @@ export class Game {
 
   /**
    * Reverts the life change from the current zone tap and disarms its ramp.
-   * Call when a long-press on the same press supersedes the paired tap
-   * (e.g. before opening the commander-damage panel), so the tap that had to
-   * fire on pointerdown to support tap-and-hold ramping leaves no trace.
-   * No-op if the current press isn't a zone hold.
+   * Call when a drag or a control action on the same press supersedes the
+   * paired tap (e.g. before opening the commander-damage panel, or before a
+   * release lands on a shared control), so the tap that had to fire on
+   * pointerdown to support tap-and-hold ramping leaves no trace — including
+   * on the undo stack, so a follow-up undo() still targets whatever action
+   * actually precedes it rather than this reverted tap. No-op if the current
+   * press isn't a zone hold.
    */
   cancelTap(): void {
     if (!this.hold) {
       return;
     }
-    const { playerId, delta, totalApplied } = this.hold;
+    const { playerId, delta, pushCount } = this.hold;
     this.hold = undefined;
-    if (totalApplied !== 0) {
-      this.applyLifeDelta(playerId, -totalApplied);
+    for (let i = 0; i < pushCount; i += 1) {
+      this.stack.undo();
     }
+    this.checkEndConditions();
     const lastPopup = this.popupsList[this.popupsList.length - 1];
     if (lastPopup && lastPopup.playerId === playerId && lastPopup.delta === delta) {
       this.popupsList.pop();

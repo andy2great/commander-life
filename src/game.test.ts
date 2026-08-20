@@ -368,6 +368,68 @@ describe('Game', () => {
     });
   });
 
+  describe('drag release onto a shared control (PR #53 review)', () => {
+    // main.ts applies a zone tap optimistically on pointerdown (so a held
+    // press can ramp), then reverts it with cancelTap() if the press
+    // resolves as something other than a plain zone tap — a zone-to-zone
+    // drag, or (per this fix) a release over a shared control. This mirrors
+    // main.ts's onTap(pointerup) handler for the isOverAnyControl branch:
+    // cancelTap() runs before the control's own action.
+    function simulatePressReleasedOverControl(
+      game: Game,
+      press: { x: number; y: number },
+      release: { x: number; y: number },
+    ): void {
+      game.onTap(press.x, press.y); // onPressStart's optimistic zone tap
+      game.cancelTap(); // main.ts's onTap handler reverts it first
+      game.onTap(release.x, release.y); // then runs the control's action
+      game.onTapEnd();
+    }
+
+    it('leaves life and popups untouched when a drag from a zone releases on the center control', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const livesBefore = game.players.map((player) => player.life);
+
+      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, { x: 200, y: 400 });
+
+      expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+      expect(game.popups).toHaveLength(0);
+    });
+
+    it('leaves life untouched when a drag from a zone releases on the end-game icon (the icon itself still ends the game, as a genuine tap there would)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const livesBefore = game.players.map((player) => player.life);
+      const endCenter = endControlCenter(400, 800);
+
+      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, endCenter);
+
+      expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+      expect(game.ended).toBe(true);
+    });
+
+    it('leaves life untouched, and does not silently consume an unrelated undo, when a drag from a zone releases on the undo icon', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const undoCenter = undoControlCenter(400, 800);
+
+      // An unrelated action already sits on top of the undo stack.
+      game.passTurn();
+      const activeIndexBeforeUndo = game.activeIndex;
+
+      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, undoCenter);
+
+      expect(game.players[0].life).toBe(40);
+      // The undo icon undoes the real last action (the turn pass), not a
+      // pending zone tap that happened to also be sitting on the stack.
+      expect(game.activeIndex).not.toBe(activeIndexBeforeUndo);
+    });
+  });
+
   it('cancelTap fully reverts a hold even after the ramp has ticked (needed so a slow zone-to-zone drag leaves no residual life change)', () => {
     const game = new Game();
     game.resize(400, 800);
