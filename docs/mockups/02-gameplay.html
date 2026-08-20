@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Commander Life — Gameplay Mockup</title>
+<style>
+  :root{
+    --bg:#121016;
+    --crimson:#e5484d;
+    --teal:#12a594;
+    --amber:#f5a524;
+    --violet:#8e4ec6;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    background:#3a3742;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+  }
+  .frame{
+    width:390px;
+    height:844px;
+    background:var(--bg);
+    border-radius:46px;
+    border:10px solid #0a0910;
+    box-shadow:0 30px 70px rgba(0,0,0,.55);
+    position:relative;
+    overflow:hidden;
+  }
+  .notch{
+    position:absolute;
+    top:10px;left:50%;
+    transform:translateX(-50%);
+    width:120px;height:26px;
+    background:#0a0910;
+    border-radius:0 0 18px 18px;
+    z-index:20;
+  }
+  .grid{
+    position:absolute;
+    inset:0;
+    display:grid;
+    grid-template-rows:1fr 1fr;
+    grid-template-columns:1fr 1fr;
+  }
+  .zone{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+  .zone::before{
+    content:"";
+    position:absolute;
+    inset:0;
+  }
+  .z1{ background:radial-gradient(circle at 50% 30%, #ff8f92 0%, var(--crimson) 55%, #a52e32 100%); }
+  .z2{ background:radial-gradient(circle at 50% 30%, #6cead9 0%, var(--teal) 55%, #0b6b60 100%); }
+  .z3{ background:radial-gradient(circle at 50% 30%, #ffcf85 0%, var(--amber) 55%, #a66c0f 100%); border-top:2px solid #0006; }
+  .z4{ background:radial-gradient(circle at 50% 30%, #c8a3ef 0%, var(--violet) 55%, #5c3183 100%); border-top:2px solid #0006; }
+  .rot180{ transform:rotate(180deg); }
+  .name-tag{
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.5px;
+    color:rgba(255,255,255,.85);
+    text-shadow:0 2px 6px rgba(0,0,0,.4);
+    text-transform:uppercase;
+    margin-bottom:4px;
+  }
+  .life{
+    font-size:64px;
+    font-weight:800;
+    color:#fff;
+    text-shadow:0 3px 10px rgba(0,0,0,.45);
+    line-height:1;
+    font-variant-numeric:tabular-nums;
+  }
+  .taphint{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    opacity:0;
+  }
+  .zone .halves{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+  }
+  .half{ flex:1; }
+  .active-border{
+    position:absolute;
+    inset:6px;
+    border-radius:22px;
+    border:4px solid rgba(255,255,255,.85);
+    box-shadow:0 0 18px 2px rgba(255,255,255,.55), inset 0 0 14px rgba(255,255,255,.3);
+  }
+  .delta-popup{
+    position:absolute;
+    top:36%;
+    left:62%;
+    font-size:30px;
+    font-weight:800;
+    color:#fff;
+    text-shadow:0 2px 8px rgba(0,0,0,.5);
+    opacity:.9;
+  }
+  /* center control disc */
+  .center-disc{
+    position:absolute;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    width:96px;height:96px;
+    border-radius:50%;
+    background:rgba(10,9,16,.72);
+    border:2px solid rgba(255,255,255,.18);
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:10;
+    backdrop-filter:blur(2px);
+  }
+  .center-disc svg{ width:38px; height:38px; }
+  .undo-btn{
+    position:absolute;
+    top:50%;left:50%;
+    transform:translate(46px,-46px);
+    width:38px;height:38px;
+    border-radius:50%;
+    background:rgba(10,9,16,.72);
+    border:2px solid rgba(255,255,255,.14);
+    display:flex;align-items:center;justify-content:center;
+    z-index:10;
+  }
+  .undo-btn svg{ width:18px;height:18px; opacity:.45; }
+  .turn-badge{
+    position:absolute;
+    top:50%;left:50%;
+    transform:translate(-50%, 58px);
+    font-size:11px;
+    color:rgba(255,255,255,.65);
+    font-weight:700;
+    letter-spacing:.6px;
+    background:rgba(10,9,16,.6);
+    padding:3px 10px;
+    border-radius:10px;
+    z-index:10;
+    white-space:nowrap;
+  }
+  .home-indicator{
+    position:absolute;
+    bottom:8px;left:50%;
+    transform:translateX(-50%);
+    width:130px;height:5px;
+    border-radius:3px;
+    background:rgba(255,255,255,.35);
+    z-index:20;
+  }
+  .caption{
+    text-align:center;
+    color:#8b869a;
+    font-size:13px;
+    margin-top:14px;
+    max-width:390px;
+  }
+  .wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="frame">
+    <div class="notch"></div>
+    <div class="grid">
+      <div class="zone z1 rot180">
+        <div class="name-tag">Alara</div>
+        <div class="life">32</div>
+      </div>
+      <div class="zone z2 rot180">
+        <div class="name-tag">Kess</div>
+        <div class="life">40</div>
+      </div>
+      <div class="zone z3">
+        <div class="active-border"></div>
+        <div class="name-tag">Nazgul</div>
+        <div class="life">27</div>
+        <div class="delta-popup">−3</div>
+      </div>
+      <div class="zone z4">
+        <div class="name-tag">Yorion</div>
+        <div class="life">40</div>
+      </div>
+    </div>
+    <div class="undo-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 14 4 9l5-5"/>
+        <path d="M4 9h11a5 5 0 0 1 0 10h-1"/>
+      </svg>
+    </div>
+    <div class="center-disc">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9" opacity=".25"/>
+        <path d="M8 8l8 4-8 4V8z"/>
+      </svg>
+    </div>
+    <div class="turn-badge">TURN 6 · NAZGUL</div>
+    <div class="home-indicator"></div>
+  </div>
+  <div class="caption">Core gameplay — Nazgul's zone is upright, active turn pulses white, a "−3" delta floats and fades where the tap landed, center disc passes the turn.</div>
+</div>
+</body>
+</html>

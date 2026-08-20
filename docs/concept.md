@@ -1,0 +1,55 @@
+# Commander Life Counter — Concept
+
+## Pitch
+A gorgeous, tap-driven life counter built specifically for Magic: The Gathering Commander (EDH) games of 3-6 players. Track life, commander damage, whose turn it is, and get a beautiful stat recap when the game ends.
+
+## Goal
+Replace pen-and-paper trackers and generic counter apps with a single shared portrait device passed around (or laid flat) at the table. Every player's life total is oriented so it's readable from their own seat, controls are one-thumb tap-driven, turn order is always visible, mistakes are one tap to undo, and the end of the game produces a rich, shareable stat summary.
+
+## Core loop
+1. Host configures the game (player count 3-6, starting life, names/colors) on the setup screen.
+2. The canvas splits into N player zones, each rotated to face that player's seat. Tapping the upper half of a zone increments life, tapping the lower half decrements it, with a floating "+1"/"-1" popping and fading above the tap point.
+3. A shared center "pass turn" control advances the active-player highlight clockwise around the table; the turn counter increments each full lap.
+4. Long-pressing a zone opens a commander-damage sub-panel where that player logs damage received from each specific opponent.
+5. Every life or commander-damage change pushes onto an undo stack; a center undo icon reverts the most recent action ("retour en arrière").
+6. The host ends the game (long-press the center control, or automatically when only one player remains above 0 life). A stats screen shows total duration, time-per-turn breakdown, most damage dealt/received, biggest single hit, and elimination order.
+7. "New Game" returns to the setup screen, pre-filled with the previous configuration.
+
+## Controls (touch-only, one-thumb per player)
+- Tap upper half of own zone: +1 life (tap-and-hold ramps continuously, accelerating after ~600ms)
+- Tap lower half of own zone: -1 life (same ramp behavior)
+- Long-press own zone (~500ms): opens the commander-damage sub-panel for that player, with +/- steppers per opponent
+- Center shared control: tap = pass turn; long-press = end game
+- Small icon beside the center control: tap = undo last action (dimmed/disabled when nothing to undo)
+- Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a name field to rename via the soft keyboard
+
+## Layout by player count (portrait canvas, all code-drawn, no external assets)
+- 3 players: one zone spans the full width at the top (rotated 180°), two zones split the bottom half vertically
+- 4 players: 2x2 grid; top row rotated 180°, bottom row upright
+- 5 players: top row = 2 zones rotated 180°, bottom row = 3 zones upright (uneven split, each row sized to fill its half)
+- 6 players: 3x2 grid; top row rotated 180°, bottom row upright
+- A shared circular control disc sits where all zones meet, at the vertical center of the canvas, hosting the pass-turn and undo icons
+
+## Scoring / "impact" stats (shown only at game end, never mid-game)
+- Match duration (mm:ss)
+- Time spent as active player, per player, drawn as a horizontal canvas bar chart
+- Total life lost and gained, per player
+- Total commander damage dealt and received, per player
+- Biggest single hit (player, amount, and target if it was commander damage)
+- Elimination order, for any player who reached 0 life
+- Winner: last player standing, or highest life if the host ends the game manually
+
+## Difficulty curve / progression
+Not applicable in the traditional score-chasing sense — this is a utility, not a score attack. "Progression" instead means configuration depth: the default game (4 players, 40 life) launches in two taps for casual use, while power users can dig into commander-damage sub-panels and the full stat history. Every screen must stay usable one-handed regardless of depth.
+
+## Visual style (all code-drawn on canvas, zero external assets/fonts/images)
+- Dark neutral background (near-black, #121016) so colored player zones pop like felt on a card table
+- Each player zone is assigned one of 6 preset saturated accent colors (crimson, teal, amber, violet, lime, sky), rendered as a soft radial gradient fill
+- Life numbers: huge, bold, centered, drawn with canvas text using a heavy sans stack, white with a subtle drop shadow, rotated 180° for top-row zones so every player reads their own number upright from their seat
+- Delta popups ("+1", "-3") float upward and fade out over ~500ms using eased canvas alpha
+- The active player's zone renders an animated pulsing border (canvas stroke with a sine-driven width/opacity)
+- Center control disc: circular, translucent dark fill, with a hand-drawn arrow icon (pass turn) and a curved-arrow icon (undo), both vector-drawn with canvas path calls — no icon fonts or bitmap images
+- Stats screen reuses the same dark background and per-player accent colors for its horizontal bar charts, so results are instantly recognizable against the in-game colors
+
+## Ad monetization potential
+Low-frequency, high-context: this app is used for the full length of a Commander game (often 20-60+ minutes), so ads must sit only at natural breaks — an interstitial after "End Game" and before the stats screen, plus an optional banner on the setup screen. No mid-game ads, since interrupting live life tracking would break usability and trust. A "remove ads" IAP fits naturally given the app's repeat, session-based usage pattern.

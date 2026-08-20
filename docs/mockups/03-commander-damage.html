@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Commander Life — Commander Damage Mockup</title>
+<style>
+  :root{
+    --bg:#121016;
+    --panel:#1b1822;
+    --panel-2:#241f2d;
+    --text:#f5f3f7;
+    --sub:#948fa3;
+    --crimson:#e5484d;
+    --teal:#12a594;
+    --amber:#f5a524;
+    --violet:#8e4ec6;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    background:#3a3742;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+  }
+  .frame{
+    width:390px;
+    height:844px;
+    background:var(--bg);
+    border-radius:46px;
+    border:10px solid #0a0910;
+    box-shadow:0 30px 70px rgba(0,0,0,.55);
+    position:relative;
+    overflow:hidden;
+  }
+  .notch{
+    position:absolute;
+    top:10px;left:50%;
+    transform:translateX(-50%);
+    width:120px;height:26px;
+    background:#0a0910;
+    border-radius:0 0 18px 18px;
+    z-index:20;
+  }
+  .bg-grid{
+    position:absolute;
+    inset:0;
+    display:grid;
+    grid-template-rows:1fr 1fr;
+    grid-template-columns:1fr 1fr;
+    filter:blur(2px) brightness(.4);
+  }
+  .zone{ position:relative; }
+  .z1{ background:radial-gradient(circle at 50% 30%, #ff8f92, var(--crimson) 60%, #a52e32); }
+  .z2{ background:radial-gradient(circle at 50% 30%, #6cead9, var(--teal) 60%, #0b6b60); }
+  .z3{ background:radial-gradient(circle at 50% 30%, #ffcf85, var(--amber) 60%, #a66c0f); }
+  .z4{ background:radial-gradient(circle at 50% 30%, #c8a3ef, var(--violet) 60%, #5c3183); }
+  .scrim{
+    position:absolute;
+    inset:0;
+    background:rgba(8,7,12,.55);
+    z-index:5;
+  }
+  .sheet{
+    position:absolute;
+    left:16px; right:16px; bottom:70px;
+    background:var(--panel);
+    border-radius:24px;
+    padding:20px 20px 22px;
+    z-index:10;
+    box-shadow:0 -10px 40px rgba(0,0,0,.5);
+    border-top:3px solid var(--amber);
+  }
+  .sheet-head{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .avatar{
+    width:34px;height:34px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ffcf85, var(--amber));
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.3);
+  }
+  .sheet-title{
+    color:var(--text);
+    font-size:16px;
+    font-weight:800;
+  }
+  .sheet-sub{
+    color:var(--sub);
+    font-size:12px;
+  }
+  .close{
+    margin-left:auto;
+    width:28px;height:28px;
+    border-radius:50%;
+    background:var(--panel-2);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+    font-size:14px;
+    font-weight:700;
+  }
+  .dmg-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--panel-2);
+    border-radius:16px;
+    padding:10px 12px;
+  }
+  .dmg-row + .dmg-row{ margin-top:10px; }
+  .dmg-swatch{
+    width:26px;height:26px;
+    border-radius:50%;
+    flex:0 0 auto;
+  }
+  .dmg-info{
+    flex:1;
+  }
+  .dmg-name{
+    color:var(--text);
+    font-size:14px;
+    font-weight:700;
+  }
+  .dmg-label{
+    color:var(--sub);
+    font-size:11px;
+  }
+  .dmg-stepper{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .dmg-stepper button{
+    width:28px;height:28px;
+    border-radius:9px;
+    border:none;
+    background:#2d2938;
+    color:var(--text);
+    font-size:16px;
+    font-weight:700;
+  }
+  .dmg-val{
+    min-width:22px;
+    text-align:center;
+    color:#fff;
+    font-size:15px;
+    font-weight:800;
+    font-variant-numeric:tabular-nums;
+  }
+  .lethal-badge{
+    margin-top:14px;
+    text-align:center;
+    color:var(--crimson);
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.4px;
+    background:rgba(229,72,77,.12);
+    border:1px solid rgba(229,72,77,.4);
+    border-radius:10px;
+    padding:8px;
+  }
+  .home-indicator{
+    position:absolute;
+    bottom:8px;left:50%;
+    transform:translateX(-50%);
+    width:130px;height:5px;
+    border-radius:3px;
+    background:rgba(255,255,255,.5);
+    z-index:20;
+  }
+  .caption{
+    text-align:center;
+    color:#8b869a;
+    font-size:13px;
+    margin-top:14px;
+    max-width:390px;
+  }
+  .wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="frame">
+    <div class="notch"></div>
+    <div class="bg-grid">
+      <div class="zone z1"></div>
+      <div class="zone z2"></div>
+      <div class="zone z3"></div>
+      <div class="zone z4"></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="avatar"></div>
+        <div>
+          <div class="sheet-title">Nazgul — Commander Damage</div>
+          <div class="sheet-sub">Long-press opened this panel</div>
+        </div>
+        <div class="close">✕</div>
+      </div>
+      <div class="dmg-row">
+        <div class="dmg-swatch" style="background:radial-gradient(circle at 35% 30%, #ff8f92, var(--crimson));"></div>
+        <div class="dmg-info">
+          <div class="dmg-name">from Alara</div>
+          <div class="dmg-label">21 to lethal</div>
+        </div>
+        <div class="dmg-stepper">
+          <button>−</button>
+          <div class="dmg-val">0</div>
+          <button>+</button>
+        </div>
+      </div>
+      <div class="dmg-row">
+        <div class="dmg-swatch" style="background:radial-gradient(circle at 35% 30%, #6cead9, var(--teal));"></div>
+        <div class="dmg-info">
+          <div class="dmg-name">from Kess</div>
+          <div class="dmg-label">15 to lethal</div>
+        </div>
+        <div class="dmg-stepper">
+          <button>−</button>
+          <div class="dmg-val">6</div>
+          <button>+</button>
+        </div>
+      </div>
+      <div class="dmg-row">
+        <div class="dmg-swatch" style="background:radial-gradient(circle at 35% 30%, #c8a3ef, var(--violet));"></div>
+        <div class="dmg-info">
+          <div class="dmg-name">from Yorion</div>
+          <div class="dmg-label">1 to lethal</div>
+        </div>
+        <div class="dmg-stepper">
+          <button>−</button>
+          <div class="dmg-val">20</div>
+          <button>+</button>
+        </div>
+      </div>
+      <div class="lethal-badge">Yorion is 1 commander damage from eliminating Nazgul</div>
+    </div>
+    <div class="home-indicator"></div>
+  </div>
+  <div class="caption">Commander-damage sub-panel — long-pressing a zone opens per-opponent steppers over a dimmed table, with a lethal-damage warning at 21.</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Commander Life — Setup Mockup</title>
+<style>
+  :root{
+    --bg:#121016;
+    --panel:#1b1822;
+    --panel-2:#211d29;
+    --text:#f5f3f7;
+    --sub:#948fa3;
+    --crimson:#e5484d;
+    --teal:#12a594;
+    --amber:#f5a524;
+    --violet:#8e4ec6;
+    --lime:#99d52a;
+    --sky:#0091ff;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    background:#3a3742;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+  }
+  .frame{
+    width:390px;
+    height:844px;
+    background:var(--bg);
+    border-radius:46px;
+    border:10px solid #0a0910;
+    box-shadow:0 30px 70px rgba(0,0,0,.55);
+    position:relative;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .notch{
+    position:absolute;
+    top:10px;left:50%;
+    transform:translateX(-50%);
+    width:120px;height:26px;
+    background:#0a0910;
+    border-radius:0 0 18px 18px;
+    z-index:5;
+  }
+  .screen{
+    flex:1;
+    padding:64px 22px 28px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    overflow:hidden;
+  }
+  h1{
+    margin:0;
+    font-size:28px;
+    font-weight:800;
+    color:var(--text);
+    letter-spacing:.3px;
+    text-align:center;
+  }
+  .sub{
+    margin:-12px 0 6px;
+    text-align:center;
+    color:var(--sub);
+    font-size:13px;
+  }
+  .card{
+    background:var(--panel);
+    border-radius:18px;
+    padding:16px 18px;
+  }
+  .row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .row + .row{margin-top:14px;}
+  .label{
+    color:var(--text);
+    font-size:15px;
+    font-weight:600;
+  }
+  .label small{
+    display:block;
+    color:var(--sub);
+    font-weight:400;
+    font-size:11px;
+    margin-top:2px;
+  }
+  .stepper{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:var(--panel-2);
+    border-radius:14px;
+    padding:6px 10px;
+  }
+  .stepper button{
+    width:32px;height:32px;
+    border-radius:10px;
+    border:none;
+    background:#2d2938;
+    color:var(--text);
+    font-size:18px;
+    font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .stepper .val{
+    min-width:34px;
+    text-align:center;
+    color:var(--text);
+    font-size:17px;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+  }
+  .players{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .player-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--panel-2);
+    border-radius:14px;
+    padding:10px 12px;
+  }
+  .swatch{
+    width:30px;height:30px;
+    border-radius:50%;
+    flex:0 0 auto;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);
+  }
+  .name-field{
+    flex:1;
+    color:var(--text);
+    font-size:14px;
+    font-weight:600;
+  }
+  .name-field .ph{
+    color:var(--sub);
+    font-weight:400;
+    font-size:11px;
+    display:block;
+    margin-top:1px;
+  }
+  .swatch-row{
+    display:flex;
+    gap:8px;
+  }
+  .mini-swatch{
+    width:16px;height:16px;
+    border-radius:50%;
+  }
+  .spacer{flex:1;}
+  .cta{
+    margin-top:auto;
+    background:linear-gradient(135deg,var(--sky),var(--violet));
+    color:#fff;
+    border:none;
+    border-radius:18px;
+    padding:18px;
+    font-size:17px;
+    font-weight:800;
+    letter-spacing:.4px;
+    text-align:center;
+    box-shadow:0 10px 26px rgba(0,145,255,.35);
+  }
+  .home-indicator{
+    position:absolute;
+    bottom:8px;left:50%;
+    transform:translateX(-50%);
+    width:130px;height:5px;
+    border-radius:3px;
+    background:rgba(255,255,255,.35);
+  }
+  .caption{
+    text-align:center;
+    color:#8b869a;
+    font-size:13px;
+    margin-top:14px;
+    max-width:390px;
+  }
+  .wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="frame">
+    <div class="notch"></div>
+    <div class="screen">
+      <h1>Commander Life</h1>
+      <div class="sub">Setup your table</div>
+
+      <div class="card">
+        <div class="row">
+          <div class="label">Players<small>3 to 6 seats</small></div>
+          <div class="stepper">
+            <button>−</button>
+            <div class="val">4</div>
+            <button>+</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="label">Starting life<small>Standard Commander is 40</small></div>
+          <div class="stepper">
+            <button>−</button>
+            <div class="val">40</div>
+            <button>+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="players">
+        <div class="player-row">
+          <div class="swatch" style="background:radial-gradient(circle at 35% 30%, #ff7a7d, var(--crimson));"></div>
+          <div class="name-field">Player 1<span class="ph">Tap to rename</span></div>
+          <div class="swatch-row">
+            <div class="mini-swatch" style="background:var(--crimson); box-shadow:0 0 0 2px #fff;"></div>
+            <div class="mini-swatch" style="background:var(--teal);"></div>
+            <div class="mini-swatch" style="background:var(--amber);"></div>
+          </div>
+        </div>
+        <div class="player-row">
+          <div class="swatch" style="background:radial-gradient(circle at 35% 30%, #5fe0cf, var(--teal));"></div>
+          <div class="name-field">Player 2<span class="ph">Tap to rename</span></div>
+          <div class="swatch-row">
+            <div class="mini-swatch" style="background:var(--violet);"></div>
+            <div class="mini-swatch" style="background:var(--teal); box-shadow:0 0 0 2px #fff;"></div>
+            <div class="mini-swatch" style="background:var(--lime);"></div>
+          </div>
+        </div>
+        <div class="player-row">
+          <div class="swatch" style="background:radial-gradient(circle at 35% 30%, #ffd27a, var(--amber));"></div>
+          <div class="name-field">Player 3<span class="ph">Tap to rename</span></div>
+          <div class="swatch-row">
+            <div class="mini-swatch" style="background:var(--sky);"></div>
+            <div class="mini-swatch" style="background:var(--amber); box-shadow:0 0 0 2px #fff;"></div>
+            <div class="mini-swatch" style="background:var(--crimson);"></div>
+          </div>
+        </div>
+        <div class="player-row">
+          <div class="swatch" style="background:radial-gradient(circle at 35% 30%, #b98ce8, var(--violet));"></div>
+          <div class="name-field">Player 4<span class="ph">Tap to rename</span></div>
+          <div class="swatch-row">
+            <div class="mini-swatch" style="background:var(--violet); box-shadow:0 0 0 2px #fff;"></div>
+            <div class="mini-swatch" style="background:var(--lime);"></div>
+            <div class="mini-swatch" style="background:var(--sky);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="cta">Start Game</div>
+    </div>
+    <div class="home-indicator"></div>
+  </div>
+  <div class="caption">Setup screen — two taps launches the 4-player / 40-life default; steppers and swatches expose the full config for power users.</div>
+</div>
+</body>
+</html>
