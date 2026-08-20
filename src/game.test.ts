@@ -50,4 +50,33 @@ describe('Game', () => {
     const game = new Game();
     game.update(0.016);
   });
+
+  it('starts with one player per seat at 40 life and zeroed commander damage', () => {
+    const game = new Game();
+
+    expect(game.players).toHaveLength(game.playerCount);
+    expect(game.players.every((player) => player.life === 40)).toBe(true);
+    expect(game.damageState[game.players[0].id]).toEqual(
+      Object.fromEntries(
+        game.players.slice(1).map((player) => [player.id, 0]),
+      ),
+    );
+  });
+
+  it('resolves a long-press to the player id whose zone contains the point', () => {
+    const game = new Game();
+    game.resize(400, 800);
+
+    const zoneHeight = 800 / game.playerCount;
+    const playerId = game.onLongPress(50, zoneHeight * 2 + 10);
+
+    expect(playerId).toBe(game.players[2].id);
+  });
+
+  it('ignores long-presses over the shared center control', () => {
+    const game = new Game();
+    game.resize(400, 800);
+
+    expect(game.onLongPress(200, 400)).toBeNull();
+  });
 });
