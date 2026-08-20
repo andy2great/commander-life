@@ -21,9 +21,19 @@ export function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-const ACTIVE_ZONE_COLOR = '#5b8cff';
+const ACTIVE_ZONE_COLOR_RGB = '91, 140, 255';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
 const STARTING_LIFE = 40;
+const BACKGROUND_COLOR = '#121016';
+
+// The 6 preset saturated accent colors from docs/concept.md, assigned to
+// seats in order (crimson, teal, amber, violet, lime, sky).
+const PLAYER_COLORS = ['#e11d48', '#14b8a6', '#f59e0b', '#8b5cf6', '#84cc16', '#38bdf8'];
+
+// Active zone's pulsing border: sine-driven width/opacity per docs/concept.md.
+const PULSE_SPEED_RAD_S = 4;
+const PULSE_MIN_WIDTH = 3;
+const PULSE_MAX_WIDTH = 7;
 
 // Tap-and-hold ramp: repeated ticks start after RAMP_DELAY_S of holding, then
 // speed up from RAMP_START_INTERVAL_S down to RAMP_MIN_INTERVAL_S per docs/concept.md.
@@ -62,6 +72,7 @@ export class Game {
   private readonly stack: UndoStack = new ArrayUndoStack();
   private height = 0;
   private hold: HoldState | undefined;
+  private animTime = 0;
 
   get activeIndex(): number {
     return this.turnState.activeIndex;
@@ -84,6 +95,8 @@ export class Game {
   }
 
   update(dt: number): void {
+    this.animTime += dt;
+
     if (!this.hold) {
       return;
     }
@@ -192,12 +205,51 @@ export class Game {
     for (let seat = 0; seat < this.playerCount; seat += 1) {
       const y = seat * zoneHeight;
       const isActive = seat === this.turnState.activeIndex;
+      // Zones in the top half face the opposite seat, so their contents read
+      // upright from there once rotated 180°.
+      const isTopRow = seat < this.playerCount / 2;
+      const player = this.playersList[seat];
+      const cx = width / 2;
+      const cy = y + zoneHeight / 2;
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, zoneHeight) * 0.75);
+      gradient.addColorStop(0, PLAYER_COLORS[seat % PLAYER_COLORS.length]);
+      gradient.addColorStop(1, BACKGROUND_COLOR);
+      ctx.fillStyle = gradient;
       ctx.fillRect(0, y, width, zoneHeight);
 
-      ctx.lineWidth = isActive ? 4 : 1;
-      ctx.strokeStyle = isActive ? ACTIVE_ZONE_COLOR : IDLE_ZONE_COLOR;
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (isTopRow) {
+        ctx.rotate(Math.PI);
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
+      ctx.textAlign = 'center';
+
+      const lifeFontSize = Math.round(zoneHeight * 0.5);
+      ctx.font = `800 ${lifeFontSize}px "Arial Black", system-ui, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(player.life), 0, 0);
+
+      const nameFontSize = Math.round(zoneHeight * 0.14);
+      ctx.font = `600 ${nameFontSize}px system-ui, sans-serif`;
+      ctx.textBaseline = 'top';
+      ctx.fillText(player.name, 0, lifeFontSize / 2 + 4);
+
+      ctx.restore();
+
+      if (isActive) {
+        const pulse = 0.5 + 0.5 * Math.sin(this.animTime * PULSE_SPEED_RAD_S);
+        ctx.lineWidth = PULSE_MIN_WIDTH + (PULSE_MAX_WIDTH - PULSE_MIN_WIDTH) * pulse;
+        ctx.strokeStyle = `rgba(${ACTIVE_ZONE_COLOR_RGB}, ${0.6 + 0.4 * pulse})`;
+      } else {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = IDLE_ZONE_COLOR;
+      }
       ctx.strokeRect(1, y + 1, width - 2, zoneHeight - 2);
     }
   }
