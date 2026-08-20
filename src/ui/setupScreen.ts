@@ -34,7 +34,7 @@ function injectStylesOnce(): void {
   stylesInjected = true;
   const style = document.createElement('style');
   style.textContent = `
-    .setup-screen { position: fixed; inset: 0; background: #121016; z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
+    .setup-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: #121016; z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
     .setup-title { margin: 0; font-size: 26px; font-weight: 800; color: #f5f3f7; text-align: center; }
     .setup-sub { margin: -8px 0 0; text-align: center; color: #948fa3; font-size: 13px; }
     .setup-card { background: #1b1822; border-radius: 18px; padding: 16px 18px; }

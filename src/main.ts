@@ -1,4 +1,4 @@
-import { Game, type GameConfig } from './game';
+import { computeOverlaySafeArea, Game, type GameConfig } from './game';
 import { attachTapAndLongPress, DamagePanel } from './ui/damagePanel';
 import { SetupScreen } from './ui/setupScreen';
 import { StatsScreen } from './ui/statsScreen';
@@ -12,6 +12,12 @@ function resize(): void {
   canvas.width = Math.round(window.innerWidth * dpr);
   canvas.height = Math.round(window.innerHeight * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Drives the --overlay-max-h CSS var read by setupScreen/damagePanel/
+  // statsScreen so they can't grow taller than the (possibly short,
+  // landscape) viewport and bury the game behind them. See issue #45.
+  const { maxHeight } = computeOverlaySafeArea(window.innerWidth, window.innerHeight);
+  document.documentElement.style.setProperty('--overlay-max-h', `${maxHeight}px`);
 }
 
 window.addEventListener('resize', resize);

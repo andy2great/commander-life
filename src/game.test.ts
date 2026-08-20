@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Game, clamp, computeZoneRects } from './game';
+import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
 import { applyPoisonDelta } from './game/poison';
 import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
 
@@ -627,5 +627,39 @@ describe('end of game', () => {
 
     game.update(10);
     expect(game.stats?.durationS).toBeCloseTo(5, 5);
+  });
+});
+
+// Issue #45: landscape overlays (setup screen, commander-damage panel, stats
+// screen) were unbounded and could grow taller than a short landscape
+// viewport, burying player zones/life totals behind them.
+describe('computeOverlaySafeArea', () => {
+  it('leaves overlay height unconstrained in portrait', () => {
+    expect(computeOverlaySafeArea(400, 800).maxHeight).toBe(800);
+  });
+
+  it.each([
+    [812, 375],
+    [896, 414],
+  ])('caps overlay height below the %ix%i landscape viewport', (width, height) => {
+    const { maxHeight } = computeOverlaySafeArea(width, height);
+    expect(maxHeight).toBeLessThan(height);
+    expect(maxHeight).toBeGreaterThan(0);
+  });
+
+  it('treats a square canvas as portrait (unconstrained)', () => {
+    expect(computeOverlaySafeArea(500, 500).maxHeight).toBe(500);
+  });
+});
+
+describe('Game overlay safe area', () => {
+  it('reflects the most recent resize() call', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+
+    game.resize(400, 900);
+    expect(game.overlaySafeArea.maxHeight).toBe(900);
+
+    game.resize(812, 375); // common landscape phone size, per issue #45
+    expect(game.overlaySafeArea.maxHeight).toBeLessThan(375);
   });
 });
