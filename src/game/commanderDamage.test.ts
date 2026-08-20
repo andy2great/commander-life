@@ -1,0 +1,116 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyCommanderDamageDelta,
+  createCommanderDamageState,
+  type Player,
+  type UndoAction,
+} from './commanderDamage';
+
+function makePlayers(): Player[] {
+  return [
+    { id: 'p1', name: 'Alara', life: 40 },
+    { id: 'p2', name: 'Kess', life: 40 },
+    { id: 'p3', name: 'Yorion', life: 40 },
+  ];
+}
+
+class FakeUndoStack {
+  actions: UndoAction[] = [];
+  push(action: UndoAction): void {
+    this.actions.push(action);
+  }
+  undoLast(): void {
+    this.actions.pop()?.undo();
+  }
+}
+
+describe('createCommanderDamageState', () => {
+  it('zeroes commander damage between every pair of players, excluding self', () => {
+    const state = createCommanderDamageState(['p1', 'p2', 'p3']);
+    expect(state).toEqual({
+      p1: { p2: 0, p3: 0 },
+      p2: { p1: 0, p3: 0 },
+      p3: { p1: 0, p2: 0 },
+    });
+  });
+});
+
+describe('applyCommanderDamageDelta', () => {
+  it('increases commander damage and reduces the target life by the same amount', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack);
+
+    expect(state.p1.p2).toBe(3);
+    expect(players[0].life).toBe(37);
+  });
+
+  it('tracks damage from each opponent independently', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 5, undoStack);
+    applyCommanderDamageDelta(state, players, 'p1', 'p3', 2, undoStack);
+
+    expect(state.p1.p2).toBe(5);
+    expect(state.p1.p3).toBe(2);
+    expect(players[0].life).toBe(33);
+  });
+
+  it('clamps commander damage at zero and only applies the clamped life delta', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -1, undoStack);
+
+    expect(state.p1.p2).toBe(0);
+    expect(players[0].life).toBe(40);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('ignores self-targeted damage', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p1', 3, undoStack);
+
+    expect(state.p1.p1).toBeUndefined();
+    expect(players[0].life).toBe(40);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('pushes an undo action that reverts both the damage counter and the life total', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 4, undoStack);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.undoLast();
+
+    expect(state.p1.p2).toBe(0);
+    expect(players[0].life).toBe(40);
+  });
+
+  it('reverts a decrease back to the prior damage and life values', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 6, undoStack);
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -2, undoStack);
+    expect(state.p1.p2).toBe(4);
+    expect(players[0].life).toBe(36);
+
+    undoStack.undoLast();
+
+    expect(state.p1.p2).toBe(6);
+    expect(players[0].life).toBe(34);
+  });
+});
