@@ -25,6 +25,17 @@ const ACTIVE_ZONE_COLOR_RGB = '91, 140, 255';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
 const BACKGROUND_COLOR = '#121016';
 
+// Half-boundary affordance (issue #32): a subtle dividing line at the tap
+// boundary plus persistent +/- glyphs, so each zone shows before any tap
+// which half adds life and which removes it. Both the line (horizontal,
+// centered on the rect) and the glyphs ("+"/"−" are visually symmetric
+// under a 180° turn) look identical whether or not the zone is rotated, so
+// they stay drawn at fixed canvas-relative positions and read correctly for
+// top-row seats without needing to know rect.rotated — matching zoneAt(),
+// which is likewise rotation-agnostic.
+const HALF_DIVIDER_COLOR = 'rgba(255, 255, 255, 0.35)';
+const HALF_GLYPH_BADGE_COLOR = 'rgba(0, 0, 0, 0.38)';
+
 export const MIN_PLAYER_COUNT = 3;
 export const MAX_PLAYER_COUNT = 6;
 export const DEFAULT_PLAYER_COUNT = 4;
@@ -497,6 +508,8 @@ export class Game {
       ctx.fillStyle = gradient;
       ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
 
+      this.drawHalfAffordance(ctx, rect);
+
       ctx.save();
       ctx.translate(cx, cy);
       if (rect.rotated) {
@@ -531,5 +544,46 @@ export class Game {
       }
       ctx.strokeRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
     }
+  }
+
+  /** Draws the always-visible +/- half-boundary affordance for one zone. See HALF_DIVIDER_COLOR above. */
+  private drawHalfAffordance(ctx: CanvasRenderingContext2D, rect: ZoneRect): void {
+    const midY = rect.y + rect.height / 2;
+    const cx = rect.x + rect.width / 2;
+
+    ctx.save();
+    ctx.strokeStyle = HALF_DIVIDER_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.moveTo(rect.x, midY);
+    ctx.lineTo(rect.x + rect.width, midY);
+    ctx.stroke();
+    ctx.restore();
+
+    const shortSide = Math.min(rect.width, rect.height);
+    const glyphSize = Math.max(14, Math.round(shortSide * 0.1));
+    const margin = Math.max(glyphSize * 1.3, rect.height * 0.12);
+    this.drawHalfGlyph(ctx, '+', cx, rect.y + margin, glyphSize);
+    this.drawHalfGlyph(ctx, '−', cx, rect.y + rect.height - margin, glyphSize);
+  }
+
+  /** Draws one +/- glyph on a small translucent badge for contrast against any of the 6 accent colors. */
+  private drawHalfGlyph(ctx: CanvasRenderingContext2D, glyph: string, x: number, y: number, size: number): void {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.62, 0, Math.PI * 2);
+    ctx.fillStyle = HALF_GLYPH_BADGE_COLOR;
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `800 ${size}px "Arial Black", system-ui, sans-serif`;
+    ctx.fillText(glyph, x, y);
+    ctx.restore();
   }
 }
