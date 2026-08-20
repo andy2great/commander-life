@@ -89,24 +89,46 @@ describe('Game', () => {
     expect(game.onLongPress(200, 400)).toBeNull();
   });
 
-  it('increments life when the upper half of a player zone is tapped', () => {
+  it('increments life when the upper half of a bottom-row (non-rotated) zone is tapped', () => {
     const game = new Game();
     game.resize(400, 800);
-    const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
+    const player = game.players[2];
+    const rect = computeZoneRects(game.playerCount, 400, 800)[2];
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(rect.x + 10, rect.y + 10); // near the row divider: away from this seat's body = upper
 
     expect(player.life).toBe(41);
   });
 
-  it('decrements life when the lower half of a player zone is tapped', () => {
+  it('decrements life when the lower half of a bottom-row (non-rotated) zone is tapped', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[2];
+    const rect = computeZoneRects(game.playerCount, 400, 800)[2];
+
+    game.onTap(rect.x + 10, rect.y + rect.height - 10); // near the phone's bottom edge: this seat's own body = lower
+
+    expect(player.life).toBe(39);
+  });
+
+  it('increments life when the upper half of a top-row (rotated) zone is tapped', () => {
     const game = new Game();
     game.resize(400, 800);
     const player = game.players[0];
     const rect = computeZoneRects(game.playerCount, 400, 800)[0];
 
-    game.onTap(rect.x + 10, rect.y + rect.height - 10);
+    game.onTap(rect.x + 10, rect.y + rect.height - 10); // near the row divider: away from this seat's body = upper
+
+    expect(player.life).toBe(41);
+  });
+
+  it('decrements life when the lower half of a top-row (rotated) zone is tapped', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const rect = computeZoneRects(game.playerCount, 400, 800)[0];
+
+    game.onTap(rect.x + 10, rect.y + 10); // near the phone's top edge: this seat's own body = lower
 
     expect(player.life).toBe(39);
   });
@@ -128,7 +150,7 @@ describe('Game', () => {
     const player = game.players[0];
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
     expect(player.life).toBe(41);
 
     const stack = game.undoStack as unknown as { actions: { undo(): void }[] };
@@ -145,7 +167,7 @@ describe('Game', () => {
 
     expect(game.canUndo).toBe(false);
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
     expect(player.life).toBe(41);
     expect(game.canUndo).toBe(true);
 
@@ -161,9 +183,9 @@ describe('Game', () => {
     const player = game.players[0];
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight / 2 - 10); // +1
+    game.onTap(50, zoneHeight + 10); // +1
     game.onTapEnd();
-    game.onTap(50, zoneHeight / 2 - 10); // +1
+    game.onTap(50, zoneHeight + 10); // +1
     game.onTapEnd();
     expect(player.life).toBe(42);
 
@@ -196,7 +218,7 @@ describe('Game', () => {
     game.onTap(undoCenter.x, undoCenter.y);
     expect(player.life).toBe(40);
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
     expect(player.life).toBe(41);
 
     game.onTap(undoCenter.x, undoCenter.y);
@@ -217,7 +239,7 @@ describe('Game', () => {
     const player = game.players[0];
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
     expect(player.life).toBe(41);
 
     game.update(0.3);
@@ -242,7 +264,7 @@ describe('Game', () => {
     const player = game.players[0];
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
     expect(player.life).toBe(41);
     expect(game.popups).toHaveLength(1);
 
@@ -269,13 +291,13 @@ describe('Game', () => {
     game.resize(400, 800);
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
 
     expect(game.popups).toHaveLength(1);
     expect(game.popups[0]).toMatchObject({
       playerId: game.players[0].id,
       x: 50,
-      y: zoneHeight / 2 - 10,
+      y: zoneHeight + 10,
       delta: 1,
     });
   });
@@ -294,7 +316,7 @@ describe('Game', () => {
     game.resize(400, 800);
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
     expect(game.popups).toHaveLength(1);
 
     game.update(0.4);
@@ -309,7 +331,7 @@ describe('Game', () => {
     game.resize(400, 800);
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight / 2 - 10);
+    game.onTap(50, zoneHeight + 10);
     game.onTapEnd();
     game.onTap(60, zoneHeight - 10);
     game.onTapEnd();
@@ -362,8 +384,11 @@ describe('Game', () => {
 
         const player = game.players[seat];
         const lifeBefore = player.life;
-        game.onTap(centerX, centerY - 1); // upper half of this zone's own center
-        expect(player.life).toBe(lifeBefore + 1);
+        // 1px toward this zone's own top edge from center: for a bottom-row
+        // (upright) zone that's away from the seat's body = upper = +1; for a
+        // top-row (rotated) zone that's near the seat's own body = lower = -1.
+        game.onTap(centerX, centerY - 1);
+        expect(player.life).toBe(lifeBefore + (rect.rotated ? -1 : 1));
       });
     },
   );
@@ -374,14 +399,17 @@ describe('Game', () => {
     const rects = computeZoneRects(playerCount, 400, 900);
 
     rects.forEach((rect, seat) => {
-      // Upper half of each zone increments, lower half decrements — regardless
-      // of the zone's row (rotation only affects rendering, not hit-testing).
-      // Taps land a quarter-height into each half, well clear of the shared
-      // control disc that sits where the two rows meet.
+      // Each zone's own upper half increments and lower half decrements, from
+      // that seat's own seated orientation: for a top-row (rotated) zone the
+      // near-to-body (small canvas-offset) side is that seat's lower half,
+      // the opposite of a bottom-row (upright) zone. Taps land a quarter-
+      // height into each half, well clear of the shared control disc that
+      // sits where the two rows meet.
       const player = game.players[seat];
+      const nearBodyDelta = rect.rotated ? -1 : 1;
 
       game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.25);
-      expect(player.life).toBe(41);
+      expect(player.life).toBe(40 + nearBodyDelta);
 
       game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.75);
       expect(player.life).toBe(40);
@@ -425,7 +453,7 @@ describe('end of game', () => {
     game.resize(400, 900);
     const rects = computeZoneRects(3, 400, 900);
 
-    game.onTap(rects[0].x + 50, rects[0].y + rects[0].height - 10); // Alara: 1 -> 0 (lower half)
+    game.onTap(rects[0].x + 50, rects[0].y + 10); // Alara: 1 -> 0 (lower half, near this rotated seat's own body)
     expect(game.ended).toBe(false);
 
     game.onTap(rects[1].x + 50, rects[1].y + rects[1].height - 10); // Kess: 1 -> 0 (lower half), only Yorion remains
@@ -443,7 +471,7 @@ describe('end of game', () => {
     game.resize(400, 900);
     const rects = computeZoneRects(3, 400, 900);
 
-    game.onTap(rects[0].x + 50, rects[0].y + rects[0].height - 10); // Alara: 1 -> 0, recorded as eliminated
+    game.onTap(rects[0].x + 50, rects[0].y + 10); // Alara: 1 -> 0, recorded as eliminated
     expect(game.stats).toBeNull();
 
     game.undo(); // Alara: 0 -> 1
@@ -459,7 +487,7 @@ describe('end of game', () => {
     const game = makeThreePlayerGame(40);
     game.resize(400, 900);
 
-    game.onTap(50, 140); // Alara upper half: 40 -> 41
+    game.onTap(50, 310); // Alara upper half (rotated seat, large canvas offset): 40 -> 41
 
     game.endGame();
 
@@ -486,7 +514,7 @@ describe('end of game', () => {
     game.onTap(200, 450); // pass turn to Kess (shared control center; see Game.resize())
     game.update(3); // Kess active for 3s
 
-    game.onTap(rects[0].x + 50, rects[0].y + rects[0].height - 10); // eliminate Alara
+    game.onTap(rects[0].x + 50, rects[0].y + 10); // eliminate Alara
     game.onTap(rects[1].x + 50, rects[1].y + rects[1].height - 10); // eliminate Kess, Yorion wins
 
     const stats = game.stats;

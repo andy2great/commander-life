@@ -27,12 +27,10 @@ const BACKGROUND_COLOR = '#121016';
 
 // Half-boundary affordance (issue #32): a subtle dividing line at the tap
 // boundary plus persistent +/- glyphs, so each zone shows before any tap
-// which half adds life and which removes it. Both the line (horizontal,
-// centered on the rect) and the glyphs ("+"/"−" are visually symmetric
-// under a 180° turn) look identical whether or not the zone is rotated, so
-// they stay drawn at fixed canvas-relative positions and read correctly for
-// top-row seats without needing to know rect.rotated — matching zoneAt(),
-// which is likewise rotation-agnostic.
+// which half adds life and which removes it. The divider line is symmetric
+// under a 180° turn so it stays put, but the +/- glyphs swap ends for a
+// rotated (top-row) zone, mirroring zoneAt()'s rotation-aware half split
+// below, so + always sits on that seat's own perceived "upper" side.
 const HALF_DIVIDER_COLOR = 'rgba(255, 255, 255, 0.35)';
 const HALF_GLYPH_BADGE_COLOR = 'rgba(0, 0, 0, 0.38)';
 
@@ -401,7 +399,12 @@ export class Game {
     }
     const rect = this.zoneRects[seat];
     const offsetInZone = y - rect.y;
-    const half = offsetInZone < rect.height / 2 ? 'upper' : 'lower';
+    const nearRectStart = offsetInZone < rect.height / 2;
+    // Top-row zones render rotated 180° to face that seat, so the small-offset
+    // side of the rect (physically closest to the top edge of the phone) is
+    // that player's own perceived "lower" half, the opposite of a bottom-row
+    // (upright) zone where the small-offset side is their perceived "upper".
+    const half = nearRectStart !== rect.rotated ? 'upper' : 'lower';
     return { playerId: this.playersList[seat].id, half };
   }
 
@@ -565,8 +568,10 @@ export class Game {
     const shortSide = Math.min(rect.width, rect.height);
     const glyphSize = Math.max(14, Math.round(shortSide * 0.1));
     const margin = Math.max(glyphSize * 1.3, rect.height * 0.12);
-    this.drawHalfGlyph(ctx, '+', cx, rect.y + margin, glyphSize);
-    this.drawHalfGlyph(ctx, '−', cx, rect.y + rect.height - margin, glyphSize);
+    const plusY = rect.rotated ? rect.y + rect.height - margin : rect.y + margin;
+    const minusY = rect.rotated ? rect.y + margin : rect.y + rect.height - margin;
+    this.drawHalfGlyph(ctx, '+', cx, plusY, glyphSize);
+    this.drawHalfGlyph(ctx, '−', cx, minusY, glyphSize);
   }
 
   /** Draws one +/- glyph on a small translucent badge for contrast against any of the 6 accent colors. */
