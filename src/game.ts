@@ -9,6 +9,7 @@ import {
   type UndoAction,
   type UndoStack,
 } from './game/commanderDamage';
+import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
 import { PassTurnControl, UndoControl } from './ui/controls';
 
 export function clamp(value: number, min: number, max: number): number {
@@ -162,6 +163,7 @@ export class Game {
   private readonly undoControl = new UndoControl();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
+  private readonly poison: PoisonState;
   private readonly stack = new ArrayUndoStack();
   private readonly popupsList: DeltaPopup[] = [];
   private zoneRects: ZoneRect[] = [];
@@ -186,6 +188,7 @@ export class Game {
       };
     });
     this.damage = createCommanderDamageState(this.playersList.map((player) => player.id));
+    this.poison = createPoisonState(this.playersList.map((player) => player.id));
     this.activeTimeList = new Array(this.playerCount).fill(0);
   }
 
@@ -203,6 +206,10 @@ export class Game {
 
   get damageState(): CommanderDamageState {
     return this.damage;
+  }
+
+  get poisonState(): PoisonState {
+    return this.poison;
   }
 
   get undoStack(): UndoStack {
@@ -264,8 +271,11 @@ export class Game {
     if (this.endedFlag) {
       return;
     }
-    // Per docs/concept.md: manually ending the game picks the highest-life player as winner.
-    const winner = this.playersList.reduce((best, player) => (player.life > best.life ? player : best));
+    // Per docs/concept.md: manually ending the game picks the highest-life player as winner,
+    // among players not already eliminated by poison (life-eliminated players can't be highest).
+    const contenders = this.playersList.filter((player) => !this.isEliminated(player));
+    const pool = contenders.length > 0 ? contenders : this.playersList;
+    const winner = pool.reduce((best, player) => (player.life > best.life ? player : best));
     this.finishGame(winner.id);
   }
 
@@ -422,11 +432,16 @@ export class Game {
     this.checkEndConditions();
   }
 
+  /** True once a player's life is at or below 0, or their poison counter has reached the lethal threshold. */
+  private isEliminated(player: Player): boolean {
+    return player.life <= 0 || (this.poison[player.id] ?? 0) >= POISON_LETHAL;
+  }
+
   /**
-   * Records newly-eliminated players (life at or below 0), clears the record
-   * for anyone since restored above 0 life (e.g. via undo), and ends the game
-   * automatically once only one player remains above 0 life, per
-   * docs/concept.md step 6.
+   * Records newly-eliminated players (life at or below 0, or poison at or
+   * above the lethal threshold), clears the record for anyone since restored
+   * below both thresholds (e.g. via undo), and ends the game automatically
+   * once only one player remains, per docs/concept.md step 6.
    */
   private checkEndConditions(): void {
     if (this.endedFlag) {
@@ -434,7 +449,7 @@ export class Game {
     }
     for (const player of this.playersList) {
       const eliminatedIndex = this.eliminationOrderList.findIndex((entry) => entry.playerId === player.id);
-      if (player.life <= 0) {
+      if (this.isEliminated(player)) {
         if (eliminatedIndex === -1) {
           this.eliminationOrderList.push({ playerId: player.id, turnCount: this.turnState.turnCount });
         }
@@ -442,7 +457,7 @@ export class Game {
         this.eliminationOrderList.splice(eliminatedIndex, 1);
       }
     }
-    const alive = this.playersList.filter((player) => player.life > 0);
+    const alive = this.playersList.filter((player) => !this.isEliminated(player));
     if (alive.length === 1) {
       this.finishGame(alive[0].id);
     }

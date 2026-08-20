@@ -9,6 +9,7 @@ import {
   type Player,
   type UndoStack,
 } from '../game/commanderDamage';
+import { applyPoisonDelta, type PoisonState } from '../game/poison';
 
 export const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
@@ -114,8 +115,9 @@ export interface DamagePanelOptions {
   root: HTMLElement;
   players: Player[];
   damageState: CommanderDamageState;
+  poisonState: PoisonState;
   undoStack: UndoStack;
-  /** Called after every commander-damage change, e.g. to repaint zone life totals. */
+  /** Called after every commander-damage or poison change, e.g. to repaint zone life totals. */
   onChange?: () => void;
 }
 
@@ -146,6 +148,7 @@ export class DamagePanel {
   private readonly root: HTMLElement;
   private readonly players: Player[];
   private readonly damageState: CommanderDamageState;
+  private readonly poisonState: PoisonState;
   private readonly undoStack: UndoStack;
   private readonly onChange?: () => void;
   private overlay: HTMLElement | null = null;
@@ -154,6 +157,7 @@ export class DamagePanel {
     this.root = options.root;
     this.players = options.players;
     this.damageState = options.damageState;
+    this.poisonState = options.poisonState;
     this.undoStack = options.undoStack;
     this.onChange = options.onChange;
   }
@@ -198,6 +202,8 @@ export class DamagePanel {
     head.appendChild(title);
     head.appendChild(closeButton);
     panel.appendChild(head);
+
+    panel.appendChild(this.buildPoisonRow(target));
 
     for (const opponent of this.players) {
       if (opponent.id === targetId) {
@@ -271,6 +277,55 @@ export class DamagePanel {
       delta,
       this.undoStack,
     );
+    this.onChange?.();
+  }
+
+  private buildPoisonRow(target: Player): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'cmdr-dmg-row';
+
+    const name = document.createElement('div');
+    name.className = 'cmdr-dmg-name';
+    name.textContent = 'Poison';
+
+    const stepper = document.createElement('div');
+    stepper.className = 'cmdr-dmg-stepper';
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'cmdr-dmg-val';
+    const refresh = (): void => {
+      valueEl.textContent = String(this.poisonState[target.id] ?? 0);
+    };
+    refresh();
+
+    const minusButton = document.createElement('button');
+    minusButton.type = 'button';
+    minusButton.textContent = '−';
+    minusButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      this.adjustPoison(target, -1);
+      refresh();
+    });
+
+    const plusButton = document.createElement('button');
+    plusButton.type = 'button';
+    plusButton.textContent = '+';
+    plusButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      this.adjustPoison(target, 1);
+      refresh();
+    });
+
+    stepper.appendChild(minusButton);
+    stepper.appendChild(valueEl);
+    stepper.appendChild(plusButton);
+    row.appendChild(name);
+    row.appendChild(stepper);
+    return row;
+  }
+
+  private adjustPoison(target: Player, delta: number): void {
+    applyPoisonDelta(this.poisonState, target.id, delta, this.undoStack);
     this.onChange?.();
   }
 }
