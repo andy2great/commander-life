@@ -14,10 +14,21 @@ const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 
 export interface TapGestureHandlers {
+  /**
+   * Called synchronously on pointerdown, before tap vs long-press is known.
+   * Optional: use it for effects that must bracket the whole press (e.g.
+   * arming a continuous tap-and-hold ramp), paired with `onPressEnd`.
+   */
+  onPressStart?: (event: PointerEvent) => void;
   /** Called on pointerup when the press resolved as a short tap (the long-press timer never fired). */
   onTap: (event: PointerEvent) => void;
   /** Called after `durationMs` of a stationary pointerdown; suppresses the paired `onTap` for that press. */
   onLongPress: (event: PointerEvent) => void;
+  /**
+   * Called on pointerup/pointercancel/pointerleave, always — whether the
+   * press resolved as a tap or a long-press. Pairs with `onPressStart`.
+   */
+  onPressEnd?: (event: PointerEvent) => void;
 }
 
 /**
@@ -33,6 +44,9 @@ export function attachTapAndLongPress(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let startX = 0;
   let startY = 0;
+  // Only ever set to true by the long-press timeout below; onPointerDown
+  // resets it for every new press, so a stale true from a prior press can
+  // never leak into this one.
   let longPressFired = false;
 
   const cancelTimer = (): void => {
@@ -47,6 +61,7 @@ export function attachTapAndLongPress(
     startY = event.clientY;
     longPressFired = false;
     cancelTimer();
+    handlers.onPressStart?.(event);
     timer = setTimeout(() => {
       timer = undefined;
       longPressFired = true;
@@ -69,11 +84,13 @@ export function attachTapAndLongPress(
     if (!wasLongPress) {
       handlers.onTap(event);
     }
+    handlers.onPressEnd?.(event);
   };
 
-  const onPointerCancel = (): void => {
+  const onPointerCancel = (event: PointerEvent): void => {
     cancelTimer();
     longPressFired = false;
+    handlers.onPressEnd?.(event);
   };
 
   element.addEventListener('pointerdown', onPointerDown);

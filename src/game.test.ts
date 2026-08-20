@@ -153,6 +153,34 @@ describe('Game', () => {
     expect(player.life).toBe(afterRelease);
   });
 
+  it('cancelTap reverts the zone life change and popup, and disarms the ramp', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10);
+    expect(player.life).toBe(41);
+    expect(game.popups).toHaveLength(1);
+
+    game.cancelTap();
+    expect(player.life).toBe(40);
+    expect(game.popups).toHaveLength(0);
+
+    game.update(1);
+    expect(player.life).toBe(40);
+  });
+
+  it('cancelTap is a no-op when no zone tap is currently held', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const livesBefore = game.players.map((player) => player.life);
+
+    game.cancelTap();
+
+    expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+  });
+
   it('spawns a delta popup at the tap location when a zone tap changes life', () => {
     const game = new Game();
     game.resize(400, 800);

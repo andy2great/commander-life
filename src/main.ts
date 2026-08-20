@@ -35,19 +35,33 @@ function startGame(config: GameConfig): void {
   canvas.style.display = 'block';
 
   const detachGesture = attachTapAndLongPress(canvas, {
+    onPressStart: (event) => {
+      // Zone taps apply on pointerdown so a held press can ramp across
+      // animation frames; a later long-press reverts this via cancelTap().
+      // Control taps stay deferred to onTap (pointerup) since they never
+      // ramp, which also keeps a long-press from passing the turn early.
+      if (!game.isOverControl(event.clientX, event.clientY)) {
+        game.onTap(event.clientX, event.clientY);
+      }
+    },
     onTap: (event) => {
-      game.onTap(event.clientX, event.clientY);
-      game.onTapEnd();
+      if (game.isOverControl(event.clientX, event.clientY)) {
+        game.onTap(event.clientX, event.clientY);
+      }
     },
     onLongPress: (event) => {
       if (game.isOverControl(event.clientX, event.clientY)) {
         game.endGame();
         return;
       }
+      game.cancelTap();
       const playerId = game.onLongPress(event.clientX, event.clientY);
       if (playerId) {
         damagePanel.open(playerId);
       }
+    },
+    onPressEnd: () => {
+      game.onTapEnd();
     },
   });
 
