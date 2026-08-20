@@ -2,6 +2,8 @@
 // each player's total life in sync, and records a matching undo action on the
 // shared undo stack. Free of DOM globals so it stays unit-testable.
 
+import type { SoundPlayer } from '../audio/soundPlayer';
+
 export interface Player {
   id: string;
   name: string;
@@ -37,7 +39,8 @@ export function createCommanderDamageState(playerIds: string[]): CommanderDamage
  * Adjusts the commander damage `targetId` has taken from `fromId` by `delta`
  * (clamped at zero) and applies the same delta to `targetId`'s life, since
  * commander damage is also regular damage. Pushes an undo action that
- * reverts both changes onto `undoStack`.
+ * reverts both changes onto `undoStack`. Plays a distinct increment/decrement
+ * cue on `sound`, if given, only when the clamped change actually applies.
  */
 export function applyCommanderDamageDelta(
   state: CommanderDamageState,
@@ -46,6 +49,7 @@ export function applyCommanderDamageDelta(
   fromId: string,
   delta: number,
   undoStack: UndoStack,
+  sound?: SoundPlayer,
 ): void {
   if (targetId === fromId || delta === 0) {
     return;
@@ -65,6 +69,7 @@ export function applyCommanderDamageDelta(
 
   targetDamage[fromId] = after;
   target.life -= applied;
+  sound?.play(applied > 0 ? 'commanderDamageUp' : 'commanderDamageDown');
 
   undoStack.push({
     undo(): void {

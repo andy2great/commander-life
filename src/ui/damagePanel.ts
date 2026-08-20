@@ -10,6 +10,7 @@ import {
   type UndoStack,
 } from '../game/commanderDamage';
 import { applyPoisonDelta, type PoisonState } from '../game/poison';
+import type { SoundPlayer } from '../audio/soundPlayer';
 
 export const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
@@ -119,6 +120,7 @@ export interface DamagePanelOptions {
   undoStack: UndoStack;
   /** Called after every commander-damage or poison change, e.g. to repaint zone life totals. */
   onChange?: () => void;
+  sound?: SoundPlayer;
 }
 
 let stylesInjected = false;
@@ -152,6 +154,7 @@ export class DamagePanel {
   private readonly poisonState: PoisonState;
   private readonly undoStack: UndoStack;
   private readonly onChange?: () => void;
+  private readonly sound?: SoundPlayer;
   private overlay: HTMLElement | null = null;
 
   constructor(options: DamagePanelOptions) {
@@ -161,6 +164,7 @@ export class DamagePanel {
     this.poisonState = options.poisonState;
     this.undoStack = options.undoStack;
     this.onChange = options.onChange;
+    this.sound = options.sound;
   }
 
   get isOpen(): boolean {
@@ -289,6 +293,7 @@ export class DamagePanel {
       opponent.id,
       delta,
       this.undoStack,
+      this.sound,
     );
     this.onChange?.();
   }
