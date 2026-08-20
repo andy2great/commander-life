@@ -29,6 +29,7 @@ function startGame(config: GameConfig): void {
     root: document.body,
     players: game.players,
     damageState: game.damageState,
+    poisonState: game.poisonState,
     undoStack: game.undoStack,
   });
 

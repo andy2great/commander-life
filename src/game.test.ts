@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeZoneRects } from './game';
+import { applyPoisonDelta } from './game/poison';
 import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
 
 /** Mirrors UndoControl's reflow math so tests can tap the icon by coordinate. */
@@ -69,6 +70,14 @@ describe('Game', () => {
       Object.fromEntries(
         game.players.slice(1).map((player) => [player.id, 0]),
       ),
+    );
+  });
+
+  it('starts every player at 0 poison counters', () => {
+    const game = new Game();
+
+    expect(game.poisonState).toEqual(
+      Object.fromEntries(game.players.map((player) => [player.id, 0])),
     );
   });
 
@@ -464,6 +473,53 @@ describe('end of game', () => {
       game.players[0].id,
       game.players[1].id,
     ]);
+  });
+
+  it('ends automatically when a player reaches 10 poison, recording elimination order the same way as 0 life', () => {
+    const game = makeThreePlayerGame(40);
+    const alara = game.players[0];
+    const kess = game.players[1];
+
+    applyPoisonDelta(game.poisonState, alara.id, 10, game.undoStack);
+    expect(game.ended).toBe(false);
+
+    applyPoisonDelta(game.poisonState, kess.id, 10, game.undoStack);
+    game.update(0.016); // checkEndConditions runs every frame; poison changes bypass Game directly
+
+    expect(game.ended).toBe(true);
+    expect(game.stats?.winnerId).toBe(game.players[2].id);
+    expect(game.stats?.eliminationOrder.map((entry) => entry.playerId)).toEqual([alara.id, kess.id]);
+  });
+
+  it('drops a player from eliminationOrder once undo restores their poison below the lethal threshold', () => {
+    const game = makeThreePlayerGame(40);
+    const alara = game.players[0];
+
+    applyPoisonDelta(game.poisonState, alara.id, 10, game.undoStack);
+    game.update(0.016);
+    expect(game.ended).toBe(false);
+
+    game.undo(); // Alara: 10 -> 0
+    game.update(0.016);
+
+    game.endGame();
+
+    expect(game.ended).toBe(true);
+    expect(game.stats?.eliminationOrder).toEqual([]);
+  });
+
+  it('excludes a poison-eliminated player from the manual endGame winner even with the highest life', () => {
+    const game = makeThreePlayerGame(40);
+    const alara = game.players[0];
+    const kess = game.players[1];
+
+    applyPoisonDelta(game.poisonState, alara.id, 10, game.undoStack); // Alara eliminated by poison, still at 40 life
+    game.update(0.016);
+
+    game.endGame();
+
+    expect(game.stats?.winnerId).not.toBe(alara.id);
+    expect(game.stats?.winnerId).toBe(kess.id);
   });
 
   it('drops a player from eliminationOrder once undo restores their life above 0', () => {
