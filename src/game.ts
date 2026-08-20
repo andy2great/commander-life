@@ -265,6 +265,26 @@ export class Game {
     this.hold = undefined;
   }
 
+  /**
+   * Reverts the life change from the current zone tap and disarms its ramp.
+   * Call when a long-press on the same press supersedes the paired tap
+   * (e.g. before opening the commander-damage panel), so the tap that had to
+   * fire on pointerdown to support tap-and-hold ramping leaves no trace.
+   * No-op if the current press isn't a zone hold.
+   */
+  cancelTap(): void {
+    if (!this.hold) {
+      return;
+    }
+    const { playerId, delta } = this.hold;
+    this.hold = undefined;
+    this.applyLifeDelta(playerId, -delta);
+    const lastPopup = this.popupsList[this.popupsList.length - 1];
+    if (lastPopup && lastPopup.playerId === playerId && lastPopup.delta === delta) {
+      this.popupsList.pop();
+    }
+  }
+
   /** Returns the id of the player zone under (x, y), or null over the shared control or outside any zone. */
   onLongPress(x: number, y: number): string | null {
     if (this.control.containsPoint(x, y)) {
