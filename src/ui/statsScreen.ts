@@ -109,9 +109,14 @@ export class StatsScreen {
 
   private buildWinnerCard(): HTMLElement {
     const winner = this.findPlayer(this.stats.winnerId);
+    const winnerColor = winner?.color;
 
     const card = document.createElement('div');
     card.className = 'stats-winner-card';
+    if (winnerColor) {
+      card.style.background = `linear-gradient(135deg, ${winnerColor}2e, ${winnerColor}14)`;
+      card.style.borderColor = `${winnerColor}66`;
+    }
 
     const tag = document.createElement('div');
     tag.className = 'stats-winner-tag';
@@ -120,6 +125,7 @@ export class StatsScreen {
 
     const name = document.createElement('div');
     name.className = 'stats-winner-name';
+    name.style.color = winnerColor ?? '#fff';
     name.textContent = winner?.name ?? 'Unknown';
     card.appendChild(name);
 
@@ -153,10 +159,12 @@ export class StatsScreen {
 
       const track = document.createElement('div');
       track.className = 'stats-bar-track';
+      const barColor = player.color ?? '#f5f3f7';
       const fill = document.createElement('div');
       fill.className = 'stats-bar-fill';
       fill.style.width = `${pct}%`;
-      fill.style.background = player.color ?? '#f5f3f7';
+      fill.style.background = barColor;
+      fill.style.boxShadow = `0 0 6px ${barColor}88`;
       track.appendChild(fill);
 
       const pctLabel = document.createElement('div');

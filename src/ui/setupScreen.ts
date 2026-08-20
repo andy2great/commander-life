@@ -46,13 +46,12 @@ function injectStylesOnce(): void {
     .setup-stepper button { width: 32px; height: 32px; border-radius: 10px; border: none; background: #2d2938; color: #f5f3f7; font-size: 18px; font-weight: 700; }
     .setup-stepper .setup-val { min-width: 34px; text-align: center; color: #f5f3f7; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .setup-players { display: flex; flex-direction: column; gap: 10px; }
-    .setup-player-row { display: flex; align-items: center; gap: 12px; background: #211d29; border-radius: 14px; padding: 10px 12px; }
+    .setup-player-row { display: flex; align-items: center; gap: 12px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; }
     .setup-swatch { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); }
     .setup-name-field { flex: 1; min-width: 0; color: #f5f3f7; font-size: 14px; font-weight: 600; background: transparent; border: none; outline: none; font-family: system-ui, sans-serif; }
     .setup-name-field::placeholder { color: #948fa3; font-weight: 400; }
     .setup-swatch-row { display: flex; gap: 8px; }
     .setup-mini-swatch { width: 18px; height: 18px; border-radius: 50%; border: none; padding: 0; }
-    .setup-mini-swatch.selected { box-shadow: 0 0 0 2px #fff; }
     .setup-spacer { flex: 1; }
     .setup-cta { margin-top: auto; background: linear-gradient(135deg, #0091ff, #8e4ec6); color: #fff; border: none; border-radius: 18px; padding: 18px; font-size: 17px; font-weight: 800; letter-spacing: 0.4px; text-align: center; }
   `;
@@ -222,6 +221,7 @@ export class SetupScreen {
     const player = this.players[seat];
     const row = document.createElement('div');
     row.className = 'setup-player-row';
+    row.style.borderLeftColor = player.color;
 
     const swatch = document.createElement('div');
     swatch.className = 'setup-swatch';
@@ -232,23 +232,33 @@ export class SetupScreen {
     nameField.className = 'setup-name-field';
     nameField.placeholder = `Player ${seat + 1}`;
     nameField.value = player.name === `Player ${seat + 1}` ? '' : player.name;
+    nameField.style.caretColor = player.color;
     nameField.addEventListener('input', () => {
       player.name = nameField.value.trim() || `Player ${seat + 1}`;
     });
 
     const swatchRow = document.createElement('div');
     swatchRow.className = 'setup-swatch-row';
+    const selectSwatch = (mini: HTMLElement, color: string): void => {
+      mini.style.boxShadow = `0 0 0 2px ${color}, 0 0 0 4px rgba(0, 0, 0, 0.35)`;
+    };
     for (const color of PLAYER_COLORS) {
       const mini = document.createElement('button');
       mini.type = 'button';
-      mini.className = `setup-mini-swatch${color === player.color ? ' selected' : ''}`;
+      mini.className = 'setup-mini-swatch';
       mini.style.background = color;
+      if (color === player.color) {
+        selectSwatch(mini, color);
+      }
       mini.addEventListener('pointerdown', () => {
         player.color = color;
         swatch.style.background = color;
+        row.style.borderLeftColor = color;
+        nameField.style.caretColor = color;
         for (const sibling of Array.from(swatchRow.children)) {
-          sibling.classList.toggle('selected', sibling === mini);
+          (sibling as HTMLElement).style.boxShadow = '';
         }
+        selectSwatch(mini, color);
       });
       swatchRow.appendChild(mini);
     }
