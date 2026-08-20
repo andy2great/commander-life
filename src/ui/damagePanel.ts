@@ -130,7 +130,7 @@ function injectStylesOnce(): void {
   const style = document.createElement('style');
   style.textContent = `
     .cmdr-dmg-overlay { position: fixed; inset: 0; background: rgba(8, 7, 12, 0.55); z-index: 30; display: flex; align-items: flex-end; }
-    .cmdr-dmg-panel { width: 100%; background: #1b1822; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); }
+    .cmdr-dmg-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: #1b1822; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); }
     .cmdr-dmg-head { display: flex; align-items: center; margin-bottom: 16px; }
     .cmdr-dmg-title { color: #f5f3f7; font-size: 16px; font-weight: 800; flex: 1; font-family: system-ui, sans-serif; }
     .cmdr-dmg-close { width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; font-size: 14px; font-weight: 700; }

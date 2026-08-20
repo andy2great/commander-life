@@ -22,7 +22,7 @@ function injectStylesOnce(): void {
   stylesInjected = true;
   const style = document.createElement('style');
   style.textContent = `
-    .stats-screen { position: fixed; inset: 0; background: #121016; z-index: 40; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 14px; overflow-y: auto; font-family: system-ui, sans-serif; }
+    .stats-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: #121016; z-index: 40; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 14px; overflow-y: auto; font-family: system-ui, sans-serif; }
     .stats-winner-card { background: linear-gradient(135deg, rgba(245,165,36,.18), rgba(142,78,198,.14)); border: 1px solid rgba(245,165,36,.4); border-radius: 20px; padding: 16px; text-align: center; }
     .stats-winner-tag { color: #f5a524; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
     .stats-winner-name { color: #fff; font-size: 26px; font-weight: 800; margin-top: 4px; }

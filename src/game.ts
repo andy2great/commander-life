@@ -54,6 +54,25 @@ export const ROW_COUNTS_BY_PLAYER_COUNT: Record<number, [number, number]> = {
   6: [3, 3],
 };
 
+// Landscape phones have far less vertical space than portrait, so a DOM
+// overlay (setup screen, commander-damage panel, stats screen) sized for a
+// tall portrait canvas can grow taller than the viewport and bury the player
+// zones/life totals behind it (issue #45). Capping overlay height to this
+// fraction of a landscape canvas leaves the rest of the game visible;
+// portrait keeps the existing full-height layout unchanged.
+export const OVERLAY_LANDSCAPE_MAX_HEIGHT_RATIO = 0.86;
+
+export interface OverlaySafeArea {
+  /** Max height, in px, a DOM overlay panel should occupy at the current canvas size. */
+  maxHeight: number;
+}
+
+/** Safe height bound for DOM overlay panels (setup/damage/stats screens) at the given canvas size. */
+export function computeOverlaySafeArea(width: number, height: number): OverlaySafeArea {
+  const isLandscape = width > height;
+  return { maxHeight: isLandscape ? height * OVERLAY_LANDSCAPE_MAX_HEIGHT_RATIO : height };
+}
+
 export interface ZoneRect {
   x: number;
   y: number;
@@ -167,6 +186,8 @@ export class Game {
   private readonly stack = new ArrayUndoStack();
   private readonly popupsList: DeltaPopup[] = [];
   private zoneRects: ZoneRect[] = [];
+  private canvasWidth = 0;
+  private canvasHeight = 0;
   private hold: HoldState | undefined;
   private animTime = 0;
   private readonly activeTimeList: number[];
@@ -223,6 +244,11 @@ export class Game {
   /** True when there is at least one action to undo. */
   get canUndo(): boolean {
     return this.stack.canUndo();
+  }
+
+  /** Safe height bound for DOM overlay panels at the current canvas size; see computeOverlaySafeArea(). */
+  get overlaySafeArea(): OverlaySafeArea {
+    return computeOverlaySafeArea(this.canvasWidth, this.canvasHeight);
   }
 
   /** True once the game has ended, manually or automatically. */
@@ -323,6 +349,8 @@ export class Game {
 
   /** Recomputes zone and control placement for the current canvas size. Also called by render(). */
   resize(width: number, height: number): void {
+    this.canvasWidth = width;
+    this.canvasHeight = height;
     this.zoneRects = computeZoneRects(this.playerCount, width, height);
     // The grid is always two rows filling half the canvas height each, so
     // height / 2 is exactly the boundary between them — never a zone's own
