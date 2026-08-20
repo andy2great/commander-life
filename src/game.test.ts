@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { Game, clamp } from './game';
+import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
+
+/** Mirrors UndoControl's reflow math so tests can tap the icon by coordinate. */
+function undoControlCenter(width: number, height: number): { x: number; y: number } {
+  const shortSide = Math.min(width, height);
+  const mainRadius = shortSide * RADIUS_RATIO;
+  const undoRadius = shortSide * UNDO_RADIUS_RATIO;
+  return { x: width / 2 + mainRadius + shortSide * UNDO_GAP_RATIO + undoRadius, y: height / 2 };
+}
 
 describe('clamp', () => {
   it('returns the value when inside the range', () => {
@@ -126,6 +135,80 @@ describe('Game', () => {
     stack.actions[stack.actions.length - 1].undo();
 
     expect(player.life).toBe(40);
+  });
+
+  it('reports canUndo and reverts the most recent life change via undo()', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    expect(game.canUndo).toBe(false);
+
+    game.onTap(50, zoneHeight / 2 - 10);
+    expect(player.life).toBe(41);
+    expect(game.canUndo).toBe(true);
+
+    game.undo();
+
+    expect(player.life).toBe(40);
+    expect(game.canUndo).toBe(false);
+  });
+
+  it('undoes multiple changes in last-in-first-out order', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10); // +1
+    game.onTapEnd();
+    game.onTap(50, zoneHeight / 2 - 10); // +1
+    game.onTapEnd();
+    expect(player.life).toBe(42);
+
+    game.undo();
+    expect(player.life).toBe(41);
+
+    game.undo();
+    expect(player.life).toBe(40);
+  });
+
+  it('undo() is a no-op when nothing to undo', () => {
+    const game = new Game();
+    const livesBefore = game.players.map((player) => player.life);
+
+    expect(() => game.undo()).not.toThrow();
+    expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+    expect(game.canUndo).toBe(false);
+  });
+
+  it('tapping the undo icon reverts the most recent change and is dimmed/disabled when empty', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+    const undoCenter = undoControlCenter(400, 800);
+
+    expect(game.isOverUndoControl(undoCenter.x, undoCenter.y)).toBe(true);
+
+    // Tapping the undo icon while disabled changes nothing.
+    game.onTap(undoCenter.x, undoCenter.y);
+    expect(player.life).toBe(40);
+
+    game.onTap(50, zoneHeight / 2 - 10);
+    expect(player.life).toBe(41);
+
+    game.onTap(undoCenter.x, undoCenter.y);
+    expect(player.life).toBe(40);
+  });
+
+  it('does not change life or open the damage panel target when long-pressing the undo icon', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const undoCenter = undoControlCenter(400, 800);
+
+    expect(game.onLongPress(undoCenter.x, undoCenter.y)).toBeNull();
   });
 
   it('ramps repeated life changes while a zone tap is held, accelerating after ~600ms', () => {
