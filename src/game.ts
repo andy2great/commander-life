@@ -34,6 +34,41 @@ export const DEFAULT_STARTING_LIFE = 40;
 // seats in order (crimson, teal, amber, violet, lime, sky).
 export const PLAYER_COLORS = ['#e11d48', '#14b8a6', '#f59e0b', '#8b5cf6', '#84cc16', '#38bdf8'];
 
+// Table-like grid layout per docs/concept.md: always two rows (top row
+// rotated 180° to face the opposite seat, bottom row upright), each sized to
+// fill half the canvas height, split into this many equal-width columns.
+export const ROW_COUNTS_BY_PLAYER_COUNT: Record<number, [number, number]> = {
+  3: [1, 2],
+  4: [2, 2],
+  5: [2, 3],
+  6: [3, 3],
+};
+
+export interface ZoneRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Top row zones render rotated 180° so their contents read upright from that seat. */
+  rotated: boolean;
+}
+
+/** Computes each seat's zone rect (in row-major, left-to-right order) for the current canvas size. */
+export function computeZoneRects(playerCount: number, width: number, height: number): ZoneRect[] {
+  const rowCounts = ROW_COUNTS_BY_PLAYER_COUNT[playerCount] ?? [Math.ceil(playerCount / 2), Math.floor(playerCount / 2)];
+  const rowHeight = height / rowCounts.length;
+  const rects: ZoneRect[] = [];
+  rowCounts.forEach((count, rowIndex) => {
+    const y = rowIndex * rowHeight;
+    const colWidth = width / count;
+    const rotated = rowIndex === 0;
+    for (let col = 0; col < count; col += 1) {
+      rects.push({ x: col * colWidth, y, width: colWidth, height: rowHeight, rotated });
+    }
+  });
+  return rects;
+}
+
 export interface PlayerConfig {
   name: string;
   color: string;
@@ -120,7 +155,7 @@ export class Game {
   private readonly damage: CommanderDamageState;
   private readonly stack = new ArrayUndoStack();
   private readonly popupsList: DeltaPopup[] = [];
-  private height = 0;
+  private zoneRects: ZoneRect[] = [];
   private hold: HoldState | undefined;
   private animTime = 0;
   private readonly activeTimeList: number[];
@@ -267,18 +302,13 @@ export class Game {
     }
   }
 
-  /** Recomputes control placement for the current canvas size. Also called by render(). */
+  /** Recomputes zone and control placement for the current canvas size. Also called by render(). */
   resize(width: number, height: number): void {
-    this.height = height;
-    // Snap to the nearest zone boundary rather than the exact geometric
-    // center: for an odd player count, height / 2 falls exactly on the
-    // middle zone's own center (where its life total is drawn), so the
-    // shared control would render on top of it and swallow taps meant for
-    // that zone. Zone boundaries are at k * zoneHeight; for an even player
-    // count the nearest boundary already equals height / 2, so this is a
-    // no-op there.
-    const zoneHeight = height / this.playerCount;
-    const controlCenterY = Math.floor(this.playerCount / 2) * zoneHeight;
+    this.zoneRects = computeZoneRects(this.playerCount, width, height);
+    // The grid is always two rows filling half the canvas height each, so
+    // height / 2 is exactly the boundary between them — never a zone's own
+    // center (where its life total is drawn) — for every player count.
+    const controlCenterY = height / 2;
     this.control.reflow(width, height, controlCenterY);
     this.undoControl.reflow(width, height, controlCenterY);
   }
@@ -338,13 +368,15 @@ export class Game {
     return this.playerIdAt(x, y);
   }
 
-  private playerIdAt(_x: number, y: number): string | null {
-    if (this.height <= 0) {
-      return null;
-    }
-    const zoneHeight = this.height / this.playerCount;
-    const seat = Math.floor(y / zoneHeight);
-    if (seat < 0 || seat >= this.playerCount) {
+  private seatAt(x: number, y: number): number {
+    return this.zoneRects.findIndex(
+      (rect) => x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height,
+    );
+  }
+
+  private playerIdAt(x: number, y: number): string | null {
+    const seat = this.seatAt(x, y);
+    if (seat === -1) {
       return null;
     }
     return this.playersList[seat].id;
@@ -352,14 +384,14 @@ export class Game {
 
   /** Returns the player zone and which half (x, y) falls in, or null outside any zone. */
   private zoneAt(x: number, y: number): { playerId: string; half: 'upper' | 'lower' } | null {
-    const playerId = this.playerIdAt(x, y);
-    if (!playerId) {
+    const seat = this.seatAt(x, y);
+    if (seat === -1) {
       return null;
     }
-    const zoneHeight = this.height / this.playerCount;
-    const offsetInZone = y % zoneHeight;
-    const half = offsetInZone < zoneHeight / 2 ? 'upper' : 'lower';
-    return { playerId, half };
+    const rect = this.zoneRects[seat];
+    const offsetInZone = y - rect.y;
+    const half = offsetInZone < rect.height / 2 ? 'upper' : 'lower';
+    return { playerId: this.playersList[seat].id, half };
   }
 
   private applyLifeDelta(playerId: string, delta: number): void {
@@ -415,26 +447,26 @@ export class Game {
     this.resize(width, height);
     ctx.clearRect(0, 0, width, height);
 
-    this.drawZones(ctx, width, height);
+    this.drawZones(ctx);
     this.drawPopups(ctx);
     this.control.draw(ctx);
     this.undoControl.draw(ctx, this.canUndo);
   }
 
   private drawPopups(ctx: CanvasRenderingContext2D): void {
-    const zoneHeight = this.height / this.playerCount;
     for (const popup of this.popupsList) {
       const seat = this.playersList.findIndex((player) => player.id === popup.playerId);
-      if (seat < 0) {
+      const rect = this.zoneRects[seat];
+      if (!rect) {
         continue;
       }
-      const isTopRow = seat < this.playerCount / 2;
       const progress = clamp(popup.age / POPUP_DURATION_S, 0, 1);
       const eased = 1 - (1 - progress) * (1 - progress);
+      const shortSide = Math.min(rect.width, rect.height);
 
       ctx.save();
       ctx.translate(popup.x, popup.y);
-      if (isTopRow) {
+      if (rect.rotated) {
         ctx.rotate(Math.PI);
       }
       ctx.globalAlpha = 1 - eased;
@@ -444,33 +476,30 @@ export class Game {
       ctx.shadowOffsetY = 2;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `800 ${Math.round(zoneHeight * 0.16)}px "Arial Black", system-ui, sans-serif`;
+      ctx.font = `800 ${Math.round(shortSide * 0.16)}px "Arial Black", system-ui, sans-serif`;
       ctx.fillText(popup.delta > 0 ? `+${popup.delta}` : `${popup.delta}`, 0, -POPUP_RISE_PX * eased);
       ctx.restore();
     }
   }
 
-  private drawZones(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    const zoneHeight = height / this.playerCount;
+  private drawZones(ctx: CanvasRenderingContext2D): void {
     for (let seat = 0; seat < this.playerCount; seat += 1) {
-      const y = seat * zoneHeight;
+      const rect = this.zoneRects[seat];
       const isActive = seat === this.turnState.activeIndex;
-      // Zones in the top half face the opposite seat, so their contents read
-      // upright from there once rotated 180°.
-      const isTopRow = seat < this.playerCount / 2;
       const player = this.playersList[seat];
-      const cx = width / 2;
-      const cy = y + zoneHeight / 2;
+      const cx = rect.x + rect.width / 2;
+      const cy = rect.y + rect.height / 2;
+      const shortSide = Math.min(rect.width, rect.height);
 
-      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, zoneHeight) * 0.75);
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rect.width, rect.height) * 0.75);
       gradient.addColorStop(0, player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length]);
       gradient.addColorStop(1, BACKGROUND_COLOR);
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, y, width, zoneHeight);
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
 
       ctx.save();
       ctx.translate(cx, cy);
-      if (isTopRow) {
+      if (rect.rotated) {
         ctx.rotate(Math.PI);
       }
 
@@ -480,12 +509,12 @@ export class Game {
       ctx.shadowOffsetY = 2;
       ctx.textAlign = 'center';
 
-      const lifeFontSize = Math.round(zoneHeight * 0.5);
+      const lifeFontSize = Math.round(shortSide * 0.5);
       ctx.font = `800 ${lifeFontSize}px "Arial Black", system-ui, sans-serif`;
       ctx.textBaseline = 'middle';
       ctx.fillText(String(player.life), 0, 0);
 
-      const nameFontSize = Math.round(zoneHeight * 0.14);
+      const nameFontSize = Math.round(shortSide * 0.14);
       ctx.font = `600 ${nameFontSize}px system-ui, sans-serif`;
       ctx.textBaseline = 'top';
       ctx.fillText(player.name, 0, lifeFontSize / 2 + 4);
@@ -500,7 +529,7 @@ export class Game {
         ctx.lineWidth = 1;
         ctx.strokeStyle = IDLE_ZONE_COLOR;
       }
-      ctx.strokeRect(1, y + 1, width - 2, zoneHeight - 2);
+      ctx.strokeRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
     }
   }
 }
