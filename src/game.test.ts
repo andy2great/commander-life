@@ -414,6 +414,23 @@ describe('end of game', () => {
     ]);
   });
 
+  it('drops a player from eliminationOrder once undo restores their life above 0', () => {
+    const game = makeThreePlayerGame(1);
+    game.resize(400, 900);
+    const zoneHeight = 900 / 3;
+
+    game.onTap(50, zoneHeight - 10); // Alara: 1 -> 0, recorded as eliminated
+    expect(game.stats).toBeNull();
+
+    game.undo(); // Alara: 0 -> 1
+
+    game.endGame();
+
+    expect(game.ended).toBe(true);
+    expect(game.stats?.winnerId).toBe(game.players[0].id);
+    expect(game.stats?.eliminationOrder).toEqual([]);
+  });
+
   it('ends manually via endGame, picking the highest-life player as winner', () => {
     const game = makeThreePlayerGame(40);
     game.resize(400, 900);
