@@ -15,11 +15,16 @@ interface ControlLayout {
 export class PassTurnControl {
   private layout: ControlLayout = { centerX: 0, centerY: 0, radius: 0 };
 
-  /** Recomputes the control's position and size for the current canvas dimensions. */
-  reflow(width: number, height: number): void {
+  /**
+   * Recomputes the control's position and size for the current canvas
+   * dimensions. `centerY` is caller-supplied (rather than always `height /
+   * 2`) so it can be snapped to a zone boundary instead of a zone's center
+   * — see `Game.resize()`.
+   */
+  reflow(width: number, height: number, centerY: number): void {
     this.layout = {
       centerX: width / 2,
-      centerY: height / 2,
+      centerY,
       radius: Math.min(width, height) * RADIUS_RATIO,
     };
   }
@@ -58,14 +63,14 @@ export const UNDO_GAP_RATIO = 0.03;
 export class UndoControl {
   private layout: ControlLayout = { centerX: 0, centerY: 0, radius: 0 };
 
-  /** Recomputes the icon's position and size for the current canvas dimensions. */
-  reflow(width: number, height: number): void {
+  /** Recomputes the icon's position and size for the current canvas dimensions. `centerY` mirrors PassTurnControl.reflow(). */
+  reflow(width: number, height: number, centerY: number): void {
     const shortSide = Math.min(width, height);
     const mainRadius = shortSide * RADIUS_RATIO;
     const radius = shortSide * UNDO_RADIUS_RATIO;
     this.layout = {
       centerX: width / 2 + mainRadius + shortSide * UNDO_GAP_RATIO + radius,
-      centerY: height / 2,
+      centerY,
       radius,
     };
   }

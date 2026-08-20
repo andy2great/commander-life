@@ -344,6 +344,25 @@ describe('Game', () => {
     expect(tooFew.playerCount).toBe(3);
     expect(tooMany.playerCount).toBe(6);
   });
+
+  it.each([3, 5])(
+    'keeps the shared control off the middle zone center in a %i-player game, so taps there still reach that zone',
+    (playerCount) => {
+      const game = new Game({ playerCount, startingLife: 40, players: [] });
+      const height = 900;
+      game.resize(400, height);
+      const zoneHeight = height / playerCount;
+      const middleSeat = Math.floor(playerCount / 2);
+      const middleZoneCenterY = middleSeat * zoneHeight + zoneHeight / 2;
+
+      expect(game.isOverControl(200, middleZoneCenterY)).toBe(false);
+
+      const middlePlayer = game.players[middleSeat];
+      game.onTap(200, middleZoneCenterY - 1); // upper half of the middle zone's own center
+
+      expect(middlePlayer.life).toBe(41);
+    },
+  );
 });
 
 describe('end of game', () => {
@@ -370,7 +389,10 @@ describe('end of game', () => {
     const game = makeThreePlayerGame(40);
     game.resize(400, 900);
 
-    expect(game.isOverControl(200, 450)).toBe(true);
+    // For 3 players, the control snaps to the boundary between seat 0 and
+    // seat 1 (300) rather than the geometric center (450), which would sit
+    // on top of seat 1's life total. See Game.resize().
+    expect(game.isOverControl(200, 300)).toBe(true);
     expect(game.isOverControl(0, 0)).toBe(false);
   });
 
@@ -420,7 +442,7 @@ describe('end of game', () => {
     const zoneHeight = 900 / 3;
 
     game.update(2); // Alara active for 2s
-    game.onTap(200, 450); // pass turn to Kess
+    game.onTap(200, 300); // pass turn to Kess (control center for 3 players; see Game.resize())
     game.update(3); // Kess active for 3s
 
     game.onTap(50, zoneHeight - 10); // eliminate Alara

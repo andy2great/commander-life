@@ -270,8 +270,17 @@ export class Game {
   /** Recomputes control placement for the current canvas size. Also called by render(). */
   resize(width: number, height: number): void {
     this.height = height;
-    this.control.reflow(width, height);
-    this.undoControl.reflow(width, height);
+    // Snap to the nearest zone boundary rather than the exact geometric
+    // center: for an odd player count, height / 2 falls exactly on the
+    // middle zone's own center (where its life total is drawn), so the
+    // shared control would render on top of it and swallow taps meant for
+    // that zone. Zone boundaries are at k * zoneHeight; for an even player
+    // count the nearest boundary already equals height / 2, so this is a
+    // no-op there.
+    const zoneHeight = height / this.playerCount;
+    const controlCenterY = Math.floor(this.playerCount / 2) * zoneHeight;
+    this.control.reflow(width, height, controlCenterY);
+    this.undoControl.reflow(width, height, controlCenterY);
   }
 
   onTap(x: number, y: number): void {
