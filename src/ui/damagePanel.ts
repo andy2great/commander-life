@@ -13,17 +13,29 @@ import {
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 
-/** Fires `onLongPress` after `durationMs` of a stationary pointerdown. Returns a detach function. */
-export function attachLongPress(
+export interface TapGestureHandlers {
+  /** Called on pointerup when the press resolved as a short tap (the long-press timer never fired). */
+  onTap: (event: PointerEvent) => void;
+  /** Called after `durationMs` of a stationary pointerdown; suppresses the paired `onTap` for that press. */
+  onLongPress: (event: PointerEvent) => void;
+}
+
+/**
+ * Resolves each pointerdown as exactly one of a short tap or a long-press —
+ * never both, unlike two independent listeners racing on the same
+ * pointerdown. Returns a detach function.
+ */
+export function attachTapAndLongPress(
   element: HTMLElement,
-  onLongPress: (event: PointerEvent) => void,
+  handlers: TapGestureHandlers,
   durationMs = LONG_PRESS_MS,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let startX = 0;
   let startY = 0;
+  let longPressFired = false;
 
-  const cancel = (): void => {
+  const cancelTimer = (): void => {
     if (timer !== undefined) {
       clearTimeout(timer);
       timer = undefined;
@@ -33,10 +45,12 @@ export function attachLongPress(
   const onPointerDown = (event: PointerEvent): void => {
     startX = event.clientX;
     startY = event.clientY;
-    cancel();
+    longPressFired = false;
+    cancelTimer();
     timer = setTimeout(() => {
       timer = undefined;
-      onLongPress(event);
+      longPressFired = true;
+      handlers.onLongPress(event);
     }, durationMs);
   };
 
@@ -44,23 +58,37 @@ export function attachLongPress(
     const dx = event.clientX - startX;
     const dy = event.clientY - startY;
     if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE_PX) {
-      cancel();
+      cancelTimer();
     }
+  };
+
+  const onPointerUp = (event: PointerEvent): void => {
+    const wasLongPress = longPressFired;
+    cancelTimer();
+    longPressFired = false;
+    if (!wasLongPress) {
+      handlers.onTap(event);
+    }
+  };
+
+  const onPointerCancel = (): void => {
+    cancelTimer();
+    longPressFired = false;
   };
 
   element.addEventListener('pointerdown', onPointerDown);
   element.addEventListener('pointermove', onPointerMove);
-  element.addEventListener('pointerup', cancel);
-  element.addEventListener('pointercancel', cancel);
-  element.addEventListener('pointerleave', cancel);
+  element.addEventListener('pointerup', onPointerUp);
+  element.addEventListener('pointercancel', onPointerCancel);
+  element.addEventListener('pointerleave', onPointerCancel);
 
   return () => {
-    cancel();
+    cancelTimer();
     element.removeEventListener('pointerdown', onPointerDown);
     element.removeEventListener('pointermove', onPointerMove);
-    element.removeEventListener('pointerup', cancel);
-    element.removeEventListener('pointercancel', cancel);
-    element.removeEventListener('pointerleave', cancel);
+    element.removeEventListener('pointerup', onPointerUp);
+    element.removeEventListener('pointercancel', onPointerCancel);
+    element.removeEventListener('pointerleave', onPointerCancel);
   };
 }
 

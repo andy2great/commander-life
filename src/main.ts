@@ -1,5 +1,5 @@
 import { Game, type GameConfig } from './game';
-import { attachLongPress, DamagePanel } from './ui/damagePanel';
+import { attachTapAndLongPress, DamagePanel } from './ui/damagePanel';
 import { SetupScreen } from './ui/setupScreen';
 import { StatsScreen } from './ui/statsScreen';
 
@@ -34,27 +34,21 @@ function startGame(config: GameConfig): void {
 
   canvas.style.display = 'block';
 
-  const onPointerDown = (event: PointerEvent): void => {
-    game.onTap(event.clientX, event.clientY);
-  };
-  const onPointerUp = (): void => {
-    game.onTapEnd();
-  };
-
-  canvas.addEventListener('pointerdown', onPointerDown);
-  canvas.addEventListener('pointerup', onPointerUp);
-  canvas.addEventListener('pointercancel', onPointerUp);
-  canvas.addEventListener('pointerleave', onPointerUp);
-
-  const detachLongPress = attachLongPress(canvas, (event) => {
-    if (game.isOverControl(event.clientX, event.clientY)) {
-      game.endGame();
-      return;
-    }
-    const playerId = game.onLongPress(event.clientX, event.clientY);
-    if (playerId) {
-      damagePanel.open(playerId);
-    }
+  const detachGesture = attachTapAndLongPress(canvas, {
+    onTap: (event) => {
+      game.onTap(event.clientX, event.clientY);
+      game.onTapEnd();
+    },
+    onLongPress: (event) => {
+      if (game.isOverControl(event.clientX, event.clientY)) {
+        game.endGame();
+        return;
+      }
+      const playerId = game.onLongPress(event.clientX, event.clientY);
+      if (playerId) {
+        damagePanel.open(playerId);
+      }
+    },
   });
 
   let rafId = 0;
@@ -74,11 +68,7 @@ function startGame(config: GameConfig): void {
 
   cleanupGame = (): void => {
     cancelAnimationFrame(rafId);
-    canvas.removeEventListener('pointerdown', onPointerDown);
-    canvas.removeEventListener('pointerup', onPointerUp);
-    canvas.removeEventListener('pointercancel', onPointerUp);
-    canvas.removeEventListener('pointerleave', onPointerUp);
-    detachLongPress();
+    detachGesture();
     damagePanel.close();
     canvas.style.display = 'none';
   };
