@@ -153,6 +153,52 @@ describe('Game', () => {
     expect(game.activeIndex).toBe(1);
   });
 
+  it('undoes a turn pass, restoring the previous active player and turn count', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const livesBefore = game.players.map((player) => player.life);
+
+    for (let i = 0; i < game.playerCount; i += 1) {
+      game.onTap(200, 400);
+    }
+    expect(game.activeIndex).toBe(0);
+    expect(game.turnCount).toBe(1);
+
+    game.undo();
+
+    expect(game.activeIndex).toBe(game.playerCount - 1);
+    expect(game.turnCount).toBe(0);
+    expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+  });
+
+  it('undoes each action exactly once, in order, through an interleaved sequence of life changes and turn passes', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight + 10); // life: 40 -> 41
+    game.onTapEnd();
+    game.onTap(200, 400); // pass turn: activeIndex 0 -> 1
+    game.onTap(50, zoneHeight + 10); // life: 41 -> 42
+    game.onTapEnd();
+
+    expect(player.life).toBe(42);
+    expect(game.activeIndex).toBe(1);
+
+    game.undo(); // reverts life: 42 -> 41
+    expect(player.life).toBe(41);
+    expect(game.activeIndex).toBe(1);
+
+    game.undo(); // reverts turn pass: activeIndex 1 -> 0
+    expect(player.life).toBe(41);
+    expect(game.activeIndex).toBe(0);
+
+    game.undo(); // reverts life: 41 -> 40
+    expect(player.life).toBe(40);
+    expect(game.activeIndex).toBe(0);
+  });
+
   it('pushes an undo action onto the shared stack that reverts a zone life change', () => {
     const game = new Game();
     game.resize(400, 800);

@@ -339,7 +339,13 @@ export class Game {
     }
 
     if (this.control.containsPoint(x, y)) {
+      const previousTurnState = this.turnState;
       this.turnState = advanceTurn(this.turnState, this.playerCount);
+      this.stack.push({
+        undo: (): void => {
+          this.turnState = previousTurnState;
+        },
+      });
       return;
     }
 
