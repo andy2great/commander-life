@@ -23,12 +23,27 @@ export function clamp(value: number, min: number, max: number): number {
 
 const ACTIVE_ZONE_COLOR_RGB = '91, 140, 255';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
-const STARTING_LIFE = 40;
 const BACKGROUND_COLOR = '#121016';
+
+export const MIN_PLAYER_COUNT = 3;
+export const MAX_PLAYER_COUNT = 6;
+export const DEFAULT_PLAYER_COUNT = 4;
+export const DEFAULT_STARTING_LIFE = 40;
 
 // The 6 preset saturated accent colors from docs/concept.md, assigned to
 // seats in order (crimson, teal, amber, violet, lime, sky).
-const PLAYER_COLORS = ['#e11d48', '#14b8a6', '#f59e0b', '#8b5cf6', '#84cc16', '#38bdf8'];
+export const PLAYER_COLORS = ['#e11d48', '#14b8a6', '#f59e0b', '#8b5cf6', '#84cc16', '#38bdf8'];
+
+export interface PlayerConfig {
+  name: string;
+  color: string;
+}
+
+export interface GameConfig {
+  playerCount: number;
+  startingLife: number;
+  players: PlayerConfig[];
+}
 
 // Active zone's pulsing border: sine-driven width/opacity per docs/concept.md.
 const PULSE_SPEED_RAD_S = 4;
@@ -70,22 +85,31 @@ class ArrayUndoStack implements UndoStack {
 }
 
 export class Game {
-  readonly playerCount = 4;
+  readonly playerCount: number;
   private turnState: TurnState = createTurnState();
   private readonly control = new PassTurnControl();
-  private readonly playersList: Player[] = Array.from({ length: this.playerCount }, (_, seat) => ({
-    id: `p${seat + 1}`,
-    name: `Player ${seat + 1}`,
-    life: STARTING_LIFE,
-  }));
-  private readonly damage: CommanderDamageState = createCommanderDamageState(
-    this.playersList.map((player) => player.id),
-  );
+  private readonly playersList: Player[];
+  private readonly damage: CommanderDamageState;
   private readonly stack: UndoStack = new ArrayUndoStack();
   private readonly popupsList: DeltaPopup[] = [];
   private height = 0;
   private hold: HoldState | undefined;
   private animTime = 0;
+
+  constructor(config?: GameConfig) {
+    this.playerCount = clamp(config?.playerCount ?? DEFAULT_PLAYER_COUNT, MIN_PLAYER_COUNT, MAX_PLAYER_COUNT);
+    const startingLife = config?.startingLife ?? DEFAULT_STARTING_LIFE;
+    this.playersList = Array.from({ length: this.playerCount }, (_, seat) => {
+      const preset = config?.players[seat];
+      return {
+        id: `p${seat + 1}`,
+        name: preset?.name || `Player ${seat + 1}`,
+        life: startingLife,
+        color: preset?.color || PLAYER_COLORS[seat % PLAYER_COLORS.length],
+      };
+    });
+    this.damage = createCommanderDamageState(this.playersList.map((player) => player.id));
+  }
 
   get activeIndex(): number {
     return this.turnState.activeIndex;
@@ -268,7 +292,7 @@ export class Game {
       const cy = y + zoneHeight / 2;
 
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, zoneHeight) * 0.75);
-      gradient.addColorStop(0, PLAYER_COLORS[seat % PLAYER_COLORS.length]);
+      gradient.addColorStop(0, player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length]);
       gradient.addColorStop(1, BACKGROUND_COLOR);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, y, width, zoneHeight);

@@ -206,4 +206,31 @@ describe('Game', () => {
     expect(game.popups).toHaveLength(2);
     expect(() => game.update(0.016)).not.toThrow();
   });
+
+  it('launches with the configured player count, starting life, names, and colors', () => {
+    const game = new Game({
+      playerCount: 3,
+      startingLife: 20,
+      players: [
+        { name: 'Alara', color: '#111111' },
+        { name: 'Kess', color: '#222222' },
+        { name: 'Yorion', color: '#333333' },
+      ],
+    });
+
+    expect(game.playerCount).toBe(3);
+    expect(game.players.map((player) => ({ name: player.name, life: player.life, color: player.color }))).toEqual([
+      { name: 'Alara', life: 20, color: '#111111' },
+      { name: 'Kess', life: 20, color: '#222222' },
+      { name: 'Yorion', life: 20, color: '#333333' },
+    ]);
+  });
+
+  it('clamps a configured player count to the 3-6 range', () => {
+    const tooFew = new Game({ playerCount: 1, startingLife: 40, players: [] });
+    const tooMany = new Game({ playerCount: 9, startingLife: 40, players: [] });
+
+    expect(tooFew.playerCount).toBe(3);
+    expect(tooMany.playerCount).toBe(6);
+  });
 });
