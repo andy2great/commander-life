@@ -47,10 +47,10 @@ export class PassTurnControl {
     ctx.fillStyle = 'rgba(20, 18, 28, 0.85)';
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#e8ecf5';
+    ctx.strokeStyle = '#f5f3f7';
     ctx.stroke();
 
-    ctx.fillStyle = '#e8ecf5';
+    ctx.fillStyle = '#f5f3f7';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Floor (not round) so the glyph never renders larger than the
@@ -104,10 +104,10 @@ export class UndoControl {
     ctx.fillStyle = 'rgba(20, 18, 28, 0.85)';
     ctx.fill();
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#e8ecf5';
+    ctx.strokeStyle = '#f5f3f7';
     ctx.stroke();
 
-    ctx.fillStyle = '#e8ecf5';
+    ctx.fillStyle = '#f5f3f7';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Floor (not round) so the glyph never renders larger than the

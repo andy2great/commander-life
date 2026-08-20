@@ -131,11 +131,12 @@ function injectStylesOnce(): void {
   style.textContent = `
     .cmdr-dmg-overlay { position: fixed; inset: 0; background: rgba(8, 7, 12, 0.55); z-index: 30; display: flex; align-items: flex-end; }
     .cmdr-dmg-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: #1b1822; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); }
-    .cmdr-dmg-head { display: flex; align-items: center; margin-bottom: 16px; }
+    .cmdr-dmg-head { display: flex; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid transparent; }
     .cmdr-dmg-title { color: #f5f3f7; font-size: 16px; font-weight: 800; flex: 1; font-family: system-ui, sans-serif; }
     .cmdr-dmg-close { width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; font-size: 14px; font-weight: 700; }
-    .cmdr-dmg-row { display: flex; align-items: center; gap: 12px; background: #241f2d; border-radius: 16px; padding: 10px 12px; }
+    .cmdr-dmg-row { display: flex; align-items: center; gap: 12px; background: #241f2d; border-radius: 16px; padding: 10px 12px; border-left: 3px solid transparent; }
     .cmdr-dmg-row + .cmdr-dmg-row { margin-top: 10px; }
+    .cmdr-dmg-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
     .cmdr-dmg-name { flex: 1; color: #f5f3f7; font-size: 14px; font-weight: 700; font-family: system-ui, sans-serif; }
     .cmdr-dmg-stepper { display: flex; align-items: center; gap: 10px; }
     .cmdr-dmg-stepper button { width: 28px; height: 28px; border-radius: 9px; border: none; background: #2d2938; color: #f5f3f7; font-size: 16px; font-weight: 700; }
@@ -186,10 +187,14 @@ export class DamagePanel {
     const panel = document.createElement('div');
     panel.className = 'cmdr-dmg-panel';
 
+    const targetColor = target.color ?? '#948fa3';
+
     const head = document.createElement('div');
     head.className = 'cmdr-dmg-head';
+    head.style.borderBottomColor = `${targetColor}55`;
     const title = document.createElement('div');
     title.className = 'cmdr-dmg-title';
+    title.style.color = targetColor;
     title.textContent = `${target.name} — Commander Damage`;
     const closeButton = document.createElement('button');
     closeButton.type = 'button';
@@ -225,8 +230,15 @@ export class DamagePanel {
   }
 
   private buildStepperRow(target: Player, opponent: Player): HTMLElement {
+    const opponentColor = opponent.color ?? '#948fa3';
+
     const row = document.createElement('div');
     row.className = 'cmdr-dmg-row';
+    row.style.borderLeftColor = opponentColor;
+
+    const dot = document.createElement('div');
+    dot.className = 'cmdr-dmg-dot';
+    dot.style.background = opponentColor;
 
     const name = document.createElement('div');
     name.className = 'cmdr-dmg-name';
@@ -263,6 +275,7 @@ export class DamagePanel {
     stepper.appendChild(minusButton);
     stepper.appendChild(valueEl);
     stepper.appendChild(plusButton);
+    row.appendChild(dot);
     row.appendChild(name);
     row.appendChild(stepper);
     return row;
@@ -283,6 +296,7 @@ export class DamagePanel {
   private buildPoisonRow(target: Player): HTMLElement {
     const row = document.createElement('div');
     row.className = 'cmdr-dmg-row';
+    row.style.borderLeftColor = target.color ?? '#948fa3';
 
     const name = document.createElement('div');
     name.className = 'cmdr-dmg-name';
