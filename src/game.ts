@@ -109,7 +109,7 @@ const PULSE_MAX_WIDTH = 7;
 
 // Tap-and-hold ramp: repeated ticks start after RAMP_DELAY_S of holding, then
 // speed up from RAMP_START_INTERVAL_S down to RAMP_MIN_INTERVAL_S per docs/concept.md.
-const RAMP_DELAY_S = 0.6;
+export const RAMP_DELAY_S = 0.6;
 const RAMP_START_INTERVAL_S = 0.2;
 const RAMP_MIN_INTERVAL_S = 0.05;
 const RAMP_ACCEL_S = 1;
