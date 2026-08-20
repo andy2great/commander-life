@@ -10,7 +10,7 @@ import {
   type UndoStack,
 } from '../game/commanderDamage';
 
-const LONG_PRESS_MS = 500;
+export const LONG_PRESS_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 
 export interface TapGestureHandlers {
