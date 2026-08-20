@@ -1,6 +1,9 @@
 // Core game logic. Keep this file free of DOM globals so it stays unit-testable;
 // everything that touches the canvas element lives in main.ts.
 
+import { advanceTurn, createTurnState, type TurnState } from './game/turn';
+import { PassTurnControl } from './ui/controls';
+
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
     return min;
@@ -11,34 +14,57 @@ export function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-export class Game {
-  score = 0;
-  private elapsed = 0;
+const ACTIVE_ZONE_COLOR = '#5b8cff';
+const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
 
-  update(dt: number): void {
-    this.elapsed += dt;
+export class Game {
+  readonly playerCount = 4;
+  private turnState: TurnState = createTurnState();
+  private readonly control = new PassTurnControl();
+
+  get activeIndex(): number {
+    return this.turnState.activeIndex;
   }
 
-  onTap(_x: number, _y: number): void {
-    this.score += 1;
+  get turnCount(): number {
+    return this.turnState.turnCount;
+  }
+
+  update(_dt: number): void {
+    // No per-frame simulation yet; kept so main.ts's frame loop stays simple.
+  }
+
+  /** Recomputes control placement for the current canvas size. Also called by render(). */
+  resize(width: number, height: number): void {
+    this.control.reflow(width, height);
+  }
+
+  onTap(x: number, y: number): void {
+    if (this.control.containsPoint(x, y)) {
+      this.turnState = advanceTurn(this.turnState, this.playerCount);
+    }
   }
 
   render(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    this.resize(width, height);
     ctx.clearRect(0, 0, width, height);
 
-    ctx.fillStyle = '#e8ecf5';
-    ctx.textAlign = 'center';
-    ctx.font = `${Math.round(height * 0.04)}px system-ui, sans-serif`;
-    ctx.fillText('Game shell ready', width / 2, height * 0.4);
+    this.drawZones(ctx, width, height);
+    this.control.draw(ctx);
+  }
 
-    const pulse = 1 + Math.sin(this.elapsed * 3) * 0.1;
-    ctx.beginPath();
-    ctx.arc(width / 2, height * 0.6, height * 0.03 * pulse, 0, Math.PI * 2);
-    ctx.fillStyle = '#5b8cff';
-    ctx.fill();
+  private drawZones(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const zoneHeight = height / this.playerCount;
+    for (let seat = 0; seat < this.playerCount; seat += 1) {
+      const y = seat * zoneHeight;
+      const isActive = seat === this.turnState.activeIndex;
 
-    ctx.fillStyle = '#8b93a7';
-    ctx.font = `${Math.round(height * 0.025)}px system-ui, sans-serif`;
-    ctx.fillText(`taps: ${this.score}`, width / 2, height * 0.7);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.fillRect(0, y, width, zoneHeight);
+
+      ctx.lineWidth = isActive ? 4 : 1;
+      ctx.strokeStyle = isActive ? ACTIVE_ZONE_COLOR : IDLE_ZONE_COLOR;
+      ctx.strokeRect(1, y + 1, width - 2, zoneHeight - 2);
+    }
   }
 }
