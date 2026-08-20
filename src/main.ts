@@ -2,10 +2,12 @@ import { computeOverlaySafeArea, Game, type GameConfig } from './game';
 import { attachTapAndLongPress, DamagePanel } from './ui/damagePanel';
 import { SetupScreen } from './ui/setupScreen';
 import { StatsScreen } from './ui/statsScreen';
+import { WebAudioSoundPlayer } from './audio/webAudioSoundPlayer';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 canvas.style.display = 'none';
+const sound = new WebAudioSoundPlayer();
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -30,13 +32,14 @@ let cleanupGame: (() => void) | null = null;
 function startGame(config: GameConfig): void {
   cleanupGame?.();
 
-  const game = new Game(config);
+  const game = new Game(config, sound);
   const damagePanel = new DamagePanel({
     root: document.body,
     players: game.players,
     damageState: game.damageState,
     poisonState: game.poisonState,
     undoStack: game.undoStack,
+    sound,
   });
 
   canvas.style.display = 'block';

@@ -11,6 +11,7 @@ import {
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
 import { PassTurnControl, UndoControl } from './ui/controls';
+import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -183,6 +184,7 @@ export class Game {
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
+  private readonly sound: SoundPlayer;
   private readonly stack = new ArrayUndoStack();
   private readonly popupsList: DeltaPopup[] = [];
   private zoneRects: ZoneRect[] = [];
@@ -196,7 +198,8 @@ export class Game {
   private winnerId: string | null = null;
   private durationS = 0;
 
-  constructor(config?: GameConfig) {
+  constructor(config?: GameConfig, sound: SoundPlayer = new NoopSoundPlayer()) {
+    this.sound = sound;
     this.playerCount = clamp(config?.playerCount ?? DEFAULT_PLAYER_COUNT, MIN_PLAYER_COUNT, MAX_PLAYER_COUNT);
     const startingLife = config?.startingLife ?? DEFAULT_STARTING_LIFE;
     this.playersList = Array.from({ length: this.playerCount }, (_, seat) => {
@@ -369,6 +372,7 @@ export class Game {
     if (this.control.containsPoint(x, y)) {
       const previousTurnState = this.turnState;
       this.turnState = advanceTurn(this.turnState, this.playerCount);
+      this.sound.play('turnPass');
       this.stack.push({
         undo: (): void => {
           this.turnState = previousTurnState;
@@ -458,6 +462,7 @@ export class Game {
       return;
     }
     player.life += delta;
+    this.sound.play(delta > 0 ? 'lifeUp' : 'lifeDown');
     this.stack.push({
       undo(): void {
         player.life -= delta;
@@ -486,6 +491,7 @@ export class Game {
       if (this.isEliminated(player)) {
         if (eliminatedIndex === -1) {
           this.eliminationOrderList.push({ playerId: player.id, turnCount: this.turnState.turnCount });
+          this.sound.play('eliminate');
         }
       } else if (eliminatedIndex !== -1) {
         this.eliminationOrderList.splice(eliminatedIndex, 1);
@@ -504,6 +510,7 @@ export class Game {
     this.endedFlag = true;
     this.winnerId = winnerId;
     this.durationS = this.animTime;
+    this.sound.play('gameEnd');
   }
 
   render(ctx: CanvasRenderingContext2D, width: number, height: number): void {

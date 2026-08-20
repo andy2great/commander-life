@@ -5,6 +5,15 @@ import {
   type Player,
   type UndoAction,
 } from './commanderDamage';
+import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
+
+/** Records every sound-trigger call so tests can assert without a real AudioContext. */
+class MockSoundPlayer implements SoundPlayer {
+  readonly events: SoundEvent[] = [];
+  play(event: SoundEvent): void {
+    this.events.push(event);
+  }
+}
 
 function makePlayers(): Player[] {
   return [
@@ -112,5 +121,37 @@ describe('applyCommanderDamageDelta', () => {
 
     expect(state.p1.p2).toBe(6);
     expect(players[0].life).toBe(34);
+  });
+
+  it('plays commanderDamageUp when damage increases and commanderDamageDown when it decreases', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const sound = new MockSoundPlayer();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack, sound);
+    expect(sound.events).toEqual(['commanderDamageUp']);
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -1, undoStack, sound);
+    expect(sound.events).toEqual(['commanderDamageUp', 'commanderDamageDown']);
+  });
+
+  it('does not play a sound when a clamped decrease applies no actual change', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const sound = new MockSoundPlayer();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -1, undoStack, sound);
+
+    expect(sound.events).toEqual([]);
+  });
+
+  it('does not require a sound player: omitting it never throws', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+
+    expect(() => applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack)).not.toThrow();
   });
 });

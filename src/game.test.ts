@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
 import { applyPoisonDelta } from './game/poison';
 import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
+import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
+
+/** Records every sound-trigger call so tests can assert on game events without a real AudioContext. */
+class MockSoundPlayer implements SoundPlayer {
+  readonly events: SoundEvent[] = [];
+  play(event: SoundEvent): void {
+    this.events.push(event);
+  }
+}
 
 /** Mirrors UndoControl's reflow math so tests can tap the icon by coordinate. */
 function undoControlCenter(width: number, height: number): { x: number; y: number } {
@@ -469,6 +478,61 @@ describe('Game', () => {
       game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.75);
       expect(player.life).toBe(40);
     });
+  });
+});
+
+describe('sound triggers', () => {
+  it('plays lifeUp on increment and lifeDown on decrement, distinguishing direction', () => {
+    const sound = new MockSoundPlayer();
+    const game = new Game(undefined, sound);
+    game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight + 10); // upper half: +1
+    expect(sound.events).toEqual(['lifeUp']);
+
+    game.onTap(50, 10); // lower half (near this rotated seat's own body): -1
+    expect(sound.events).toEqual(['lifeUp', 'lifeDown']);
+  });
+
+  it('plays turnPass when the shared center control is tapped', () => {
+    const sound = new MockSoundPlayer();
+    const game = new Game(undefined, sound);
+    game.resize(400, 800);
+
+    game.onTap(200, 400);
+
+    expect(sound.events).toEqual(['turnPass']);
+  });
+
+  it('plays eliminate exactly once when a player newly drops out, not again on later frames', () => {
+    const sound = new MockSoundPlayer();
+    const game = new Game({ playerCount: 3, startingLife: 1, players: [] }, sound);
+    game.resize(400, 900);
+    const rects = computeZoneRects(3, 400, 900);
+
+    game.onTap(rects[0].x + 50, rects[0].y + 10); // Alara: 1 -> 0
+
+    expect(sound.events.filter((event) => event === 'eliminate')).toHaveLength(1);
+
+    game.update(0.016);
+    game.update(0.016);
+
+    expect(sound.events.filter((event) => event === 'eliminate')).toHaveLength(1);
+  });
+
+  it('plays gameEnd exactly once when the game ends', () => {
+    const sound = new MockSoundPlayer();
+    const game = new Game({ playerCount: 3, startingLife: 40, players: [] }, sound);
+
+    game.endGame();
+    game.endGame(); // no-op once already ended
+
+    expect(sound.events.filter((event) => event === 'gameEnd')).toHaveLength(1);
+  });
+
+  it('does not require a real AudioContext: default Game() construction never throws', () => {
+    expect(() => new Game()).not.toThrow();
   });
 });
 
