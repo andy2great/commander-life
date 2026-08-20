@@ -45,6 +45,19 @@ export interface GameConfig {
   players: PlayerConfig[];
 }
 
+export interface EliminationEntry {
+  playerId: string;
+  turnCount: number;
+}
+
+export interface GameStats {
+  winnerId: string;
+  durationS: number;
+  /** Seconds each player spent as the active player, keyed by player id. */
+  activeTimeS: Record<string, number>;
+  eliminationOrder: EliminationEntry[];
+}
+
 // Active zone's pulsing border: sine-driven width/opacity per docs/concept.md.
 const PULSE_SPEED_RAD_S = 4;
 const PULSE_MIN_WIDTH = 3;
@@ -95,6 +108,11 @@ export class Game {
   private height = 0;
   private hold: HoldState | undefined;
   private animTime = 0;
+  private readonly activeTimeList: number[];
+  private readonly eliminationOrderList: EliminationEntry[] = [];
+  private endedFlag = false;
+  private winnerId: string | null = null;
+  private durationS = 0;
 
   constructor(config?: GameConfig) {
     this.playerCount = clamp(config?.playerCount ?? DEFAULT_PLAYER_COUNT, MIN_PLAYER_COUNT, MAX_PLAYER_COUNT);
@@ -109,6 +127,7 @@ export class Game {
       };
     });
     this.damage = createCommanderDamageState(this.playersList.map((player) => player.id));
+    this.activeTimeList = new Array(this.playerCount).fill(0);
   }
 
   get activeIndex(): number {
@@ -135,8 +154,58 @@ export class Game {
     return this.popupsList;
   }
 
+  /** True once the game has ended, manually or automatically. */
+  get ended(): boolean {
+    return this.endedFlag;
+  }
+
+  /** Stats for the end-game screen, or null until the game has ended. */
+  get stats(): GameStats | null {
+    if (!this.endedFlag || this.winnerId === null) {
+      return null;
+    }
+    const activeTimeS: Record<string, number> = {};
+    this.playersList.forEach((player, seat) => {
+      activeTimeS[player.id] = this.activeTimeList[seat];
+    });
+    return {
+      winnerId: this.winnerId,
+      durationS: this.durationS,
+      activeTimeS,
+      eliminationOrder: [...this.eliminationOrderList],
+    };
+  }
+
+  /** True when (x, y) — in the same coordinate space passed to resize — is over the shared center control. */
+  isOverControl(x: number, y: number): boolean {
+    return this.control.containsPoint(x, y);
+  }
+
+  /** Ends the game, e.g. from a long-press on the shared center control. No-op once already ended. */
+  endGame(): void {
+    if (this.endedFlag) {
+      return;
+    }
+    this.checkEndConditions();
+    if (this.endedFlag) {
+      return;
+    }
+    // Per docs/concept.md: manually ending the game picks the highest-life player as winner.
+    const winner = this.playersList.reduce((best, player) => (player.life > best.life ? player : best));
+    this.finishGame(winner.id);
+  }
+
   update(dt: number): void {
+    if (this.endedFlag) {
+      return;
+    }
+    this.checkEndConditions();
+    if (this.endedFlag) {
+      return;
+    }
+
     this.animTime += dt;
+    this.activeTimeList[this.turnState.activeIndex] += dt;
 
     for (let i = this.popupsList.length - 1; i >= 0; i -= 1) {
       this.popupsList[i].age += dt;
@@ -239,6 +308,36 @@ export class Game {
         player.life -= delta;
       },
     });
+    this.checkEndConditions();
+  }
+
+  /**
+   * Records newly-eliminated players (life at or below 0) and ends the game
+   * automatically once only one player remains above 0 life, per
+   * docs/concept.md step 6.
+   */
+  private checkEndConditions(): void {
+    if (this.endedFlag) {
+      return;
+    }
+    for (const player of this.playersList) {
+      if (player.life <= 0 && !this.eliminationOrderList.some((entry) => entry.playerId === player.id)) {
+        this.eliminationOrderList.push({ playerId: player.id, turnCount: this.turnState.turnCount });
+      }
+    }
+    const alive = this.playersList.filter((player) => player.life > 0);
+    if (alive.length === 1) {
+      this.finishGame(alive[0].id);
+    }
+  }
+
+  private finishGame(winnerId: string): void {
+    if (this.endedFlag) {
+      return;
+    }
+    this.endedFlag = true;
+    this.winnerId = winnerId;
+    this.durationS = this.animTime;
   }
 
   render(ctx: CanvasRenderingContext2D, width: number, height: number): void {

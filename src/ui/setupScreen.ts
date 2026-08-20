@@ -22,6 +22,8 @@ export interface SetupScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
   root: HTMLElement;
   onStart: (config: GameConfig) => void;
+  /** Pre-fills the form with a previous game's configuration, e.g. for "New Game". */
+  initialConfig?: GameConfig;
 }
 
 let stylesInjected = false;
@@ -72,6 +74,17 @@ export class SetupScreen {
   constructor(options: SetupScreenOptions) {
     this.root = options.root;
     this.onStartCallback = options.onStart;
+
+    const initialConfig = options.initialConfig;
+    if (initialConfig) {
+      this.playerCount = clampPlayerCount(initialConfig.playerCount);
+      this.startingLife = clampStartingLife(initialConfig.startingLife);
+      initialConfig.players.forEach((player, seat) => {
+        if (this.players[seat]) {
+          this.players[seat] = { ...player };
+        }
+      });
+    }
   }
 
   show(): void {
