@@ -234,3 +234,94 @@ describe('Game', () => {
     expect(tooMany.playerCount).toBe(6);
   });
 });
+
+describe('end of game', () => {
+  function makeThreePlayerGame(startingLife: number): Game {
+    return new Game({
+      playerCount: 3,
+      startingLife,
+      players: [
+        { name: 'Alara', color: '#111111' },
+        { name: 'Kess', color: '#222222' },
+        { name: 'Yorion', color: '#333333' },
+      ],
+    });
+  }
+
+  it('has no stats before the game ends', () => {
+    const game = makeThreePlayerGame(40);
+
+    expect(game.ended).toBe(false);
+    expect(game.stats).toBeNull();
+  });
+
+  it('reports whether a point is over the shared center control', () => {
+    const game = makeThreePlayerGame(40);
+    game.resize(400, 900);
+
+    expect(game.isOverControl(200, 450)).toBe(true);
+    expect(game.isOverControl(0, 0)).toBe(false);
+  });
+
+  it('ends automatically when only one player remains above 0 life, recording elimination order', () => {
+    const game = makeThreePlayerGame(1);
+    game.resize(400, 900);
+    const zoneHeight = 900 / 3;
+
+    game.onTap(50, zoneHeight - 10); // Alara: 1 -> 0
+    expect(game.ended).toBe(false);
+
+    game.onTap(50, zoneHeight * 2 - 10); // Kess: 1 -> 0, only Yorion remains
+    expect(game.ended).toBe(true);
+
+    expect(game.stats?.winnerId).toBe(game.players[2].id);
+    expect(game.stats?.eliminationOrder.map((entry) => entry.playerId)).toEqual([
+      game.players[0].id,
+      game.players[1].id,
+    ]);
+  });
+
+  it('ends manually via endGame, picking the highest-life player as winner', () => {
+    const game = makeThreePlayerGame(40);
+    game.resize(400, 900);
+
+    game.onTap(50, 140); // Alara upper half: 40 -> 41
+
+    game.endGame();
+
+    expect(game.ended).toBe(true);
+    expect(game.stats?.winnerId).toBe(game.players[0].id);
+  });
+
+  it('is a no-op to end an already-ended game', () => {
+    const game = makeThreePlayerGame(40);
+    game.endGame();
+    const stats = game.stats;
+
+    game.endGame();
+
+    expect(game.stats).toEqual(stats);
+  });
+
+  it('accumulates time-as-active-player and freezes match duration once ended', () => {
+    const game = makeThreePlayerGame(1);
+    game.resize(400, 900);
+    const zoneHeight = 900 / 3;
+
+    game.update(2); // Alara active for 2s
+    game.onTap(200, 450); // pass turn to Kess
+    game.update(3); // Kess active for 3s
+
+    game.onTap(50, zoneHeight - 10); // eliminate Alara
+    game.onTap(50, zoneHeight * 2 - 10); // eliminate Kess, Yorion wins
+
+    const stats = game.stats;
+    expect(stats).not.toBeNull();
+    expect(stats?.durationS).toBeCloseTo(5, 5);
+    expect(stats?.activeTimeS[game.players[0].id]).toBeCloseTo(2, 5);
+    expect(stats?.activeTimeS[game.players[1].id]).toBeCloseTo(3, 5);
+
+    game.update(10);
+    expect(game.stats?.durationS).toBeCloseTo(5, 5);
+  });
+});
