@@ -25,6 +25,20 @@ const ACTIVE_ZONE_COLOR = '#5b8cff';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
 const STARTING_LIFE = 40;
 
+// Tap-and-hold ramp: repeated ticks start after RAMP_DELAY_S of holding, then
+// speed up from RAMP_START_INTERVAL_S down to RAMP_MIN_INTERVAL_S per docs/concept.md.
+const RAMP_DELAY_S = 0.6;
+const RAMP_START_INTERVAL_S = 0.2;
+const RAMP_MIN_INTERVAL_S = 0.05;
+const RAMP_ACCEL_S = 1;
+
+interface HoldState {
+  playerId: string;
+  delta: 1 | -1;
+  heldFor: number;
+  sinceLastTick: number;
+}
+
 class ArrayUndoStack implements UndoStack {
   private readonly actions: UndoAction[] = [];
 
@@ -47,6 +61,7 @@ export class Game {
   );
   private readonly stack: UndoStack = new ArrayUndoStack();
   private height = 0;
+  private hold: HoldState | undefined;
 
   get activeIndex(): number {
     return this.turnState.activeIndex;
@@ -68,8 +83,28 @@ export class Game {
     return this.stack;
   }
 
-  update(_dt: number): void {
-    // No per-frame simulation yet; kept so main.ts's frame loop stays simple.
+  update(dt: number): void {
+    if (!this.hold) {
+      return;
+    }
+
+    this.hold.heldFor += dt;
+    if (this.hold.heldFor < RAMP_DELAY_S) {
+      return;
+    }
+
+    this.hold.sinceLastTick += dt;
+    const rampElapsed = this.hold.heldFor - RAMP_DELAY_S;
+    const interval = Math.max(
+      RAMP_MIN_INTERVAL_S,
+      RAMP_START_INTERVAL_S -
+        (RAMP_START_INTERVAL_S - RAMP_MIN_INTERVAL_S) * Math.min(1, rampElapsed / RAMP_ACCEL_S),
+    );
+
+    while (this.hold.sinceLastTick >= interval) {
+      this.hold.sinceLastTick -= interval;
+      this.applyLifeDelta(this.hold.playerId, this.hold.delta);
+    }
   }
 
   /** Recomputes control placement for the current canvas size. Also called by render(). */
@@ -81,7 +116,22 @@ export class Game {
   onTap(x: number, y: number): void {
     if (this.control.containsPoint(x, y)) {
       this.turnState = advanceTurn(this.turnState, this.playerCount);
+      return;
     }
+
+    const zone = this.zoneAt(x, y);
+    if (!zone) {
+      return;
+    }
+
+    const delta = zone.half === 'upper' ? 1 : -1;
+    this.applyLifeDelta(zone.playerId, delta);
+    this.hold = { playerId: zone.playerId, delta, heldFor: 0, sinceLastTick: 0 };
+  }
+
+  /** Call on pointerup/pointercancel/pointerleave to stop any in-progress ramp. */
+  onTapEnd(): void {
+    this.hold = undefined;
   }
 
   /** Returns the id of the player zone under (x, y), or null over the shared control or outside any zone. */
@@ -102,6 +152,31 @@ export class Game {
       return null;
     }
     return this.playersList[seat].id;
+  }
+
+  /** Returns the player zone and which half (x, y) falls in, or null outside any zone. */
+  private zoneAt(x: number, y: number): { playerId: string; half: 'upper' | 'lower' } | null {
+    const playerId = this.playerIdAt(x, y);
+    if (!playerId) {
+      return null;
+    }
+    const zoneHeight = this.height / this.playerCount;
+    const offsetInZone = y % zoneHeight;
+    const half = offsetInZone < zoneHeight / 2 ? 'upper' : 'lower';
+    return { playerId, half };
+  }
+
+  private applyLifeDelta(playerId: string, delta: number): void {
+    const player = this.playersList.find((candidate) => candidate.id === playerId);
+    if (!player) {
+      return;
+    }
+    player.life += delta;
+    this.stack.push({
+      undo(): void {
+        player.life -= delta;
+      },
+    });
   }
 
   render(ctx: CanvasRenderingContext2D, width: number, height: number): void {

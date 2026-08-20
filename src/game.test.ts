@@ -79,4 +79,77 @@ describe('Game', () => {
 
     expect(game.onLongPress(200, 400)).toBeNull();
   });
+
+  it('increments life when the upper half of a player zone is tapped', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10);
+
+    expect(player.life).toBe(41);
+  });
+
+  it('decrements life when the lower half of a player zone is tapped', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight - 10);
+
+    expect(player.life).toBe(39);
+  });
+
+  it('does not change any life total when tapping the shared center control', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const livesBefore = game.players.map((player) => player.life);
+
+    game.onTap(200, 400);
+
+    expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+    expect(game.activeIndex).toBe(1);
+  });
+
+  it('pushes an undo action onto the shared stack that reverts a zone life change', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10);
+    expect(player.life).toBe(41);
+
+    const stack = game.undoStack as unknown as { actions: { undo(): void }[] };
+    stack.actions[stack.actions.length - 1].undo();
+
+    expect(player.life).toBe(40);
+  });
+
+  it('ramps repeated life changes while a zone tap is held, accelerating after ~600ms', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const zoneHeight = 800 / game.playerCount;
+
+    game.onTap(50, zoneHeight / 2 - 10);
+    expect(player.life).toBe(41);
+
+    game.update(0.3);
+    expect(player.life).toBe(41);
+
+    game.update(0.4);
+    const afterRampStarts = player.life;
+    expect(afterRampStarts).toBeGreaterThan(41);
+
+    game.update(0.5);
+    expect(player.life).toBeGreaterThan(afterRampStarts);
+
+    game.onTapEnd();
+    const afterRelease = player.life;
+    game.update(1);
+    expect(player.life).toBe(afterRelease);
+  });
 });

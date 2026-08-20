@@ -25,6 +25,15 @@ resize();
 canvas.addEventListener('pointerdown', (event) => {
   game.onTap(event.clientX, event.clientY);
 });
+canvas.addEventListener('pointerup', () => {
+  game.onTapEnd();
+});
+canvas.addEventListener('pointercancel', () => {
+  game.onTapEnd();
+});
+canvas.addEventListener('pointerleave', () => {
+  game.onTapEnd();
+});
 
 attachLongPress(canvas, (event) => {
   const playerId = game.onLongPress(event.clientX, event.clientY);
