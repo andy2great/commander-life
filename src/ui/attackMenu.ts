@@ -209,10 +209,12 @@ function injectStylesOnce(): void {
     .cmdr-atk-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
     .cmdr-atk-toggle { box-sizing: border-box; flex: 1 1 auto; min-width: 84px; padding: 10px 12px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; }
     .cmdr-atk-toggle.active { border-color: var(--toggle-color, #948fa3); color: #f5f3f7; background: #2d2938; }
-    .cmdr-atk-row { display: flex; align-items: center; justify-content: center; background: #241f2d; border-radius: 20px; padding: 20px; border-left: 3px solid transparent; }
-    .cmdr-atk-stepper { display: flex; align-items: center; gap: 16px; }
-    .cmdr-atk-stepper button { box-sizing: border-box; width: 56px; height: 56px; border-radius: 50%; border: none; background: #2d2938; color: #f5f3f7; font-size: 24px; font-weight: 700; }
-    .cmdr-atk-val { min-width: 44px; text-align: center; color: #fff; font-size: 30px; font-weight: 800; font-family: system-ui, sans-serif; }
+    .cmdr-atk-row { display: flex; align-items: stretch; background: #241f2d; border-radius: 20px; padding: 10px; border-left: 3px solid transparent; }
+    .cmdr-atk-stepper { position: relative; display: flex; align-items: stretch; gap: 6px; width: 100%; height: 84px; }
+    .cmdr-atk-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 16px; background: #2d2938; color: #f5f3f7; font-size: 32px; font-weight: 800; }
+    .cmdr-atk-stepper button.cmdr-atk-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
+    .cmdr-atk-stepper button.cmdr-atk-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
+    .cmdr-atk-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 44px; text-align: center; color: #fff; font-size: 26px; font-weight: 800; font-family: system-ui, sans-serif; background: #1b1822; padding: 6px 14px; border-radius: 14px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); }
   `;
   document.head.appendChild(style);
 }
@@ -382,6 +384,7 @@ export class AttackMenu {
 
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
+    minusButton.className = 'cmdr-atk-minus';
     minusButton.textContent = '−';
     this.holdToRepeatDetachFns.push(
       attachHoldToRepeat(minusButton, () => {
@@ -392,6 +395,7 @@ export class AttackMenu {
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
+    plusButton.className = 'cmdr-atk-plus';
     plusButton.textContent = '+';
     this.holdToRepeatDetachFns.push(
       attachHoldToRepeat(plusButton, () => {

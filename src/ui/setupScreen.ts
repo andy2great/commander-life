@@ -38,13 +38,15 @@ function injectStylesOnce(): void {
     .setup-title { margin: 0; font-size: 26px; font-weight: 800; color: #f5f3f7; text-align: center; }
     .setup-sub { margin: -8px 0 0; text-align: center; color: #948fa3; font-size: 13px; }
     .setup-card { background: #1b1822; border-radius: 18px; padding: 16px 18px; }
-    .setup-row { display: flex; align-items: center; justify-content: space-between; }
-    .setup-row + .setup-row { margin-top: 14px; }
+    .setup-row { display: flex; flex-direction: column; gap: 10px; }
+    .setup-row + .setup-row { margin-top: 18px; }
     .setup-label { color: #f5f3f7; font-size: 15px; font-weight: 600; }
     .setup-label small { display: block; color: #948fa3; font-weight: 400; font-size: 11px; margin-top: 2px; }
-    .setup-stepper { display: flex; align-items: center; gap: 14px; background: #211d29; border-radius: 14px; padding: 6px 10px; }
-    .setup-stepper button { box-sizing: border-box; width: 32px; height: 32px; border-radius: 10px; border: none; background: #2d2938; color: #f5f3f7; font-size: 18px; font-weight: 700; }
-    .setup-stepper .setup-val { min-width: 34px; text-align: center; color: #f5f3f7; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .setup-stepper { position: relative; display: flex; align-items: stretch; gap: 6px; width: 100%; height: 64px; background: #211d29; border-radius: 16px; padding: 4px; }
+    .setup-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 12px; background: #2d2938; color: #f5f3f7; font-size: 26px; font-weight: 800; }
+    .setup-stepper button.setup-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
+    .setup-stepper button.setup-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
+    .setup-stepper .setup-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 34px; text-align: center; color: #fff; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; background: #17141d; padding: 6px 12px; border-radius: 10px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3); }
     .setup-players { display: flex; flex-direction: column; gap: 10px; }
     .setup-player-row { display: flex; align-items: center; gap: 12px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; }
     .setup-swatch { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); }
@@ -177,6 +179,7 @@ export class SetupScreen {
 
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
+    minusButton.className = 'setup-minus';
     minusButton.textContent = '−';
     minusButton.addEventListener('pointerdown', () => {
       onChange(-1);
@@ -185,6 +188,7 @@ export class SetupScreen {
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
+    plusButton.className = 'setup-plus';
     plusButton.textContent = '+';
     plusButton.addEventListener('pointerdown', () => {
       onChange(1);
