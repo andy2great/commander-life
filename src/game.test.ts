@@ -538,23 +538,45 @@ describe('Game', () => {
       expect(game.dragArrow).toBeNull();
     });
 
-    it('updateDragPointer past the move tolerance reveals the arrow from the origin zone center to the pointer', () => {
+    it('updateDragPointer past the move tolerance reveals the arrow from the exact press point to the pointer', () => {
       const game = new Game();
       game.resize(400, 800);
-      const originRect = computeZoneRects(game.playerCount, 400, 800)[0];
 
       game.beginDrag(50, 10);
       game.updateDragPointer(50, 10 + LONG_PRESS_MOVE_TOLERANCE_PX + 1);
 
       expect(game.dragArrow).toEqual({
         fromPlayerId: game.players[0].id,
-        originX: originRect.x + originRect.width / 2,
-        originY: originRect.y + originRect.height / 2,
+        originX: 50,
+        originY: 10,
         headX: 50,
         headY: 10 + LONG_PRESS_MOVE_TOLERANCE_PX + 1,
         targetPlayerId: null,
         color: game.players[0].color,
       });
+    });
+
+    it('keeps the arrow origin fixed at the exact press point, not the zone center, regardless of where within the zone the press started', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const originRect = computeZoneRects(game.playerCount, 400, 800)[0];
+      const pressX = originRect.x + 15; // away from the zone's horizontal center
+      const pressY = 5; // away from the zone's vertical center
+
+      game.beginDrag(pressX, pressY);
+      game.updateDragPointer(pressX, zoneHeight - 20); // moves well past the tolerance, within the same zone
+
+      expect(game.dragArrow).toMatchObject({
+        originX: pressX,
+        originY: pressY,
+      });
+      expect(game.dragArrow?.originX).not.toBe(originRect.x + originRect.width / 2);
+      expect(game.dragArrow?.originY).not.toBe(originRect.y + originRect.height / 2);
+
+      // Moving the pointer further must not move the origin — only the head tracks the live pointer.
+      game.updateDragPointer(pressX + 30, zoneHeight - 5);
+      expect(game.dragArrow).toMatchObject({ originX: pressX, originY: pressY });
     });
 
     it('updateDragPointer moves the arrow head while no valid target is under the pointer, once past the move tolerance', () => {
