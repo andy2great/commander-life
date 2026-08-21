@@ -920,6 +920,65 @@ describe('end of game', () => {
   });
 });
 
+// Issue #88: canvas-wide screen-shake on impactful damage actions. The
+// trigger/decay math itself lives in src/game/screenShake.ts and is unit
+// tested there independent of Game/rendering; these tests only cover how
+// Game wires it in (shakeTrigger exposed to UI menus, elimination shaking
+// harder than a routine damage tick, hit-testing staying unaffected).
+describe('screen shake (issue #88)', () => {
+  function makeThreePlayerGame(startingLife: number): Game {
+    return new Game({ playerCount: 3, startingLife, players: [] });
+  }
+
+  it('starts with no trauma', () => {
+    const game = makeThreePlayerGame(40);
+
+    expect(game.shakeTrauma).toBe(0);
+  });
+
+  it('exposes a shakeTrigger that raises trauma, e.g. for a damage-menu action', () => {
+    const game = makeThreePlayerGame(40);
+
+    game.shakeTrigger.trigger(0.4);
+
+    expect(game.shakeTrauma).toBeCloseTo(0.4, 5);
+  });
+
+  it('decays trauma over successive update() calls', () => {
+    const game = makeThreePlayerGame(40);
+    game.shakeTrigger.trigger(1);
+
+    game.update(0.05);
+    const afterOneFrame = game.shakeTrauma;
+    game.update(0.05);
+
+    expect(afterOneFrame).toBeGreaterThan(0);
+    expect(afterOneFrame).toBeLessThan(1);
+    expect(game.shakeTrauma).toBeLessThan(afterOneFrame);
+  });
+
+  it('shakes harder when a player is eliminated than a routine damage-menu trigger', () => {
+    const eliminationGame = makeThreePlayerGame(1);
+    dealDamage(eliminationGame, eliminationGame.players[1].id, eliminationGame.players[0].id, 1); // Alara: 1 -> 0
+    eliminationGame.update(0.016); // checkEndConditions runs every frame, then decays trauma once
+
+    const routineGame = makeThreePlayerGame(40);
+    routineGame.shakeTrigger.trigger(0.4); // e.g. a plain damage-menu tick
+    routineGame.update(0.016); // same single frame of decay
+
+    expect(eliminationGame.shakeTrauma).toBeGreaterThan(routineGame.shakeTrauma);
+  });
+
+  it('leaves hit-testing (e.g. the undo control) unaffected while trauma is active', () => {
+    const game = makeThreePlayerGame(40);
+    game.resize(400, 900);
+    game.shakeTrigger.trigger(1);
+
+    expect(game.isOverUndoControl(200, 450)).toBe(true);
+    expect(game.isOverUndoControl(0, 0)).toBe(false);
+  });
+});
+
 // Issue #45: landscape overlays (setup screen, commander-damage panel, stats
 // screen) were unbounded and could grow taller than a short landscape
 // viewport, burying player zones/life totals behind them.

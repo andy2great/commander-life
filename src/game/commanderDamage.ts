@@ -3,6 +3,7 @@
 // shared undo stack. Free of DOM globals so it stays unit-testable.
 
 import type { SoundPlayer } from '../audio/soundPlayer';
+import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
 
 export interface Player {
   id: string;
@@ -41,6 +42,8 @@ export function createCommanderDamageState(playerIds: string[]): CommanderDamage
  * commander damage is also regular damage. Pushes an undo action that
  * reverts both changes onto `undoStack`. Plays a distinct increment/decrement
  * cue on `sound`, if given, only when the clamped change actually applies.
+ * Triggers `shake` (issue #88) only when the clamped change is an increase —
+ * an actual damage tick.
  */
 export function applyCommanderDamageDelta(
   state: CommanderDamageState,
@@ -50,6 +53,7 @@ export function applyCommanderDamageDelta(
   delta: number,
   undoStack: UndoStack,
   sound?: SoundPlayer,
+  shake?: ScreenShakeTrigger,
 ): void {
   if (targetId === fromId || delta === 0) {
     return;
@@ -70,6 +74,9 @@ export function applyCommanderDamageDelta(
   targetDamage[fromId] = after;
   target.life -= applied;
   sound?.play(applied > 0 ? 'commanderDamageUp' : 'commanderDamageDown');
+  if (applied > 0) {
+    shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+  }
 
   undoStack.push({
     undo(): void {

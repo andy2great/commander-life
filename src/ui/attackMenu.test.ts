@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { buildDamageTypeDefs } from './attackMenu';
 import { createCommanderDamageState, type Player, type UndoAction } from '../game/commanderDamage';
 import { createPoisonState } from '../game/poison';
+import type { ScreenShakeTrigger } from '../game/screenShake';
+
+class MockShake implements ScreenShakeTrigger {
+  readonly intensities: number[] = [];
+  trigger(intensity: number): void {
+    this.intensities.push(intensity);
+  }
+}
 
 function makePlayers(): [Player, Player] {
   return [
@@ -175,5 +183,30 @@ describe('buildDamageTypeDefs', () => {
     undoStack.actions[0].undo();
     expect(target.life).toBe(40);
     expect(attacker.life).toBe(40);
+  });
+
+  it('triggers screen-shake for damage/commander/lifelink/poison increases but never for heal (issue #88)', () => {
+    const [attacker, target] = makePlayers();
+    const shake = new MockShake();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState(['a', 'b']),
+      createPoisonState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+      undefined,
+      shake,
+    );
+
+    for (const key of ['damage', 'commander', 'lifelink', 'poison'] as const) {
+      types.find((type) => type.key === key)!.apply(1);
+    }
+    expect(shake.intensities).toHaveLength(4);
+
+    types.find((type) => type.key === 'heal')!.apply(1);
+    expect(shake.intensities).toHaveLength(4);
   });
 });

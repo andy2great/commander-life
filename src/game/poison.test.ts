@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { applyPoisonDelta, createPoisonState, type PoisonState } from './poison';
 import type { UndoAction } from './commanderDamage';
+import type { ScreenShakeTrigger } from './screenShake';
+
+class MockShake implements ScreenShakeTrigger {
+  readonly intensities: number[] = [];
+  trigger(intensity: number): void {
+    this.intensities.push(intensity);
+  }
+}
 
 class FakeUndoStack {
   actions: UndoAction[] = [];
@@ -73,5 +81,36 @@ describe('applyPoisonDelta', () => {
     undoStack.undoLast();
 
     expect(state.p1).toBe(6);
+  });
+
+  it('triggers screen-shake for a poison increase', () => {
+    const state: PoisonState = createPoisonState(['p1']);
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyPoisonDelta(state, 'p1', 2, undoStack, shake);
+
+    expect(shake.intensities).toHaveLength(1);
+  });
+
+  it('does not trigger screen-shake for a decrease', () => {
+    const state: PoisonState = createPoisonState(['p1']);
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyPoisonDelta(state, 'p1', 5, undoStack);
+    applyPoisonDelta(state, 'p1', -2, undoStack, shake);
+
+    expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('does not trigger screen-shake when a clamped decrease applies no actual change', () => {
+    const state: PoisonState = createPoisonState(['p1']);
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyPoisonDelta(state, 'p1', -1, undoStack, shake);
+
+    expect(shake.intensities).toHaveLength(0);
   });
 });

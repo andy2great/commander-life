@@ -11,6 +11,7 @@
 import { BOARD_SHORTCUT_OPTIONS, applyBoardShortcutDelta, type BoardShortcutOption } from '../game/boardShortcut';
 import type { Player, UndoStack } from '../game/commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
+import type { ScreenShakeTrigger } from '../game/screenShake';
 import { attachHoldToRepeat } from './holdToRepeat';
 
 /**
@@ -33,6 +34,7 @@ export interface BoardShortcutMenuOptions {
   getActiveIndex: () => number;
   undoStack: UndoStack;
   sound?: SoundPlayer;
+  shake?: ScreenShakeTrigger;
 }
 
 let stylesInjected = false;
@@ -67,6 +69,7 @@ export class BoardShortcutMenu {
   private readonly getActiveIndex: () => number;
   private readonly undoStack: UndoStack;
   private readonly sound?: SoundPlayer;
+  private readonly shake?: ScreenShakeTrigger;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
 
@@ -76,6 +79,7 @@ export class BoardShortcutMenu {
     this.getActiveIndex = options.getActiveIndex;
     this.undoStack = options.undoStack;
     this.sound = options.sound;
+    this.shake = options.shake;
   }
 
   get isOpen(): boolean {
@@ -221,6 +225,7 @@ export class BoardShortcutMenu {
         amount,
         this.undoStack,
         this.sound,
+        this.shake,
       );
       this.close();
     });

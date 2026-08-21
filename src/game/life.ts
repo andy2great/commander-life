@@ -5,23 +5,30 @@
 
 import type { Player, UndoStack } from './commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
+import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
 
 /**
  * Decreases `target`'s life by `delta`, without touching any commander-damage
  * counter. Pushes an undo action that reverts it onto `undoStack`. No-op if
- * `delta` is zero.
+ * `delta` is zero. Triggers `shake` (issue #88) only for a positive delta —
+ * an actual damage tick, as opposed to correcting a prior tap within the
+ * same menu session.
  */
 export function applyDamageDelta(
   target: Player,
   delta: number,
   undoStack: UndoStack,
   sound?: SoundPlayer,
+  shake?: ScreenShakeTrigger,
 ): void {
   if (delta === 0) {
     return;
   }
   target.life -= delta;
   sound?.play(delta > 0 ? 'lifeDown' : 'lifeUp');
+  if (delta > 0) {
+    shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+  }
   undoStack.push({
     undo(): void {
       target.life += delta;
@@ -55,7 +62,8 @@ export function applyHealDelta(
  * Decreases `target`'s life by `delta` and increases `attacker`'s life by the
  * same amount, as one action (lifelink damage). Pushes a single undo action
  * that reverts both changes onto `undoStack`. No-op if `delta` is zero or
- * `attacker` and `target` are the same player.
+ * `attacker` and `target` are the same player. Triggers `shake` (issue #88)
+ * only for a positive delta — the target is taking damage.
  */
 export function applyLifelinkDelta(
   attacker: Player,
@@ -63,6 +71,7 @@ export function applyLifelinkDelta(
   delta: number,
   undoStack: UndoStack,
   sound?: SoundPlayer,
+  shake?: ScreenShakeTrigger,
 ): void {
   if (delta === 0 || attacker.id === target.id) {
     return;
@@ -70,6 +79,9 @@ export function applyLifelinkDelta(
   target.life -= delta;
   attacker.life += delta;
   sound?.play(delta > 0 ? 'lifeDown' : 'lifeUp');
+  if (delta > 0) {
+    shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+  }
   undoStack.push({
     undo(): void {
       target.life += delta;

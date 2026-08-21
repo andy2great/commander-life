@@ -6,12 +6,20 @@ import {
   type UndoAction,
 } from './commanderDamage';
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
+import type { ScreenShakeTrigger } from './screenShake';
 
 /** Records every sound-trigger call so tests can assert without a real AudioContext. */
 class MockSoundPlayer implements SoundPlayer {
   readonly events: SoundEvent[] = [];
   play(event: SoundEvent): void {
     this.events.push(event);
+  }
+}
+
+class MockShake implements ScreenShakeTrigger {
+  readonly intensities: number[] = [];
+  trigger(intensity: number): void {
+    this.intensities.push(intensity);
   }
 }
 
@@ -153,5 +161,39 @@ describe('applyCommanderDamageDelta', () => {
     const undoStack = new FakeUndoStack();
 
     expect(() => applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack)).not.toThrow();
+  });
+
+  it('triggers screen-shake when the clamped change is an increase', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(1);
+  });
+
+  it('does not trigger screen-shake for a decrease', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 5, undoStack);
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -2, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('does not trigger screen-shake when a clamped decrease applies no actual change', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -1, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(0);
   });
 });

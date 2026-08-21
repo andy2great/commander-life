@@ -13,6 +13,15 @@ import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poiso
 import { CONTROL_GAP_RATIO, SHORTCUT_RADIUS_RATIO, ShortcutControl, UNDO_RADIUS_RATIO, UndoControl } from './ui/controls';
 import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
+import {
+  createScreenShakeState,
+  ELIMINATION_SHAKE_TRAUMA,
+  getScreenShakeOffset,
+  triggerScreenShake,
+  updateScreenShake,
+  type ScreenShakeState,
+  type ScreenShakeTrigger,
+} from './game/screenShake';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -251,6 +260,10 @@ export class Game {
   private dragState: DragState | null = null;
   private passTurnFlashSeatIndex: number | null = null;
   private passTurnFlashTime = 0;
+  private readonly shakeState: ScreenShakeState = createScreenShakeState();
+  private readonly shakeTriggerObj: ScreenShakeTrigger = {
+    trigger: (intensity) => triggerScreenShake(this.shakeState, intensity),
+  };
   private readonly activeTimeList: number[];
   private readonly eliminationOrderList: EliminationEntry[] = [];
   private endedFlag = false;
@@ -346,6 +359,16 @@ export class Game {
     return this.passTurnFlashSeatIndex;
   }
 
+  /** Triggers the canvas-wide screen-shake (issue #88); passed to UI menus so damage/poison actions can shake on impact. */
+  get shakeTrigger(): ScreenShakeTrigger {
+    return this.shakeTriggerObj;
+  }
+
+  /** Current screen-shake trauma (0-1), decaying every update(); exposed for tests independent of canvas rendering. */
+  get shakeTrauma(): number {
+    return this.shakeState.trauma;
+  }
+
   /** Reverts the most recent life or commander-damage change. No-op if nothing to undo. */
   undo(): void {
     this.stack.undo();
@@ -362,6 +385,7 @@ export class Game {
 
     this.animTime += dt;
     this.activeTimeList[this.turnState.activeIndex] += dt;
+    updateScreenShake(this.shakeState, dt);
 
     if (this.passTurnFlashSeatIndex !== null) {
       this.passTurnFlashTime += dt;
@@ -565,6 +589,7 @@ export class Game {
         if (eliminatedIndex === -1) {
           this.eliminationOrderList.push({ playerId: player.id, turnCount: this.turnState.turnCount });
           this.sound.play('eliminate');
+          triggerScreenShake(this.shakeState, ELIMINATION_SHAKE_TRAUMA);
         }
       } else if (eliminatedIndex !== -1) {
         this.eliminationOrderList.splice(eliminatedIndex, 1);
@@ -590,10 +615,20 @@ export class Game {
     this.resize(width, height);
     ctx.clearRect(0, 0, width, height);
 
+    // Screen-shake (issue #88) only offsets what's drawn below, via ctx
+    // translate — resize() above already recomputed zoneRects/controls from
+    // the untranslated width/height, so hit-testing (onLongPress,
+    // resolveZoneDrag, isOverUndoControl, ...) never sees this offset.
+    const shakeOffset = getScreenShakeOffset(this.shakeState, this.animTime);
+    ctx.save();
+    ctx.translate(shakeOffset.x, shakeOffset.y);
+
     this.drawZones(ctx);
     this.drawDragArrow(ctx);
     this.undoControl.draw(ctx, this.canUndo);
     this.shortcutControl.draw(ctx);
+
+    ctx.restore();
   }
 
   private drawZones(ctx: CanvasRenderingContext2D): void {
