@@ -93,6 +93,21 @@ describe('attachTapAndLongPress', () => {
     vi.useRealTimers();
   });
 
+  it('never arms the long-press timer when onPressStart returns false, so a press held past the threshold still resolves as a plain tap (issue #123)', () => {
+    vi.useFakeTimers();
+    const element = new FakeElement();
+    const handlers = attach(element, { onPressStart: vi.fn().mockReturnValue(false) });
+
+    element.dispatch('pointerdown', press());
+    vi.advanceTimersByTime(500);
+    expect(handlers.onLongPress).not.toHaveBeenCalled();
+
+    element.dispatch('pointerup', press());
+    expect(handlers.onTap).toHaveBeenCalledTimes(1);
+    expect(handlers.onPressEnd).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it('cancels the long-press timer when the pointer moves past the tolerance', () => {
     vi.useFakeTimers();
     const element = new FakeElement();

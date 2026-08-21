@@ -83,7 +83,12 @@ function startGame(config: GameConfig): void {
     onPressStart: (event) => {
       if (isOverUndoControl(event) || isOverShortcutControl(event) || isOverPauseControl(event)) {
         pressStart = null;
-        return;
+        // These controls are tap-only (no long-press behavior of their own),
+        // so skip arming the long-press timer entirely — otherwise a tap
+        // held past LONG_PRESS_MS (more likely for a less-confident tap near
+        // the control's rim) resolves as a long-press, a no-op here, and the
+        // control's onTap is silently suppressed (issue #123).
+        return false;
       }
       pressStart = { x: event.clientX, y: event.clientY };
       game.beginDrag(event.clientX, event.clientY);
