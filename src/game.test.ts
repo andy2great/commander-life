@@ -359,6 +359,104 @@ describe('Game', () => {
     });
   });
 
+  describe('dragArrow live preview (issue #55)', () => {
+    it('is null before any drag starts', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      expect(game.dragArrow).toBeNull();
+    });
+
+    it('beginDrag inside a player zone starts an arrow from that zone\'s center to the pointer, with no target yet', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const originRect = computeZoneRects(game.playerCount, 400, 800)[0];
+
+      game.beginDrag(50, 10);
+
+      expect(game.dragArrow).toEqual({
+        fromPlayerId: game.players[0].id,
+        originX: originRect.x + originRect.width / 2,
+        originY: originRect.y + originRect.height / 2,
+        headX: 50,
+        headY: 10,
+        targetPlayerId: null,
+        color: game.players[0].color,
+      });
+    });
+
+    it('beginDrag outside every player zone (e.g. over a shared control) starts no arrow', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.beginDrag(200, 400); // center control
+
+      expect(game.dragArrow).toBeNull();
+    });
+
+    it('updateDragPointer moves the arrow head while no valid target is under the pointer', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.beginDrag(50, 10);
+      game.updateDragPointer(60, zoneHeight - 20); // still inside the origin zone
+
+      expect(game.dragArrow?.headX).toBe(60);
+      expect(game.dragArrow?.headY).toBe(zoneHeight - 20);
+      expect(game.dragArrow?.targetPlayerId).toBeNull();
+    });
+
+    it('is a no-op if called with no drag in progress', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.updateDragPointer(60, 60);
+
+      expect(game.dragArrow).toBeNull();
+    });
+
+    it('snaps the arrow head to a different zone\'s center once the pointer is over it, and reports its player as the target', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const targetRect = computeZoneRects(game.playerCount, 400, 800)[2];
+
+      game.beginDrag(50, zoneHeight + 10);
+      game.updateDragPointer(55, zoneHeight * 2 + 15);
+
+      expect(game.dragArrow).toMatchObject({
+        fromPlayerId: game.players[0].id,
+        targetPlayerId: game.players[2].id,
+        headX: targetRect.x + targetRect.width / 2,
+        headY: targetRect.y + targetRect.height / 2,
+      });
+    });
+
+    it('does not snap to / target a shared control even though the pointer moves over it', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.beginDrag(50, zoneHeight + 10);
+      game.updateDragPointer(200, 400); // center control
+
+      expect(game.dragArrow).toMatchObject({ targetPlayerId: null, headX: 200, headY: 400 });
+    });
+
+    it('endDrag clears the arrow immediately, regardless of how the press resolved', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.beginDrag(50, 10);
+      expect(game.dragArrow).not.toBeNull();
+
+      game.endDrag();
+
+      expect(game.dragArrow).toBeNull();
+    });
+  });
+
   it('leaves life unchanged when a zone is tapped, even right before a release over a shared control (issue #54)', () => {
     const game = new Game();
     game.resize(400, 800);

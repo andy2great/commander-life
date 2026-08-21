@@ -62,6 +62,10 @@ function startGame(config: GameConfig): void {
         return;
       }
       pressStart = { x: event.clientX, y: event.clientY };
+      game.beginDrag(event.clientX, event.clientY);
+    },
+    onMove: (event) => {
+      game.updateDragPointer(event.clientX, event.clientY);
     },
     onTap: (event) => {
       if (isOverAnyControl(event)) {
@@ -93,6 +97,7 @@ function startGame(config: GameConfig): void {
       // resolved by onTap above on release, is the only way life changes.
     },
     onPressEnd: () => {
+      game.endDrag();
       pressStart = null;
     },
   });

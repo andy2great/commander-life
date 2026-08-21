@@ -27,6 +27,37 @@ const ACTIVE_ZONE_COLOR_RGB = '91, 140, 255';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
 const BACKGROUND_COLOR = '#121016';
 
+// Zone-to-zone drag arrow (issue #55): drawn live from the origin zone to
+// the pointer while a drag is in progress, so a Playgroup-style preview of
+// the attacker/target pair is visible before resolveZoneDrag/AttackMenu.
+// Sized relative to the shorter canvas dimension so it scales with the
+// device/canvas size like the zone text does.
+const ARROW_SHAFT_WIDTH_RATIO = 0.035;
+const ARROW_HEAD_LENGTH_RATIO = 0.09;
+const ARROW_HEAD_WIDTH_RATIO = 0.09;
+const ARROW_TARGET_HIGHLIGHT_WIDTH_RATIO = 0.012;
+
+function hexToRgb(hex: string): [number, number, number] {
+  const normalized = hex.replace('#', '');
+  return [
+    parseInt(normalized.substring(0, 2), 16),
+    parseInt(normalized.substring(2, 4), 16),
+    parseInt(normalized.substring(4, 6), 16),
+  ];
+}
+
+/** Blends a player accent color toward white, for the arrow's "3D" shaded gradient. */
+function lightenColor(hex: string, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgb(${Math.round(r + (255 - r) * amount)}, ${Math.round(g + (255 - g) * amount)}, ${Math.round(b + (255 - b) * amount)})`;
+}
+
+/** Blends a player accent color toward black, for the arrow's "3D" shaded gradient. */
+function darkenColor(hex: string, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgb(${Math.round(r * (1 - amount))}, ${Math.round(g * (1 - amount))}, ${Math.round(b * (1 - amount))})`;
+}
+
 export const MIN_PLAYER_COUNT = 3;
 export const MAX_PLAYER_COUNT = 6;
 export const DEFAULT_PLAYER_COUNT = 4;
@@ -141,6 +172,26 @@ class ArrayUndoStack implements UndoStack {
   }
 }
 
+interface DragState {
+  fromPlayerId: string;
+  pointerX: number;
+  pointerY: number;
+}
+
+/** Live preview of a zone-to-zone drag (issue #55), previewing what resolveZoneDrag would resolve if released now. */
+export interface DragArrowState {
+  fromPlayerId: string;
+  originX: number;
+  originY: number;
+  /** Snapped to the target zone's center when targetPlayerId is set; otherwise the raw pointer position. */
+  headX: number;
+  headY: number;
+  /** The zone under the pointer, only when it's a *different* player than fromPlayerId; null over empty space, the origin zone, or a shared control. */
+  targetPlayerId: string | null;
+  /** The attacking (origin) player's accent color. */
+  color: string;
+}
+
 export class Game {
   readonly playerCount: number;
   private turnState: TurnState = createTurnState();
@@ -156,6 +207,7 @@ export class Game {
   private canvasWidth = 0;
   private canvasHeight = 0;
   private animTime = 0;
+  private dragState: DragState | null = null;
   private readonly activeTimeList: number[];
   private readonly eliminationOrderList: EliminationEntry[] = [];
   private endedFlag = false;
@@ -374,6 +426,61 @@ export class Game {
     return { fromPlayerId, toPlayerId };
   }
 
+  /**
+   * Begins tracking the live drag arrow (issue #55), e.g. from main.ts's
+   * onPressStart. No-op — clears any prior drag — if (x, y) isn't inside a
+   * player zone (uses the same onLongPress rules resolveZoneDrag's `from`
+   * end does, so a press starting over a shared control never shows an arrow).
+   */
+  beginDrag(x: number, y: number): void {
+    const fromPlayerId = this.onLongPress(x, y);
+    this.dragState = fromPlayerId ? { fromPlayerId, pointerX: x, pointerY: y } : null;
+  }
+
+  /** Updates the live drag arrow's pointer end, e.g. from main.ts's pointermove. No-op if no drag is in progress. */
+  updateDragPointer(x: number, y: number): void {
+    if (!this.dragState) {
+      return;
+    }
+    this.dragState.pointerX = x;
+    this.dragState.pointerY = y;
+  }
+
+  /** Clears the live drag arrow. Call on pointerup/pointercancel/pointerleave so it disappears immediately, whether or not the drag resolved into an opened menu. */
+  endDrag(): void {
+    this.dragState = null;
+  }
+
+  /** Live drag-arrow geometry/state for render(), or null when no zone-to-zone drag is in progress. */
+  get dragArrow(): DragArrowState | null {
+    if (!this.dragState) {
+      return null;
+    }
+    const { fromPlayerId, pointerX, pointerY } = this.dragState;
+    const fromSeat = this.playersList.findIndex((player) => player.id === fromPlayerId);
+    const fromRect = this.zoneRects[fromSeat];
+    if (!fromRect) {
+      return null;
+    }
+    const originX = fromRect.x + fromRect.width / 2;
+    const originY = fromRect.y + fromRect.height / 2;
+    const color = this.playersList[fromSeat].color ?? PLAYER_COLORS[fromSeat % PLAYER_COLORS.length];
+
+    const pointedPlayerId = this.onLongPress(pointerX, pointerY);
+    const targetPlayerId = pointedPlayerId && pointedPlayerId !== fromPlayerId ? pointedPlayerId : null;
+
+    let headX = pointerX;
+    let headY = pointerY;
+    if (targetPlayerId) {
+      const targetSeat = this.playersList.findIndex((player) => player.id === targetPlayerId);
+      const targetRect = this.zoneRects[targetSeat];
+      headX = targetRect.x + targetRect.width / 2;
+      headY = targetRect.y + targetRect.height / 2;
+    }
+
+    return { fromPlayerId, originX, originY, headX, headY, targetPlayerId, color };
+  }
+
   private seatAt(x: number, y: number): number {
     return this.zoneRects.findIndex(
       (rect) => x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height,
@@ -435,6 +542,7 @@ export class Game {
     ctx.clearRect(0, 0, width, height);
 
     this.drawZones(ctx);
+    this.drawDragArrow(ctx);
     this.control.draw(ctx);
     this.undoControl.draw(ctx, this.canUndo);
     this.endControl.draw(ctx);
@@ -489,5 +597,98 @@ export class Game {
       }
       ctx.strokeRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
     }
+  }
+
+  /** Draws the live zone-to-zone drag arrow (issue #55), plus a target-zone highlight when the pointer is over a valid target. */
+  private drawDragArrow(ctx: CanvasRenderingContext2D): void {
+    const arrow = this.dragArrow;
+    if (!arrow) {
+      return;
+    }
+
+    if (arrow.targetPlayerId) {
+      const targetSeat = this.playersList.findIndex((player) => player.id === arrow.targetPlayerId);
+      const targetRect = this.zoneRects[targetSeat];
+      if (targetRect) {
+        this.drawDragTargetHighlight(ctx, targetRect, arrow.color);
+      }
+    }
+
+    this.drawArrowShaft(ctx, arrow.originX, arrow.originY, arrow.headX, arrow.headY, arrow.color);
+  }
+
+  /** Bright glowing border marking the zone a live drag arrow is currently snapped to. */
+  private drawDragTargetHighlight(ctx: CanvasRenderingContext2D, rect: ZoneRect, color: string): void {
+    const shortSide = Math.min(this.canvasWidth, this.canvasHeight);
+    const lineWidth = Math.max(4, shortSide * ARROW_TARGET_HIGHLIGHT_WIDTH_RATIO);
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = shortSide * 0.03;
+    ctx.strokeRect(rect.x + lineWidth / 2, rect.y + lineWidth / 2, rect.width - lineWidth, rect.height - lineWidth);
+    ctx.restore();
+  }
+
+  /**
+   * Draws a shaft (quad) + arrowhead (triangle) from (x1, y1) to (x2, y2),
+   * shaded with a gradient across the arrow's width (light -> color -> dark)
+   * for a "3D" rounded look, using canvas path/gradient calls only.
+   */
+  private drawArrowShaft(
+    ctx: CanvasRenderingContext2D,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    color: string,
+  ): void {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) {
+      return;
+    }
+    const ux = dx / length;
+    const uy = dy / length;
+    // Perpendicular unit vector: the axis the "3D" shading gradient runs across.
+    const px = -uy;
+    const py = ux;
+
+    const shortSide = Math.min(this.canvasWidth, this.canvasHeight);
+    const shaftHalfWidth = (shortSide * ARROW_SHAFT_WIDTH_RATIO) / 2;
+    const headLength = Math.min(length, shortSide * ARROW_HEAD_LENGTH_RATIO);
+    const headHalfWidth = (shortSide * ARROW_HEAD_WIDTH_RATIO) / 2;
+    const shaftEndX = x2 - ux * headLength;
+    const shaftEndY = y2 - uy * headLength;
+
+    const gradient = ctx.createLinearGradient(x1 + px, y1 + py, x1 - px, y1 - py);
+    gradient.addColorStop(0, lightenColor(color, 0.35));
+    gradient.addColorStop(0.5, color);
+    gradient.addColorStop(1, darkenColor(color, 0.4));
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    ctx.shadowBlur = shortSide * 0.02;
+    ctx.shadowOffsetY = shortSide * 0.006;
+    ctx.fillStyle = gradient;
+
+    ctx.beginPath();
+    ctx.moveTo(x1 + px * shaftHalfWidth, y1 + py * shaftHalfWidth);
+    ctx.lineTo(shaftEndX + px * shaftHalfWidth, shaftEndY + py * shaftHalfWidth);
+    ctx.lineTo(shaftEndX - px * shaftHalfWidth, shaftEndY - py * shaftHalfWidth);
+    ctx.lineTo(x1 - px * shaftHalfWidth, y1 - py * shaftHalfWidth);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(shaftEndX + px * headHalfWidth, shaftEndY + py * headHalfWidth);
+    ctx.lineTo(shaftEndX - px * headHalfWidth, shaftEndY - py * headHalfWidth);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
   }
 }
