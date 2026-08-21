@@ -63,6 +63,8 @@ function startGame(config: GameConfig): void {
     shake: game.shakeTrigger,
     zoneEffects: game.zoneEffectTrigger,
     stats: game.statsTrigger,
+    getAlivePlayers: () => game.alivePlayers,
+    onEndGame: (winnerId) => game.endGameWithWinner(winnerId),
   });
 
   canvas.style.display = 'block';

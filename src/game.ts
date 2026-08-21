@@ -806,6 +806,32 @@ export class Game {
     return player.life <= 0 || (this.poison[player.id] ?? 0) >= POISON_LETHAL;
   }
 
+  /** Non-eliminated players — the pool of valid winners for the manual "End game" board shortcut (issue #117). */
+  get alivePlayers(): Player[] {
+    return this.playersList.filter((player) => !this.isEliminated(player));
+  }
+
+  /**
+   * Manually ends the game with `winnerId` as the winner (issue #117's
+   * board-wide "End game" shortcut), recording them as the "last player
+   * standing" winner per docs/concept.md — the same winner field the
+   * automatic elimination path (checkEndConditions/finishGame) sets. The
+   * confirmation step required before ending lives in the UI layer
+   * (BoardShortcutMenu), mirroring the #56 precedent for the now-removed
+   * EndGameControl. No-op once the game has already ended, or if `winnerId`
+   * isn't currently in alivePlayers.
+   */
+  endGameWithWinner(winnerId: string): void {
+    if (this.endedFlag) {
+      return;
+    }
+    const winner = this.alivePlayers.find((player) => player.id === winnerId);
+    if (!winner) {
+      return;
+    }
+    this.finishGame(winnerId);
+  }
+
   /**
    * Records newly-eliminated players (life at or below 0, or poison at or
    * above the lethal threshold), clears the record for anyone since restored
