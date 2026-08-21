@@ -3,13 +3,16 @@ import { advanceTurn, clockwiseSeatOrder, createTurnState, nextPlayerIndex } fro
 
 const SUPPORTED_PLAYER_COUNTS = [3, 4, 5, 6];
 
-// Raw seat indices (row-major, as computeZoneRects lays them out) walked in
-// clockwise order around the table for each supported player count —
-// top row left-to-right, then bottom row right-to-left (issue #68).
+// Raw seat indices (as computeZoneRects lays them out) walked in clockwise
+// order around the table for each supported player count — top row
+// left-to-right, then bottom row right-to-left (issue #68). 5 players is the
+// 2-top/2-bottom/1-left shape from issue #81: raw seats
+// [top-left, top-right, bottom-left, bottom-right, left] walk clockwise as
+// [0, 1, 3, 2, 4].
 const EXPECTED_CLOCKWISE_ORDER: Record<number, number[]> = {
   3: [0, 2, 1],
   4: [0, 1, 3, 2],
-  5: [0, 4, 3, 2, 1],
+  5: [0, 1, 3, 2, 4],
   6: [0, 1, 2, 5, 4, 3],
 };
 

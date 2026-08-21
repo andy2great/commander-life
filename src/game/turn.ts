@@ -18,14 +18,11 @@ export function createTurnState(): TurnState {
 // This is also src/game.ts's computeZoneRects layout table (seats are stored
 // and rendered in this same row-major order) — it lives here because
 // clockwiseSeatOrder below needs it to know which raw seat indices sit in
-// the top vs. bottom row.
+// the top vs. bottom row. 5 players is not a simple row grid (issue #81) and
+// is special-cased directly in clockwiseSeatOrder below instead.
 export const ROW_COUNTS_BY_PLAYER_COUNT: Record<number, [number, number]> = {
   3: [1, 2],
   4: [2, 2],
-  // Issue #77: the fifth seat sits alone in its own full-width row (like the
-  // 3-player lone top row) so its life total renders upright from its own
-  // seated position, instead of sharing a row with another rotated seat.
-  5: [1, 4],
   6: [3, 3],
 };
 
@@ -34,13 +31,23 @@ function rowCountsFor(playerCount: number): [number, number] {
 }
 
 /**
- * Raw seat indices (row-major left-to-right, as computeZoneRects lays them
- * out) reordered into a clockwise loop around the table: top row
- * left-to-right, then bottom row right-to-left (issue #68) — e.g. for 4
- * players, raw seats [0, 1, 2, 3] (top-left, top-right, bottom-left,
- * bottom-right) become the clockwise loop [0, 1, 3, 2].
+ * Raw seat indices (as computeZoneRects lays them out) reordered into a
+ * clockwise loop around the table.
+ *
+ * For the row-grid counts (3, 4, 6): top row left-to-right, then bottom row
+ * right-to-left (issue #68) — e.g. for 4 players, raw seats [0, 1, 2, 3]
+ * (top-left, top-right, bottom-left, bottom-right) become the clockwise loop
+ * [0, 1, 3, 2].
+ *
+ * For 5 players (issue #81), computeZoneRects lays out raw seats
+ * [top-left, top-right, bottom-left, bottom-right, left]. Walking clockwise
+ * from top-left: across the top row, down to bottom-right, back across the
+ * bottom row, then up the left-edge seat — i.e. [0, 1, 3, 2, 4].
  */
 export function clockwiseSeatOrder(playerCount: number): number[] {
+  if (playerCount === 5) {
+    return [0, 1, 3, 2, 4];
+  }
   const [topCount] = rowCountsFor(playerCount);
   const top = Array.from({ length: topCount }, (_, i) => i);
   const bottom = Array.from({ length: playerCount - topCount }, (_, i) => playerCount - 1 - i);
