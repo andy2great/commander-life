@@ -20,6 +20,18 @@ const STARTING_LIFE_STEP = 5;
 const MIN_STARTING_LIFE = 5;
 const MAX_STARTING_LIFE = 999;
 
+/**
+ * Per-player row control icons (issue #133), vector-drawn inline SVG per the
+ * repo's no-external-assets rule — same `currentColor`/`stroke-width: 2.2`
+ * conventions as the OPTION_ICONS/END_GAME_ICON/close-button icons in
+ * boardShortcutMenu.ts, replacing the raw `⠿`/`▶`/`✕` unicode glyphs.
+ */
+const DRAG_HANDLE_ICON =
+  '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+const START_PLAYER_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const REMOVE_PLAYER_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="19" x2="19" y2="5"/><line x1="5" y1="5" x2="19" y2="19"/></svg>';
+
 export interface SetupScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
   root: HTMLElement;
@@ -55,14 +67,17 @@ function injectStylesOnce(): void {
     .setup-player-row { display: flex; flex-direction: column; gap: 10px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; transition: border-color 150ms ease, box-shadow 150ms ease; }
     .setup-player-row-dragging { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
     .setup-player-row-main { display: flex; align-items: center; gap: 10px; }
-    .setup-drag-handle { flex: 0 0 auto; width: 26px; height: 34px; display: flex; align-items: center; justify-content: center; color: #6a6478; font-size: 18px; line-height: 1; touch-action: none; user-select: none; }
+    .setup-drag-handle { flex: 0 0 auto; width: 26px; height: 34px; display: flex; align-items: center; justify-content: center; color: #6a6478; line-height: 1; touch-action: none; user-select: none; }
+    .setup-drag-handle svg { width: 20px; height: 20px; }
     .setup-swatch { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); }
     .setup-name-field { flex: 1; min-width: 0; color: #f5f3f7; font-size: 14px; font-weight: 600; background: transparent; border: none; outline: none; font-family: system-ui, sans-serif; }
     .setup-name-field::placeholder { color: #948fa3; font-weight: 400; }
-    .setup-start-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; background: #2d2938; color: #6a6478; font-size: 13px; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-start-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; background: #2d2938; color: #6a6478; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-start-btn svg { width: 14px; height: 14px; }
     .setup-start-btn:active { transform: scale(0.9); }
     .setup-start-btn-active { background: rgba(215, 165, 76, 0.22); color: #d7a54c; box-shadow: 0 0 0 2px rgba(215, 165, 76, 0.4); }
-    .setup-remove-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(229, 72, 77, 0.14); color: #ff8a8f; font-size: 14px; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-remove-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, 0.14); color: #ff8a8f; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-remove-btn svg { width: 14px; height: 14px; }
     .setup-remove-btn:active { transform: scale(0.9); }
     .setup-remove-btn:disabled { opacity: 0.3; }
     .setup-swatch-row { display: flex; gap: 8px; padding-left: 36px; }
@@ -270,7 +285,7 @@ export class SetupScreen {
 
     const handle = document.createElement('div');
     handle.className = 'setup-drag-handle';
-    handle.textContent = '⠿';
+    handle.innerHTML = DRAG_HANDLE_ICON;
     handle.setAttribute('aria-label', 'Drag to reorder');
     handle.addEventListener('pointerdown', (event) => this.beginRowDrag(row, handle, event));
 
@@ -292,7 +307,7 @@ export class SetupScreen {
     const startBtn = document.createElement('button');
     startBtn.type = 'button';
     startBtn.className = 'setup-start-btn';
-    startBtn.textContent = '▶';
+    startBtn.innerHTML = START_PLAYER_ICON;
     startBtn.title = 'Starts first';
     const isStarting = (this.startingPlayer ?? this.players[0]) === player;
     startBtn.classList.toggle('setup-start-btn-active', isStarting);
@@ -305,7 +320,7 @@ export class SetupScreen {
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'setup-remove-btn';
-    removeBtn.textContent = '✕';
+    removeBtn.innerHTML = REMOVE_PLAYER_ICON;
     removeBtn.title = 'Remove player';
     removeBtn.disabled = this.players.length <= MIN_PLAYER_COUNT;
     removeBtn.addEventListener('pointerdown', () => {
