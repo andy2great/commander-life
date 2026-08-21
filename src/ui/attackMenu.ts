@@ -213,8 +213,6 @@ function injectStylesOnce(): void {
     .cmdr-atk-stepper { display: flex; align-items: center; gap: 16px; }
     .cmdr-atk-stepper button { width: 56px; height: 56px; border-radius: 50%; border: none; background: #2d2938; color: #f5f3f7; font-size: 24px; font-weight: 700; }
     .cmdr-atk-val { min-width: 44px; text-align: center; color: #fff; font-size: 30px; font-weight: 800; font-family: system-ui, sans-serif; }
-    .cmdr-atk-precision { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 16px; }
-    .cmdr-atk-precision.active { border-color: #5b8cff; color: #f5f3f7; background: #2d2938; }
   `;
   document.head.appendChild(style);
 }
@@ -382,46 +380,24 @@ export class AttackMenu {
       toggleRow.appendChild(button);
     }
 
-    let precisionActive = false;
-    const precisionButton = document.createElement('button');
-    precisionButton.type = 'button';
-    precisionButton.className = 'cmdr-atk-precision';
-    precisionButton.textContent = '🔒';
-    precisionButton.setAttribute('aria-label', 'Precision mode: one step per press, no acceleration');
-    precisionButton.setAttribute('aria-pressed', 'false');
-    precisionButton.addEventListener('pointerdown', (event) => {
-      event.stopPropagation();
-      precisionActive = !precisionActive;
-      precisionButton.classList.toggle('active', precisionActive);
-      precisionButton.setAttribute('aria-pressed', String(precisionActive));
-    });
-
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
     minusButton.textContent = '−';
     this.holdToRepeatDetachFns.push(
-      attachHoldToRepeat(
-        minusButton,
-        () => {
-          active.apply(-1);
-          refreshValue();
-        },
-        () => precisionActive,
-      ),
+      attachHoldToRepeat(minusButton, () => {
+        active.apply(-1);
+        refreshValue();
+      }),
     );
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
     plusButton.textContent = '+';
     this.holdToRepeatDetachFns.push(
-      attachHoldToRepeat(
-        plusButton,
-        () => {
-          active.apply(1);
-          refreshValue();
-        },
-        () => precisionActive,
-      ),
+      attachHoldToRepeat(plusButton, () => {
+        active.apply(1);
+        refreshValue();
+      }),
     );
 
     const stepper = document.createElement('div');
@@ -429,7 +405,6 @@ export class AttackMenu {
     stepper.appendChild(minusButton);
     stepper.appendChild(valueEl);
     stepper.appendChild(plusButton);
-    stepper.appendChild(precisionButton);
     counterRow.appendChild(stepper);
 
     selectType(types[0]);

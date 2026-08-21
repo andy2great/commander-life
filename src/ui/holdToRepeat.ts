@@ -17,17 +17,8 @@ export const HOLD_REPEAT_MIN_INTERVAL_MS = 60;
  * `onRepeat()` once immediately (so a quick tap applies exactly one step),
  * then keeps calling it on an accelerating schedule until
  * pointerup/pointercancel/pointerleave. Returns a detach function.
- *
- * `isPrecisionMode` (issue #96), when supplied and returning true at the
- * moment of a pointerdown, suppresses the repeat schedule entirely: only the
- * immediate one-shot `onRepeat()` call fires, however long the button is
- * held, so precise single-step adjustments aren't at risk of overshooting.
  */
-export function attachHoldToRepeat(
-  element: HTMLElement,
-  onRepeat: () => void,
-  isPrecisionMode?: () => boolean,
-): () => void {
+export function attachHoldToRepeat(element: HTMLElement, onRepeat: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const cancelTimer = (): void => {
@@ -48,9 +39,7 @@ export function attachHoldToRepeat(
     event.stopPropagation();
     cancelTimer();
     onRepeat();
-    if (!isPrecisionMode?.()) {
-      scheduleNext(HOLD_REPEAT_INITIAL_DELAY_MS);
-    }
+    scheduleNext(HOLD_REPEAT_INITIAL_DELAY_MS);
   };
 
   const onPressEnd = (): void => {

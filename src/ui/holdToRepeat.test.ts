@@ -146,47 +146,6 @@ describe('attachHoldToRepeat', () => {
     vi.useRealTimers();
   });
 
-  it('applies exactly one step and does not schedule a repeat when precision mode is active', () => {
-    vi.useFakeTimers();
-    const element = new FakeElement();
-    const onRepeat = vi.fn();
-    attachHoldToRepeat(element as unknown as HTMLElement, onRepeat, () => true);
-
-    element.dispatch('pointerdown');
-    expect(onRepeat).toHaveBeenCalledTimes(1);
-
-    vi.advanceTimersByTime(HOLD_REPEAT_INITIAL_DELAY_MS);
-    expect(onRepeat).toHaveBeenCalledTimes(1);
-
-    vi.advanceTimersByTime(5000);
-    expect(onRepeat).toHaveBeenCalledTimes(1);
-
-    element.dispatch('pointerup');
-    vi.useRealTimers();
-  });
-
-  it('re-checks precision mode on every pointerdown, so toggling it between presses works', () => {
-    vi.useFakeTimers();
-    const element = new FakeElement();
-    const onRepeat = vi.fn();
-    let precision = false;
-    attachHoldToRepeat(element as unknown as HTMLElement, onRepeat, () => precision);
-
-    element.dispatch('pointerdown');
-    vi.advanceTimersByTime(HOLD_REPEAT_INITIAL_DELAY_MS);
-    expect(onRepeat).toHaveBeenCalledTimes(2);
-    element.dispatch('pointerup');
-
-    precision = true;
-    onRepeat.mockClear();
-    element.dispatch('pointerdown');
-    vi.advanceTimersByTime(HOLD_REPEAT_INITIAL_DELAY_MS);
-    expect(onRepeat).toHaveBeenCalledTimes(1);
-    element.dispatch('pointerup');
-
-    vi.useRealTimers();
-  });
-
   it('detaching stops any in-flight repeat and removes listeners', () => {
     vi.useFakeTimers();
     const element = new FakeElement();
