@@ -1,9 +1,9 @@
 // Zone-to-zone drag damage-type menu (issue #48): opened when a drag starts
 // in one player's zone and releases in another's (see
 // Game.resolveZoneDrag). Lets the dragging player pick which kind of
-// damage to log — commander damage (the directional, per-opponent counter)
-// or poison — reusing the same state/undo plumbing the old long-press
-// sub-panel used.
+// damage to log — plain damage, commander damage (the directional,
+// per-opponent counter), lifelink damage, heal, or poison (issue #71) —
+// reusing the same state/undo plumbing the old long-press sub-panel used.
 
 import {
   applyCommanderDamageDelta,
@@ -11,6 +11,7 @@ import {
   type Player,
   type UndoStack,
 } from '../game/commanderDamage';
+import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from '../game/life';
 import { applyPoisonDelta, type PoisonState } from '../game/poison';
 import type { SoundPlayer } from '../audio/soundPlayer';
 
@@ -112,7 +113,10 @@ export class AttackMenu {
     head.appendChild(closeButton);
     panel.appendChild(head);
 
+    panel.appendChild(this.buildDamageRow(target));
     panel.appendChild(this.buildCommanderDamageRow(attacker, target));
+    panel.appendChild(this.buildLifelinkRow(attacker, target));
+    panel.appendChild(this.buildHealRow(target));
     panel.appendChild(this.buildPoisonRow(target));
 
     overlay.appendChild(panel);
@@ -161,6 +165,83 @@ export class AttackMenu {
     plusButton.addEventListener('pointerdown', (event) => {
       event.stopPropagation();
       applyCommanderDamageDelta(this.damageState, this.players, target.id, attacker.id, 1, this.undoStack, this.sound);
+      refresh();
+    });
+
+    stepper.appendChild(minusButton);
+    stepper.appendChild(valueEl);
+    stepper.appendChild(plusButton);
+    row.appendChild(name);
+    row.appendChild(stepper);
+    return row;
+  }
+
+  private buildDamageRow(target: Player): HTMLElement {
+    return this.buildLocalStepperRow('Damage', target.color ?? '#948fa3', (delta) => {
+      applyDamageDelta(target, delta, this.undoStack, this.sound);
+    });
+  }
+
+  private buildLifelinkRow(attacker: Player, target: Player): HTMLElement {
+    return this.buildLocalStepperRow('Lifelink damage', attacker.color ?? '#948fa3', (delta) => {
+      applyLifelinkDelta(attacker, target, delta, this.undoStack, this.sound);
+    });
+  }
+
+  private buildHealRow(target: Player): HTMLElement {
+    return this.buildLocalStepperRow('Heal', target.color ?? '#948fa3', (delta) => {
+      applyHealDelta(target, delta, this.undoStack, this.sound);
+    });
+  }
+
+  /**
+   * Builds a stepper row backed by a menu-local session counter (rather than
+   * shared game state, unlike the commander-damage/poison rows), clamped at
+   * zero so the minus button can only undo taps made within this same open
+   * menu. `onApply` receives ±1 and is responsible for applying that delta
+   * (and pushing the matching undo action) via the relevant `game/life`
+   * helper.
+   */
+  private buildLocalStepperRow(label: string, borderColor: string, onApply: (delta: 1 | -1) => void): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'cmdr-atk-row';
+    row.style.borderLeftColor = borderColor;
+
+    const name = document.createElement('div');
+    name.className = 'cmdr-atk-name';
+    name.textContent = label;
+
+    const stepper = document.createElement('div');
+    stepper.className = 'cmdr-atk-stepper';
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'cmdr-atk-val';
+    let count = 0;
+    const refresh = (): void => {
+      valueEl.textContent = String(count);
+    };
+    refresh();
+
+    const minusButton = document.createElement('button');
+    minusButton.type = 'button';
+    minusButton.textContent = '−';
+    minusButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      if (count <= 0) {
+        return;
+      }
+      count -= 1;
+      onApply(-1);
+      refresh();
+    });
+
+    const plusButton = document.createElement('button');
+    plusButton.type = 'button';
+    plusButton.textContent = '+';
+    plusButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      count += 1;
+      onApply(1);
       refresh();
     });
 

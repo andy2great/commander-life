@@ -10,13 +10,13 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 1. Host configures the game (player count 3-6, starting life, names/colors) on the setup screen.
 2. The canvas splits into N player zones, each rotated to face that player's seat.
 3. The active player's zone is highlighted with a pulsing border; long-pressing anywhere inside that zone advances the active-player highlight clockwise around the table (with a brief flash animation as the press commits), and the turn counter increments each full lap.
-4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log commander damage or poison dealt in that direction. A drag that starts and ends in the same zone, or that's released outside any player zone, is ignored. This drag gesture is the only way life totals change — tapping a zone does nothing.
+4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log plain damage, commander damage, lifelink damage, healing, or poison dealt in that direction. A drag that starts and ends in the same zone, or that's released outside any player zone, is ignored. This drag gesture is the only way life totals change — tapping a zone does nothing.
 5. Every life, commander-damage, or poison change pushes onto an undo stack; a center undo icon reverts the most recent action ("retour en arrière").
 6. The game ends automatically when only one player remains above 0 life. A stats screen shows total duration, time-per-turn breakdown, most damage dealt/received, biggest single hit, and elimination order.
 7. "New Game" returns to the setup screen, pre-filled with the previous configuration.
 
 ## Controls (touch-only, one-thumb per player)
-- Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for commander damage and for poison — the only way life totals change; a plain tap on your own zone does nothing
+- Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for plain damage, commander damage, lifelink damage (damages the target and heals the attacker as one action), healing, and poison — the only way life totals change; a plain tap on your own zone does nothing
 - Long-press (~500ms) anywhere inside the active player's own zone = pass turn, with a brief flash animation as it commits; long-pressing a non-active zone does nothing
 - Center shared control: tap = undo last action (dimmed/disabled when nothing to undo)
 - Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a name field to rename via the soft keyboard
