@@ -522,6 +522,9 @@ export class Game {
       return;
     }
     if (this.undoControl.containsPoint(x, y)) {
+      if (this.pausedFlag) {
+        return;
+      }
       this.undo();
       return;
     }
