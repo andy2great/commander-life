@@ -8,8 +8,9 @@ export interface TurnState {
   turnCount: number;
 }
 
-export function createTurnState(): TurnState {
-  return { activeIndex: 0, turnCount: 0 };
+/** `startIndex` (default 0) is which seat is active first — the host's "who starts first" pick on the setup screen (issue #126). */
+export function createTurnState(startIndex = 0): TurnState {
+  return { activeIndex: startIndex, turnCount: 0 };
 }
 
 // Table-like grid layout per docs/concept.md: always two rows (top row

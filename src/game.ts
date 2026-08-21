@@ -2,6 +2,7 @@
 // everything that touches the canvas element lives in main.ts.
 
 import { advanceTurn, createTurnState, ROW_COUNTS_BY_PLAYER_COUNT, type TurnState } from './game/turn';
+import { clampStartingIndex } from './game/playerRoster';
 import {
   createCommanderDamageState,
   type CommanderDamageState,
@@ -221,6 +222,8 @@ export interface GameConfig {
   playerCount: number;
   startingLife: number;
   players: PlayerConfig[];
+  /** Seat that starts as the active player (issue #126); defaults to seat 0 when omitted or out of range. */
+  startingIndex?: number;
 }
 
 export interface EliminationEntry {
@@ -325,7 +328,7 @@ export interface DragArrowState {
 
 export class Game {
   readonly playerCount: number;
-  private turnState: TurnState = createTurnState();
+  private turnState: TurnState;
   private readonly undoControl = new UndoControl();
   private readonly shortcutControl = new ShortcutControl();
   private readonly pauseControl = new PauseControl();
@@ -364,6 +367,7 @@ export class Game {
   constructor(config?: GameConfig, sound: SoundPlayer = new NoopSoundPlayer()) {
     this.sound = sound;
     this.playerCount = clamp(config?.playerCount ?? DEFAULT_PLAYER_COUNT, MIN_PLAYER_COUNT, MAX_PLAYER_COUNT);
+    this.turnState = createTurnState(clampStartingIndex(config?.startingIndex ?? 0, this.playerCount));
     const startingLife = config?.startingLife ?? DEFAULT_STARTING_LIFE;
     this.playersList = Array.from({ length: this.playerCount }, (_, seat) => {
       const preset = config?.players[seat];

@@ -13,6 +13,8 @@ import {
   type GameConfig,
   type PlayerConfig,
 } from '../game';
+import { clampStartingIndex, movePlayer, removePlayerAt } from '../game/playerRoster';
+import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
 
 const STARTING_LIFE_STEP = 5;
 const MIN_STARTING_LIFE = 5;
@@ -50,11 +52,20 @@ function injectStylesOnce(): void {
     .setup-stepper button.setup-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
     .setup-stepper .setup-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 34px; text-align: center; color: #fff; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; background: #17141d; padding: 6px 12px; border-radius: 10px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(215, 165, 76, 0.25); }
     .setup-players { display: flex; flex-direction: column; gap: 10px; }
-    .setup-player-row { display: flex; align-items: center; gap: 12px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; transition: border-color 150ms ease; }
+    .setup-player-row { display: flex; flex-direction: column; gap: 10px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; transition: border-color 150ms ease, box-shadow 150ms ease; }
+    .setup-player-row-dragging { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
+    .setup-player-row-main { display: flex; align-items: center; gap: 10px; }
+    .setup-drag-handle { flex: 0 0 auto; width: 26px; height: 34px; display: flex; align-items: center; justify-content: center; color: #6a6478; font-size: 18px; line-height: 1; touch-action: none; user-select: none; }
     .setup-swatch { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); }
     .setup-name-field { flex: 1; min-width: 0; color: #f5f3f7; font-size: 14px; font-weight: 600; background: transparent; border: none; outline: none; font-family: system-ui, sans-serif; }
     .setup-name-field::placeholder { color: #948fa3; font-weight: 400; }
-    .setup-swatch-row { display: flex; gap: 8px; }
+    .setup-start-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; background: #2d2938; color: #6a6478; font-size: 13px; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-start-btn:active { transform: scale(0.9); }
+    .setup-start-btn-active { background: rgba(215, 165, 76, 0.22); color: #d7a54c; box-shadow: 0 0 0 2px rgba(215, 165, 76, 0.4); }
+    .setup-remove-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(229, 72, 77, 0.14); color: #ff8a8f; font-size: 14px; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-remove-btn:active { transform: scale(0.9); }
+    .setup-remove-btn:disabled { opacity: 0.3; }
+    .setup-swatch-row { display: flex; gap: 8px; padding-left: 36px; }
     .setup-mini-swatch { width: 18px; height: 18px; border-radius: 50%; border: none; padding: 0; transition: transform 100ms ease, box-shadow 150ms ease; }
     .setup-mini-swatch:active { transform: scale(0.85); }
     .setup-spacer { flex: 1; }
@@ -71,26 +82,32 @@ export class SetupScreen {
   private readonly onStartCallback: (config: GameConfig) => void;
   private overlay: HTMLElement | null = null;
   private playersContainer: HTMLElement | null = null;
-  private playerCount = DEFAULT_PLAYER_COUNT;
-  private startingLife = DEFAULT_STARTING_LIFE;
-  private readonly players: PlayerConfig[] = Array.from({ length: MAX_PLAYER_COUNT }, (_, seat) => ({
-    name: `Player ${seat + 1}`,
-    color: PLAYER_COLORS[seat % PLAYER_COLORS.length],
-  }));
+  private playerCount: number;
+  private startingLife: number;
+  private players: PlayerConfig[];
+  /** The player picked to start first, or null to default to seat 0 — a fresh per-game choice, never carried over from a previous game (issue #126). */
+  private startingPlayer: PlayerConfig | null = null;
 
   constructor(options: SetupScreenOptions) {
     this.root = options.root;
     this.onStartCallback = options.onStart;
 
-    const initialConfig = options.initialConfig;
-    if (initialConfig) {
-      this.playerCount = clampPlayerCount(initialConfig.playerCount);
-      this.startingLife = clampStartingLife(initialConfig.startingLife);
-      initialConfig.players.forEach((player, seat) => {
-        if (this.players[seat]) {
-          this.players[seat] = { ...player };
-        }
-      });
+    // A previous game's config (e.g. "New Game") takes priority; otherwise
+    // fall back to the last roster persisted to localStorage, so names,
+    // colors, and table order survive closing and reopening the app and
+    // pre-fill the very first launch too, not just the in-game hop (issue #126).
+    const source: PersistedRoster | undefined = options.initialConfig ?? loadLastRoster(window.localStorage) ?? undefined;
+    if (source) {
+      this.playerCount = clampPlayerCount(source.playerCount);
+      this.startingLife = clampStartingLife(source.startingLife);
+      this.players = source.players.slice(0, this.playerCount).map((player) => ({ ...player }));
+      while (this.players.length < this.playerCount) {
+        this.players.push(defaultPlayer(this.players.length));
+      }
+    } else {
+      this.playerCount = DEFAULT_PLAYER_COUNT;
+      this.startingLife = DEFAULT_STARTING_LIFE;
+      this.players = Array.from({ length: this.playerCount }, (_, seat) => defaultPlayer(seat));
     }
   }
 
@@ -151,7 +168,19 @@ export class SetupScreen {
     card.className = 'setup-card';
     card.appendChild(
       this.buildStepperRow('Players', '3 to 6 seats', () => String(this.playerCount), (delta) => {
-        this.playerCount = clampPlayerCount(this.playerCount + delta);
+        const nextCount = clampPlayerCount(this.playerCount + delta);
+        if (nextCount === this.playerCount) {
+          return;
+        }
+        if (nextCount > this.playerCount) {
+          this.players.push(defaultPlayer(this.players.length));
+        } else {
+          const [removed] = this.players.splice(this.players.length - 1, 1);
+          if (removed === this.startingPlayer) {
+            this.startingPlayer = null;
+          }
+        }
+        this.playerCount = nextCount;
         this.renderPlayerRows();
       }),
     );
@@ -226,30 +255,78 @@ export class SetupScreen {
       return;
     }
     container.replaceChildren();
-    for (let seat = 0; seat < this.playerCount; seat += 1) {
-      container.appendChild(this.buildPlayerRow(seat));
-    }
+    this.players.forEach((player, index) => {
+      container.appendChild(this.buildPlayerRow(player, index));
+    });
   }
 
-  private buildPlayerRow(seat: number): HTMLElement {
-    const player = this.players[seat];
+  private buildPlayerRow(player: PlayerConfig, index: number): HTMLElement {
     const row = document.createElement('div');
     row.className = 'setup-player-row';
     row.style.borderLeftColor = player.color;
+
+    const main = document.createElement('div');
+    main.className = 'setup-player-row-main';
+
+    const handle = document.createElement('div');
+    handle.className = 'setup-drag-handle';
+    handle.textContent = '⠿';
+    handle.setAttribute('aria-label', 'Drag to reorder');
+    handle.addEventListener('pointerdown', (event) => this.beginRowDrag(row, handle, event));
 
     const swatch = document.createElement('div');
     swatch.className = 'setup-swatch';
     swatch.style.background = gemBackground(player.color);
 
+    const defaultName = `Player ${index + 1}`;
     const nameField = document.createElement('input');
     nameField.type = 'text';
     nameField.className = 'setup-name-field';
-    nameField.placeholder = `Player ${seat + 1}`;
-    nameField.value = player.name === `Player ${seat + 1}` ? '' : player.name;
+    nameField.placeholder = defaultName;
+    nameField.value = player.name === defaultName ? '' : player.name;
     nameField.style.caretColor = player.color;
     nameField.addEventListener('input', () => {
-      player.name = nameField.value.trim() || `Player ${seat + 1}`;
+      player.name = nameField.value.trim() || defaultName;
     });
+
+    const startBtn = document.createElement('button');
+    startBtn.type = 'button';
+    startBtn.className = 'setup-start-btn';
+    startBtn.textContent = '▶';
+    startBtn.title = 'Starts first';
+    const isStarting = (this.startingPlayer ?? this.players[0]) === player;
+    startBtn.classList.toggle('setup-start-btn-active', isStarting);
+    startBtn.setAttribute('aria-pressed', String(isStarting));
+    startBtn.addEventListener('pointerdown', () => {
+      this.startingPlayer = player;
+      this.renderPlayerRows();
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'setup-remove-btn';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove player';
+    removeBtn.disabled = this.players.length <= MIN_PLAYER_COUNT;
+    removeBtn.addEventListener('pointerdown', () => {
+      const removeIndex = this.players.indexOf(player);
+      const next = removePlayerAt(this.players, removeIndex);
+      if (next === this.players) {
+        return;
+      }
+      if (player === this.startingPlayer) {
+        this.startingPlayer = null;
+      }
+      this.players = next;
+      this.playerCount = this.players.length;
+      this.renderPlayerRows();
+    });
+
+    main.appendChild(handle);
+    main.appendChild(swatch);
+    main.appendChild(nameField);
+    main.appendChild(startBtn);
+    main.appendChild(removeBtn);
 
     const swatchRow = document.createElement('div');
     swatchRow.className = 'setup-swatch-row';
@@ -277,20 +354,78 @@ export class SetupScreen {
       swatchRow.appendChild(mini);
     }
 
-    row.appendChild(swatch);
-    row.appendChild(nameField);
+    row.appendChild(main);
     row.appendChild(swatchRow);
     return row;
   }
 
+  /**
+   * Touch-drag reorder (issue #126): the pressed row follows the pointer's
+   * row position live via DOM insertBefore (kept alive across moves so
+   * pointer capture on `handle` isn't lost), while `this.players` is
+   * reordered in lockstep via the pure movePlayer() helper. A full
+   * renderPlayerRows() on release normalizes placeholders/handlers once the
+   * drag (and any mid-drag pointer capture concerns) is over.
+   */
+  private beginRowDrag(row: HTMLElement, handle: HTMLElement, event: PointerEvent): void {
+    const container = this.playersContainer;
+    if (!container) {
+      return;
+    }
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    row.classList.add('setup-player-row-dragging');
+
+    const onMove = (moveEvent: PointerEvent): void => {
+      const rows = Array.from(container.children) as HTMLElement[];
+      const fromIndex = rows.indexOf(row);
+      const overIndex = rows.findIndex((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        return moveEvent.clientY >= rect.top && moveEvent.clientY < rect.bottom;
+      });
+      if (fromIndex === -1 || overIndex === -1 || overIndex === fromIndex) {
+        return;
+      }
+      this.players = movePlayer(this.players, fromIndex, overIndex);
+      if (overIndex < fromIndex) {
+        container.insertBefore(row, rows[overIndex]);
+      } else {
+        container.insertBefore(row, rows[overIndex].nextSibling);
+      }
+    };
+
+    const endDrag = (): void => {
+      handle.releasePointerCapture(event.pointerId);
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', endDrag);
+      handle.removeEventListener('pointercancel', endDrag);
+      this.renderPlayerRows();
+    };
+
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
+  }
+
   private start(): void {
-    this.onStartCallback({
+    const startingIndex = clampStartingIndex(
+      this.startingPlayer ? this.players.indexOf(this.startingPlayer) : 0,
+      this.players.length,
+    );
+    const config: GameConfig = {
       playerCount: this.playerCount,
       startingLife: this.startingLife,
-      players: this.players.slice(0, this.playerCount),
-    });
+      players: this.players.map((player) => ({ ...player })),
+      startingIndex,
+    };
+    saveLastRoster(window.localStorage, config);
+    this.onStartCallback(config);
     this.close();
   }
+}
+
+function defaultPlayer(seat: number): PlayerConfig {
+  return { name: `Player ${seat + 1}`, color: PLAYER_COLORS[seat % PLAYER_COLORS.length] };
 }
 
 /** A soft top-left highlight over the flat accent color, so swatches read as a gem/foil chip rather than a flat dot — echoes concept.md's radial-gradient player zone fill. */
