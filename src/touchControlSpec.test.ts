@@ -73,7 +73,7 @@ describe('docs/concept.md touch-control spec (#40)', () => {
     expect(game.activeIndex).toBe(1);
   });
 
-  it('end-game is reachable via the dedicated end-game icon, not the center control (issue #48)', () => {
+  it('end-game icon: tap no longer ends the game outright (issue #56)', () => {
     const game = new Game();
     game.resize(400, 800);
     expect(game.ended).toBe(false);
@@ -82,6 +82,19 @@ describe('docs/concept.md touch-control spec (#40)', () => {
     expect(game.isOverEndControl(endCenter.x, endCenter.y)).toBe(true);
 
     game.onTap(endCenter.x, endCenter.y);
+
+    expect(game.ended).toBe(false);
+  });
+
+  it('end-game icon: long-press ends the game, mirroring the center control\'s tap/long-press split (issue #56)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    expect(game.ended).toBe(false);
+
+    const endCenter = endControlCenter(400, 800);
+    expect(game.isOverEndControl(endCenter.x, endCenter.y)).toBe(true);
+
+    game.endGame();
 
     expect(game.ended).toBe(true);
   });

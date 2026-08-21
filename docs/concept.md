@@ -21,7 +21,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 - Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for commander damage and for poison
 - Center shared control: long-press (~500ms) = pass turn; a plain tap does nothing
 - Small icon beside the center control: tap = undo last action (dimmed/disabled when nothing to undo)
-- Small icon on the opposite side of the center control: tap = end the game
+- Small icon on the opposite side of the center control: long-press (~500ms) = end the game; a plain tap does nothing, so an accidental tap can't end the game
 - Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a name field to rename via the soft keyboard
 
 ## Layout by player count (portrait canvas, all code-drawn, no external assets)

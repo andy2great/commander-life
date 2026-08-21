@@ -299,7 +299,7 @@ export class Game {
     this.stack.undo();
   }
 
-  /** Ends the game, e.g. from a long-press on the shared center control. No-op once already ended. */
+  /** Ends the game, e.g. from a long-press on the end-game icon. No-op once already ended. */
   endGame(): void {
     if (this.endedFlag) {
       return;
@@ -380,7 +380,10 @@ export class Game {
     }
 
     if (this.endControl.containsPoint(x, y)) {
-      this.endGame();
+      // Tapping the end-game icon no longer ends the game outright — a
+      // long-press does instead (see endGame(), called from main.ts's
+      // onLongPress), mirroring the center control's tap/long-press split
+      // so an accidental tap can't end the game (#56).
       return;
     }
 

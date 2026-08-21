@@ -315,7 +315,7 @@ describe('Game', () => {
     expect(game.onLongPress(undoCenter.x, undoCenter.y)).toBeNull();
   });
 
-  it('tapping the end-game icon ends the game (issue #48)', () => {
+  it('tapping the end-game icon no longer ends the game outright (issue #56)', () => {
     const game = new Game();
     game.resize(400, 800);
     const endCenter = endControlCenter(400, 800);
@@ -324,6 +324,19 @@ describe('Game', () => {
     expect(game.ended).toBe(false);
 
     game.onTap(endCenter.x, endCenter.y);
+
+    expect(game.ended).toBe(false);
+  });
+
+  it('long-pressing the end-game icon ends the game, mirroring the pass-turn control (issue #56)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const endCenter = endControlCenter(400, 800);
+
+    expect(game.isOverEndControl(endCenter.x, endCenter.y)).toBe(true);
+    expect(game.ended).toBe(false);
+
+    game.endGame();
 
     expect(game.ended).toBe(true);
   });
@@ -398,7 +411,7 @@ describe('Game', () => {
       expect(game.popups).toHaveLength(0);
     });
 
-    it('leaves life untouched when a drag from a zone releases on the end-game icon (the icon itself still ends the game, as a genuine tap there would)', () => {
+    it('leaves life and the game unended when a drag from a zone releases on the end-game icon (a genuine tap there no longer ends the game either, issue #56)', () => {
       const game = new Game();
       game.resize(400, 800);
       const zoneHeight = 800 / game.playerCount;
@@ -408,7 +421,7 @@ describe('Game', () => {
       simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, endCenter);
 
       expect(game.players.map((player) => player.life)).toEqual(livesBefore);
-      expect(game.ended).toBe(true);
+      expect(game.ended).toBe(false);
     });
 
     it('leaves life untouched, and does not silently consume an unrelated undo, when a drag from a zone releases on the undo icon', () => {
