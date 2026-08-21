@@ -265,6 +265,13 @@ interface DragState {
   pointerY: number;
 }
 
+/** Where a press started, tracked from `beginDrag` until the pointer crosses `LONG_PRESS_MOVE_TOLERANCE_PX` and the live arrow (`DragState`) activates. */
+interface DragOrigin {
+  fromPlayerId: string;
+  x: number;
+  y: number;
+}
+
 /** Live preview of a zone-to-zone drag (issue #55), previewing what resolveZoneDrag would resolve if released now. */
 export interface DragArrowState {
   fromPlayerId: string;
@@ -295,6 +302,7 @@ export class Game {
   private canvasHeight = 0;
   private animTime = 0;
   private dragState: DragState | null = null;
+  private dragOrigin: DragOrigin | null = null;
   private passTurnFlashSeatIndex: number | null = null;
   private passTurnFlashTime = 0;
   private readonly shakeState: ScreenShakeState = createScreenShakeState();
@@ -618,32 +626,50 @@ export class Game {
   }
 
   /**
-   * Begins tracking the live drag arrow (issue #55), e.g. from main.ts's
-   * onPressStart. No-op — clears any prior drag — if (x, y) isn't inside a
-   * player zone (uses the same onLongPress rules resolveZoneDrag's `from`
-   * end does, so a press starting over a shared control never shows an arrow).
+   * Records where a press started, e.g. from main.ts's onPressStart. The
+   * live drag arrow doesn't activate yet — it only appears once
+   * updateDragPointer sees the pointer cross LONG_PRESS_MOVE_TOLERANCE_PX
+   * away from this origin (issue #106), so a plain tap never shows it.
+   * No-op — clears any prior origin/drag — if (x, y) isn't inside a player
+   * zone (uses the same onLongPress rules resolveZoneDrag's `from` end
+   * does, so a press starting over a shared control never shows an arrow).
    */
   beginDrag(x: number, y: number): void {
+    this.dragState = null;
     if (this.pausedFlag) {
-      this.dragState = null;
+      this.dragOrigin = null;
       return;
     }
     const fromPlayerId = this.onLongPress(x, y);
-    this.dragState = fromPlayerId ? { fromPlayerId, pointerX: x, pointerY: y } : null;
+    this.dragOrigin = fromPlayerId ? { fromPlayerId, x, y } : null;
   }
 
-  /** Updates the live drag arrow's pointer end, e.g. from main.ts's pointermove. No-op if no drag is in progress. */
+  /**
+   * Updates the live drag arrow's pointer end, e.g. from main.ts's
+   * pointermove. Once a drag is active, tracks the pointer as before. If no
+   * drag is active yet, activates one the moment the pointer moves past
+   * LONG_PRESS_MOVE_TOLERANCE_PX from the beginDrag origin; no-op if
+   * beginDrag was never called (or started outside a zone).
+   */
   updateDragPointer(x: number, y: number): void {
-    if (!this.dragState) {
+    if (this.dragState) {
+      this.dragState.pointerX = x;
+      this.dragState.pointerY = y;
       return;
     }
-    this.dragState.pointerX = x;
-    this.dragState.pointerY = y;
+    if (!this.dragOrigin) {
+      return;
+    }
+    if (Math.hypot(x - this.dragOrigin.x, y - this.dragOrigin.y) <= LONG_PRESS_MOVE_TOLERANCE_PX) {
+      return;
+    }
+    this.dragState = { fromPlayerId: this.dragOrigin.fromPlayerId, pointerX: x, pointerY: y };
   }
 
-  /** Clears the live drag arrow. Call on pointerup/pointercancel/pointerleave so it disappears immediately, whether or not the drag resolved into an opened menu. */
+  /** Clears the live drag arrow (and any pending origin). Call on pointerup/pointercancel/pointerleave so it disappears immediately, whether or not the drag resolved into an opened menu. */
   endDrag(): void {
     this.dragState = null;
+    this.dragOrigin = null;
   }
 
   /** Live drag-arrow geometry/state for render(), or null when no zone-to-zone drag is in progress. */

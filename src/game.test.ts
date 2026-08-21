@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
+import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
 import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './game/life';
@@ -418,7 +419,7 @@ describe('Game', () => {
     });
   });
 
-  describe('dragArrow live preview (issue #55)', () => {
+  describe('dragArrow live preview (issue #55, gated by move threshold per issue #106)', () => {
     it('is null before any drag starts', () => {
       const game = new Game();
       game.resize(400, 800);
@@ -426,40 +427,61 @@ describe('Game', () => {
       expect(game.dragArrow).toBeNull();
     });
 
-    it('beginDrag inside a player zone starts an arrow from that zone\'s center to the pointer, with no target yet', () => {
+    it('beginDrag alone (no movement yet) starts no arrow, so a plain tap never shows one', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.beginDrag(50, 10);
+
+      expect(game.dragArrow).toBeNull();
+    });
+
+    it('beginDrag outside every player zone (e.g. over a shared control) starts no arrow, even after movement', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.beginDrag(200, 400); // center control
+      game.updateDragPointer(200, 400 + LONG_PRESS_MOVE_TOLERANCE_PX + 5);
+
+      expect(game.dragArrow).toBeNull();
+    });
+
+    it('updateDragPointer within the move tolerance keeps the arrow hidden', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.beginDrag(50, 10);
+      game.updateDragPointer(50, 10 + LONG_PRESS_MOVE_TOLERANCE_PX); // exactly at tolerance, not past it
+
+      expect(game.dragArrow).toBeNull();
+    });
+
+    it('updateDragPointer past the move tolerance reveals the arrow from the origin zone center to the pointer', () => {
       const game = new Game();
       game.resize(400, 800);
       const originRect = computeZoneRects(game.playerCount, 400, 800)[0];
 
       game.beginDrag(50, 10);
+      game.updateDragPointer(50, 10 + LONG_PRESS_MOVE_TOLERANCE_PX + 1);
 
       expect(game.dragArrow).toEqual({
         fromPlayerId: game.players[0].id,
         originX: originRect.x + originRect.width / 2,
         originY: originRect.y + originRect.height / 2,
         headX: 50,
-        headY: 10,
+        headY: 10 + LONG_PRESS_MOVE_TOLERANCE_PX + 1,
         targetPlayerId: null,
         color: game.players[0].color,
       });
     });
 
-    it('beginDrag outside every player zone (e.g. over a shared control) starts no arrow', () => {
-      const game = new Game();
-      game.resize(400, 800);
-
-      game.beginDrag(200, 400); // center control
-
-      expect(game.dragArrow).toBeNull();
-    });
-
-    it('updateDragPointer moves the arrow head while no valid target is under the pointer', () => {
+    it('updateDragPointer moves the arrow head while no valid target is under the pointer, once past the move tolerance', () => {
       const game = new Game();
       game.resize(400, 800);
       const zoneHeight = 800 / game.playerCount;
 
       game.beginDrag(50, 10);
-      game.updateDragPointer(60, zoneHeight - 20); // still inside the origin zone
+      game.updateDragPointer(60, zoneHeight - 20); // still inside the origin zone, past the tolerance
 
       expect(game.dragArrow?.headX).toBe(60);
       expect(game.dragArrow?.headY).toBe(zoneHeight - 20);
@@ -523,9 +545,21 @@ describe('Game', () => {
       game.resize(400, 800);
 
       game.beginDrag(50, 10);
+      game.updateDragPointer(50, 10 + LONG_PRESS_MOVE_TOLERANCE_PX + 1);
       expect(game.dragArrow).not.toBeNull();
 
       game.endDrag();
+
+      expect(game.dragArrow).toBeNull();
+    });
+
+    it('endDrag before crossing the move tolerance clears the pending origin too, so a later move does not resurrect the arrow', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.beginDrag(50, 10);
+      game.endDrag();
+      game.updateDragPointer(50, 10 + LONG_PRESS_MOVE_TOLERANCE_PX + 1);
 
       expect(game.dragArrow).toBeNull();
     });
