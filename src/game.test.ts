@@ -41,6 +41,21 @@ describe('clamp', () => {
 });
 
 describe('Game', () => {
+  it('defaults the active player to seat 0 when no startingIndex is configured', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+    expect(game.activeIndex).toBe(0);
+  });
+
+  it('starts at the configured seat when startingIndex is set (issue #126)', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [], startingIndex: 2 });
+    expect(game.activeIndex).toBe(2);
+  });
+
+  it('falls back to seat 0 when startingIndex is out of range for the configured player count', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [], startingIndex: 9 });
+    expect(game.activeIndex).toBe(0);
+  });
+
   it('advances the active player when passTurn() is called (e.g. long-pressing the active player\'s zone)', () => {
     const game = new Game();
     game.resize(400, 800);

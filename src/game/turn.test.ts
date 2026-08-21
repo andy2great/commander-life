@@ -40,6 +40,16 @@ describe('nextPlayerIndex', () => {
   }
 });
 
+describe('createTurnState', () => {
+  it('defaults activeIndex to seat 0', () => {
+    expect(createTurnState().activeIndex).toBe(0);
+  });
+
+  it('starts at the given seat when a startIndex is passed (issue #126)', () => {
+    expect(createTurnState(2)).toEqual({ activeIndex: 2, turnCount: 0 });
+  });
+});
+
 describe('advanceTurn', () => {
   for (const playerCount of SUPPORTED_PLAYER_COUNTS) {
     it(`advances seats in clockwise order and increments the turn counter exactly once per lap for ${playerCount} players`, () => {
