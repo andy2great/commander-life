@@ -10,7 +10,15 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
-import { CONTROL_GAP_RATIO, SHORTCUT_RADIUS_RATIO, ShortcutControl, UNDO_RADIUS_RATIO, UndoControl } from './ui/controls';
+import {
+  CONTROL_GAP_RATIO,
+  PAUSE_RADIUS_RATIO,
+  PauseControl,
+  SHORTCUT_RADIUS_RATIO,
+  ShortcutControl,
+  UNDO_RADIUS_RATIO,
+  UndoControl,
+} from './ui/controls';
 import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 import {
@@ -81,6 +89,14 @@ function lightenColor(hex: string, amount: number): string {
 function darkenColor(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);
   return `rgb(${Math.round(r * (1 - amount))}, ${Math.round(g * (1 - amount))}, ${Math.round(b * (1 - amount))})`;
+}
+
+/** Formats a seconds count as mm:ss for the active player's turn timer (issue #97). */
+function formatMmSs(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const mm = Math.floor(total / 60);
+  const ss = total % 60;
+  return `${mm}:${String(ss).padStart(2, '0')}`;
 }
 
 export const MIN_PLAYER_COUNT = 3;
@@ -257,6 +273,7 @@ export class Game {
   private turnState: TurnState = createTurnState();
   private readonly undoControl = new UndoControl();
   private readonly shortcutControl = new ShortcutControl();
+  private readonly pauseControl = new PauseControl();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
@@ -282,6 +299,8 @@ export class Game {
   private endedFlag = false;
   private winnerId: string | null = null;
   private durationS = 0;
+  private pausedFlag = false;
+  private turnTimerElapsedS = 0;
 
   constructor(config?: GameConfig, sound: SoundPlayer = new NoopSoundPlayer()) {
     this.sound = sound;
@@ -367,6 +386,26 @@ export class Game {
     return this.shortcutControl.containsPoint(x, y);
   }
 
+  /** True when (x, y) — in the same coordinate space passed to resize — is over the shared center pause control (issue #97). */
+  isOverPauseControl(x: number, y: number): boolean {
+    return this.pauseControl.containsPoint(x, y);
+  }
+
+  /** True while the game is paused (issue #97): the turn timer and match duration are frozen and gameplay inputs are disabled. */
+  get paused(): boolean {
+    return this.pausedFlag;
+  }
+
+  /** Seconds since the active player became active, frozen while paused; resets to 0 each time the turn passes. */
+  get turnTimerS(): number {
+    return this.turnTimerElapsedS;
+  }
+
+  /** Toggles pause: freezes/resumes the turn timer, match duration, and gameplay inputs (issue #97). */
+  togglePause(): void {
+    this.pausedFlag = !this.pausedFlag;
+  }
+
   /** The seat currently playing the turn-pass flash animation (issue #64), or null. */
   get passTurnFlashSeat(): number | null {
     return this.passTurnFlashSeatIndex;
@@ -401,12 +440,16 @@ export class Game {
     if (this.endedFlag) {
       return;
     }
+    if (this.pausedFlag) {
+      return;
+    }
     this.checkEndConditions();
     if (this.endedFlag) {
       return;
     }
 
     this.animTime += dt;
+    this.turnTimerElapsedS += dt;
     this.activeTimeList[this.turnState.activeIndex] += dt;
     updateScreenShake(this.shakeState, dt);
     updateZoneEffects(this.zoneEffectState, dt);
@@ -433,19 +476,26 @@ export class Game {
     const controlCenterY = height / 2;
     this.undoControl.reflow(width, height, controlCenterY);
 
-    // ShortcutControl (issue #80) sits just clear of UndoControl's
-    // hit-circle rather than sharing its centerX, so both stay
-    // independently tappable without overlapping (#38's touch-target sizing
-    // applies to both).
+    // ShortcutControl (issue #80) and PauseControl (issue #97) sit just
+    // clear of UndoControl's hit-circle, on opposite sides, rather than
+    // sharing its centerX, so all three stay independently tappable without
+    // overlapping (#38's touch-target sizing applies to all of them).
     const shortSide = Math.min(width, height);
     const undoRadius = shortSide * UNDO_RADIUS_RATIO;
     const shortcutRadius = shortSide * SHORTCUT_RADIUS_RATIO;
+    const pauseRadius = shortSide * PAUSE_RADIUS_RATIO;
     const gap = shortSide * CONTROL_GAP_RATIO;
     const shortcutCenterX = width / 2 + undoRadius + gap + shortcutRadius;
+    const pauseCenterX = width / 2 - undoRadius - gap - pauseRadius;
     this.shortcutControl.reflow(width, height, shortcutCenterX, controlCenterY);
+    this.pauseControl.reflow(width, height, pauseCenterX, controlCenterY);
   }
 
   onTap(x: number, y: number): void {
+    if (this.pauseControl.containsPoint(x, y)) {
+      this.togglePause();
+      return;
+    }
     if (this.undoControl.containsPoint(x, y)) {
       this.undo();
       return;
@@ -459,11 +509,14 @@ export class Game {
   /** Advances the active player, e.g. from a long-press on the active player's zone. */
   passTurn(): void {
     const previousTurnState = this.turnState;
+    const previousTurnTimerS = this.turnTimerElapsedS;
     this.turnState = advanceTurn(this.turnState, this.playerCount);
+    this.turnTimerElapsedS = 0;
     this.sound.play('turnPass');
     this.stack.push({
       undo: (): void => {
         this.turnState = previousTurnState;
+        this.turnTimerElapsedS = previousTurnTimerS;
       },
     });
   }
@@ -476,6 +529,9 @@ export class Game {
    * control.
    */
   passTurnFromZoneLongPress(x: number, y: number): void {
+    if (this.pausedFlag) {
+      return;
+    }
     const playerId = this.onLongPress(x, y);
     const activeSeat = this.turnState.activeIndex;
     if (playerId === null || playerId !== this.playersList[activeSeat].id) {
@@ -519,6 +575,9 @@ export class Game {
     toX: number,
     toY: number,
   ): { fromPlayerId: string; toPlayerId: string } | null {
+    if (this.pausedFlag) {
+      return null;
+    }
     const fromPlayerId = this.onLongPress(fromX, fromY);
     const toPlayerId = this.onLongPress(toX, toY);
     if (!fromPlayerId || !toPlayerId) {
@@ -537,6 +596,10 @@ export class Game {
    * end does, so a press starting over a shared control never shows an arrow).
    */
   beginDrag(x: number, y: number): void {
+    if (this.pausedFlag) {
+      this.dragState = null;
+      return;
+    }
     const fromPlayerId = this.onLongPress(x, y);
     this.dragState = fromPlayerId ? { fromPlayerId, pointerX: x, pointerY: y } : null;
   }
@@ -651,7 +714,26 @@ export class Game {
     this.drawDragArrow(ctx);
     this.undoControl.draw(ctx, this.canUndo);
     this.shortcutControl.draw(ctx);
+    this.pauseControl.draw(ctx, this.pausedFlag);
 
+    ctx.restore();
+
+    if (this.pausedFlag) {
+      this.drawPauseOverlay(ctx, width, height);
+    }
+  }
+
+  /** Unambiguous full-canvas overlay shown while paused (issue #97), drawn outside the screen-shake translate so it never jitters. */
+  private drawPauseOverlay(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.save();
+    ctx.fillStyle = 'rgba(10, 9, 14, 0.72)';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = '#f5f3f7';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 32px system-ui, sans-serif';
+    ctx.fillText('PAUSED', width / 2, height / 2);
     ctx.restore();
   }
 
@@ -691,6 +773,12 @@ export class Game {
       ctx.font = `600 ${nameFontSize}px system-ui, sans-serif`;
       ctx.textBaseline = 'top';
       ctx.fillText(player.name, 0, lifeFontSize / 2 + 4);
+
+      if (isActive) {
+        const timerFontSize = Math.round(shortSide * 0.1);
+        ctx.font = `700 ${timerFontSize}px system-ui, sans-serif`;
+        ctx.fillText(formatMmSs(this.turnTimerElapsedS), 0, lifeFontSize / 2 + 4 + nameFontSize + 4);
+      }
 
       ctx.restore();
 

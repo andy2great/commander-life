@@ -14,6 +14,10 @@ export const UNDO_RADIUS_RATIO = 0.079;
 // same #38 rationale applies to both icons on the shared disc.
 export const SHORTCUT_RADIUS_RATIO = UNDO_RADIUS_RATIO;
 
+// PauseControl (issue #97) matches UndoControl's touch-target sizing — same
+// #38 rationale applies to every icon on the shared disc.
+export const PAUSE_RADIUS_RATIO = UNDO_RADIUS_RATIO;
+
 // Gap between the two center-disc controls' edges, relative to the canvas's
 // short side, so they read as two distinct tappable icons rather than one
 // blob at the smallest supported phone width.
@@ -123,6 +127,58 @@ export class ShortcutControl {
     // larger than the hit-circle radius (#31/#38).
     ctx.font = `${Math.floor(radius)}px system-ui, sans-serif`;
     ctx.fillText('⚡', centerX, centerY);
+
+    ctx.restore();
+  }
+}
+
+/**
+ * Pause icon at the shared control disc (issue #97): tap freezes the turn
+ * timer and match duration and disables gameplay inputs; tapping again
+ * resumes from exactly where they left off. Placed by the caller (see
+ * `Game.resize()`) just clear of UndoControl's hit-circle, mirroring
+ * ShortcutControl on the opposite side.
+ */
+export class PauseControl {
+  private layout: ControlLayout = { centerX: 0, centerY: 0, radius: 0 };
+
+  /** `centerX`/`centerY` are caller-supplied so this control can sit beside UndoControl rather than always centered on the canvas. */
+  reflow(width: number, height: number, centerX: number, centerY: number): void {
+    const shortSide = Math.min(width, height);
+    this.layout = {
+      centerX,
+      centerY,
+      radius: shortSide * PAUSE_RADIUS_RATIO,
+    };
+  }
+
+  /** True when (x, y) — in the same coordinate space passed to reflow — is over the icon. */
+  containsPoint(x: number, y: number): boolean {
+    const { centerX, centerY, radius } = this.layout;
+    return Math.hypot(x - centerX, y - centerY) <= radius;
+  }
+
+  /** `paused` swaps the glyph between pause (⏸) and resume (▶). */
+  draw(ctx: CanvasRenderingContext2D, paused: boolean): void {
+    const { centerX, centerY, radius } = this.layout;
+
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20, 18, 28, 0.85)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#f5f3f7';
+    ctx.stroke();
+
+    ctx.fillStyle = '#f5f3f7';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Floor (not round), matching UndoControl, so the glyph never renders
+    // larger than the hit-circle radius (#31/#38).
+    ctx.font = `${Math.floor(radius)}px system-ui, sans-serif`;
+    ctx.fillText(paused ? '▶' : '⏸', centerX, centerY);
 
     ctx.restore();
   }
