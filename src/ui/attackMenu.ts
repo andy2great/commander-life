@@ -205,13 +205,13 @@ function injectStylesOnce(): void {
     .cmdr-atk-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: #1b1822; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); }
     .cmdr-atk-head { display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid transparent; }
     .cmdr-atk-title { color: #f5f3f7; font-size: 16px; font-weight: 800; flex: 1; font-family: system-ui, sans-serif; }
-    .cmdr-atk-close { width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; font-size: 14px; font-weight: 700; }
+    .cmdr-atk-close { box-sizing: border-box; width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; font-size: 14px; font-weight: 700; }
     .cmdr-atk-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .cmdr-atk-toggle { flex: 1 1 auto; min-width: 84px; padding: 10px 12px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; }
+    .cmdr-atk-toggle { box-sizing: border-box; flex: 1 1 auto; min-width: 84px; padding: 10px 12px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; }
     .cmdr-atk-toggle.active { border-color: var(--toggle-color, #948fa3); color: #f5f3f7; background: #2d2938; }
     .cmdr-atk-row { display: flex; align-items: center; justify-content: center; background: #241f2d; border-radius: 20px; padding: 20px; border-left: 3px solid transparent; }
     .cmdr-atk-stepper { display: flex; align-items: center; gap: 16px; }
-    .cmdr-atk-stepper button { width: 56px; height: 56px; border-radius: 50%; border: none; background: #2d2938; color: #f5f3f7; font-size: 24px; font-weight: 700; }
+    .cmdr-atk-stepper button { box-sizing: border-box; width: 56px; height: 56px; border-radius: 50%; border: none; background: #2d2938; color: #f5f3f7; font-size: 24px; font-weight: 700; }
     .cmdr-atk-val { min-width: 44px; text-align: center; color: #fff; font-size: 30px; font-weight: 800; font-family: system-ui, sans-serif; }
   `;
   document.head.appendChild(style);

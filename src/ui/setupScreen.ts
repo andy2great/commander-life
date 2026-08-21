@@ -43,7 +43,7 @@ function injectStylesOnce(): void {
     .setup-label { color: #f5f3f7; font-size: 15px; font-weight: 600; }
     .setup-label small { display: block; color: #948fa3; font-weight: 400; font-size: 11px; margin-top: 2px; }
     .setup-stepper { display: flex; align-items: center; gap: 14px; background: #211d29; border-radius: 14px; padding: 6px 10px; }
-    .setup-stepper button { width: 32px; height: 32px; border-radius: 10px; border: none; background: #2d2938; color: #f5f3f7; font-size: 18px; font-weight: 700; }
+    .setup-stepper button { box-sizing: border-box; width: 32px; height: 32px; border-radius: 10px; border: none; background: #2d2938; color: #f5f3f7; font-size: 18px; font-weight: 700; }
     .setup-stepper .setup-val { min-width: 34px; text-align: center; color: #f5f3f7; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .setup-players { display: flex; flex-direction: column; gap: 10px; }
     .setup-player-row { display: flex; align-items: center; gap: 12px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; }
@@ -53,7 +53,7 @@ function injectStylesOnce(): void {
     .setup-swatch-row { display: flex; gap: 8px; }
     .setup-mini-swatch { width: 18px; height: 18px; border-radius: 50%; border: none; padding: 0; }
     .setup-spacer { flex: 1; }
-    .setup-cta { margin-top: auto; background: linear-gradient(135deg, #0091ff, #8e4ec6); color: #fff; border: none; border-radius: 18px; padding: 18px; font-size: 17px; font-weight: 800; letter-spacing: 0.4px; text-align: center; }
+    .setup-cta { box-sizing: border-box; margin-top: auto; background: linear-gradient(135deg, #0091ff, #8e4ec6); color: #fff; border: none; border-radius: 18px; padding: 18px; font-size: 17px; font-weight: 800; letter-spacing: 0.4px; text-align: center; }
   `;
   document.head.appendChild(style);
 }
