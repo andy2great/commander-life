@@ -42,6 +42,7 @@ function startGame(config: GameConfig): void {
     poisonState: game.poisonState,
     undoStack: game.undoStack,
     sound,
+    shake: game.shakeTrigger,
   });
   const boardShortcutMenu = new BoardShortcutMenu({
     root: document.body,
@@ -49,6 +50,7 @@ function startGame(config: GameConfig): void {
     getActiveIndex: () => game.activeIndex,
     undoStack: game.undoStack,
     sound,
+    shake: game.shakeTrigger,
   });
 
   canvas.style.display = 'block';

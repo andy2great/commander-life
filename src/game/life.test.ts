@@ -2,11 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './life';
 import type { Player, UndoAction } from './commanderDamage';
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
+import type { ScreenShakeTrigger } from './screenShake';
 
 class MockSoundPlayer implements SoundPlayer {
   readonly events: SoundEvent[] = [];
   play(event: SoundEvent): void {
     this.events.push(event);
+  }
+}
+
+class MockShake implements ScreenShakeTrigger {
+  readonly intensities: number[] = [];
+  trigger(intensity: number): void {
+    this.intensities.push(intensity);
   }
 }
 
@@ -68,6 +76,33 @@ describe('applyDamageDelta', () => {
 
     expect(target.life).toBe(40);
     expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('triggers screen-shake for a positive (damage) delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyDamageDelta(target, 3, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(1);
+  });
+
+  it('does not trigger screen-shake for a negative delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyDamageDelta(target, -1, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('does not require a shake trigger: omitting it never throws', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    expect(() => applyDamageDelta(target, 3, undoStack)).not.toThrow();
   });
 });
 
@@ -168,5 +203,25 @@ describe('applyLifelinkDelta', () => {
     expect(target.life).toBe(40);
     expect(attacker.life).toBe(40);
     expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('triggers screen-shake for a positive (damage) delta', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyLifelinkDelta(attacker, target, 4, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(1);
+  });
+
+  it('does not trigger screen-shake for a negative delta', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyLifelinkDelta(attacker, target, -2, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(0);
   });
 });

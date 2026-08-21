@@ -3,6 +3,7 @@
 // independent of life total). Free of DOM globals so it stays unit-testable.
 
 import type { UndoStack } from './commanderDamage';
+import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
 
 /** state[playerId] = poison counters that player has accumulated. */
 export type PoisonState = Record<string, number>;
@@ -20,13 +21,15 @@ export function createPoisonState(playerIds: string[]): PoisonState {
 
 /**
  * Adjusts `playerId`'s poison counter by `delta`, clamped at zero. Pushes an
- * undo action that reverts it onto `undoStack`.
+ * undo action that reverts it onto `undoStack`. Triggers `shake` (issue #88)
+ * only when the clamped change is an increase.
  */
 export function applyPoisonDelta(
   state: PoisonState,
   playerId: string,
   delta: number,
   undoStack: UndoStack,
+  shake?: ScreenShakeTrigger,
 ): void {
   if (delta === 0) {
     return;
@@ -39,6 +42,9 @@ export function applyPoisonDelta(
   }
 
   state[playerId] = after;
+  if (applied > 0) {
+    shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+  }
   undoStack.push({
     undo(): void {
       state[playerId] = before;

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { applyBoardShortcutDelta, BOARD_SHORTCUT_OPTIONS, boardShortcutTargets } from './boardShortcut';
 import type { Player, UndoAction } from './commanderDamage';
+import type { ScreenShakeTrigger } from './screenShake';
+
+class MockShake implements ScreenShakeTrigger {
+  readonly intensities: number[] = [];
+  trigger(intensity: number): void {
+    this.intensities.push(intensity);
+  }
+}
 
 function makePlayers(count: number): Player[] {
   return Array.from({ length: count }, (_, seat) => ({
@@ -102,5 +110,25 @@ describe('applyBoardShortcutDelta', () => {
     applyBoardShortcutDelta(players, 0, 'opponents', -2, undoStack);
 
     expect(players.map((player) => player.life)).toEqual([40, 42, 42]);
+  });
+
+  it('triggers screen-shake once per affected player for a positive (damage) delta', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyBoardShortcutDelta(players, 0, 'opponents', 3, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(2);
+  });
+
+  it('does not trigger screen-shake for a negative (healing) delta', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const shake = new MockShake();
+
+    applyBoardShortcutDelta(players, 0, 'opponents', -2, undoStack, undefined, shake);
+
+    expect(shake.intensities).toHaveLength(0);
   });
 });
