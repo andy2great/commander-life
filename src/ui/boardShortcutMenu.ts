@@ -61,6 +61,8 @@ function injectStylesOnce(): void {
     .cmdr-bsc-stepper button { width: 44px; height: 44px; border-radius: 50%; border: none; background: #2d2938; color: #f5f3f7; font-size: 20px; font-weight: 700; }
     .cmdr-bsc-val { min-width: 32px; text-align: center; color: #fff; font-size: 22px; font-weight: 800; font-family: system-ui, sans-serif; }
     .cmdr-bsc-apply { border-radius: 14px; border: none; padding: 10px 16px; background: #5b8cff; color: #fff; font-size: 13px; font-weight: 800; font-family: system-ui, sans-serif; }
+    .cmdr-bsc-precision { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #2d2938; background: #1b1822; color: #948fa3; font-size: 14px; }
+    .cmdr-bsc-precision.active { border-color: #5b8cff; color: #f5f3f7; background: #2d2938; }
   `;
   document.head.appendChild(style);
 }
@@ -187,24 +189,46 @@ export class BoardShortcutMenu {
       toggleRow.appendChild(button);
     }
 
+    let precisionActive = false;
+    const precisionButton = document.createElement('button');
+    precisionButton.type = 'button';
+    precisionButton.className = 'cmdr-bsc-precision';
+    precisionButton.textContent = '🔒';
+    precisionButton.setAttribute('aria-label', 'Precision mode: one step per press, no acceleration');
+    precisionButton.setAttribute('aria-pressed', 'false');
+    precisionButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      precisionActive = !precisionActive;
+      precisionButton.classList.toggle('active', precisionActive);
+      precisionButton.setAttribute('aria-pressed', String(precisionActive));
+    });
+
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
     minusButton.textContent = '−';
     this.holdToRepeatDetachFns.push(
-      attachHoldToRepeat(minusButton, () => {
-        amount -= 1;
-        valueEl.textContent = String(amount);
-      }),
+      attachHoldToRepeat(
+        minusButton,
+        () => {
+          amount -= 1;
+          valueEl.textContent = String(amount);
+        },
+        () => precisionActive,
+      ),
     );
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
     plusButton.textContent = '+';
     this.holdToRepeatDetachFns.push(
-      attachHoldToRepeat(plusButton, () => {
-        amount += 1;
-        valueEl.textContent = String(amount);
-      }),
+      attachHoldToRepeat(
+        plusButton,
+        () => {
+          amount += 1;
+          valueEl.textContent = String(amount);
+        },
+        () => precisionActive,
+      ),
     );
 
     const stepper = document.createElement('div');
@@ -212,6 +236,7 @@ export class BoardShortcutMenu {
     stepper.appendChild(minusButton);
     stepper.appendChild(valueEl);
     stepper.appendChild(plusButton);
+    stepper.appendChild(precisionButton);
 
     const applyButton = document.createElement('button');
     applyButton.type = 'button';
