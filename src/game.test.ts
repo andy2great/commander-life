@@ -346,6 +346,18 @@ describe('Game', () => {
     expect(game.onLongPress(undoCenter.x, undoCenter.y)).toBeNull();
   });
 
+  it('exposes a tappable shortcut control next to the undo control that is not itself a zone (issue #80)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const undoCenter = undoControlCenter(400, 800);
+
+    // Somewhere to the right of the undo icon, still on the shared disc's row.
+    const shortcutProbeX = undoCenter.x + 40;
+    expect(game.isOverShortcutControl(shortcutProbeX, undoCenter.y)).toBe(true);
+    expect(game.isOverUndoControl(shortcutProbeX, undoCenter.y)).toBe(false);
+    expect(game.onLongPress(shortcutProbeX, undoCenter.y)).toBeNull();
+  });
+
   describe('resolveZoneDrag (issue #48)', () => {
     it('resolves a drag from one zone to a different zone, without itself changing any total', () => {
       const game = new Game();
@@ -571,6 +583,27 @@ describe('Game', () => {
 
         expect(game.isOverUndoControl(centerX, centerY)).toBe(false);
       });
+    },
+  );
+
+  it.each([3, 4, 5, 6])(
+    'keeps the shared shortcut control off every zone center and off the undo control, at the smallest supported width, in a %i-player game (issue #80)',
+    (playerCount) => {
+      const game = new Game({ playerCount, startingLife: 40, players: [] });
+      const width = 360;
+      const height = 900;
+      game.resize(width, height);
+      const rects = computeZoneRects(playerCount, width, height);
+
+      rects.forEach((rect) => {
+        const centerX = rect.x + rect.width / 2;
+        const centerY = rect.y + rect.height / 2;
+
+        expect(game.isOverShortcutControl(centerX, centerY)).toBe(false);
+      });
+
+      const undoCenter = undoControlCenter(width, height);
+      expect(game.isOverShortcutControl(undoCenter.x, undoCenter.y)).toBe(false);
     },
   );
 

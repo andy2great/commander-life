@@ -10,7 +10,7 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
-import { UndoControl } from './ui/controls';
+import { CONTROL_GAP_RATIO, SHORTCUT_RADIUS_RATIO, ShortcutControl, UNDO_RADIUS_RATIO, UndoControl } from './ui/controls';
 import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 
@@ -198,6 +198,7 @@ export class Game {
   readonly playerCount: number;
   private turnState: TurnState = createTurnState();
   private readonly undoControl = new UndoControl();
+  private readonly shortcutControl = new ShortcutControl();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
@@ -295,6 +296,11 @@ export class Game {
     return this.undoControl.containsPoint(x, y);
   }
 
+  /** True when (x, y) — in the same coordinate space passed to resize — is over the shared center shortcut control (issue #80). */
+  isOverShortcutControl(x: number, y: number): boolean {
+    return this.shortcutControl.containsPoint(x, y);
+  }
+
   /** The seat currently playing the turn-pass flash animation (issue #64), or null. */
   get passTurnFlashSeat(): number | null {
     return this.passTurnFlashSeatIndex;
@@ -335,6 +341,17 @@ export class Game {
     // center (where its life total is drawn) — for every player count.
     const controlCenterY = height / 2;
     this.undoControl.reflow(width, height, controlCenterY);
+
+    // ShortcutControl (issue #80) sits just clear of UndoControl's
+    // hit-circle rather than sharing its centerX, so both stay
+    // independently tappable without overlapping (#38's touch-target sizing
+    // applies to both).
+    const shortSide = Math.min(width, height);
+    const undoRadius = shortSide * UNDO_RADIUS_RATIO;
+    const shortcutRadius = shortSide * SHORTCUT_RADIUS_RATIO;
+    const gap = shortSide * CONTROL_GAP_RATIO;
+    const shortcutCenterX = width / 2 + undoRadius + gap + shortcutRadius;
+    this.shortcutControl.reflow(width, height, shortcutCenterX, controlCenterY);
   }
 
   onTap(x: number, y: number): void {
@@ -384,7 +401,7 @@ export class Game {
    * resolveZoneDrag() below, to resolve either end of a zone-to-zone drag.
    */
   onLongPress(x: number, y: number): string | null {
-    if (this.undoControl.containsPoint(x, y)) {
+    if (this.undoControl.containsPoint(x, y) || this.shortcutControl.containsPoint(x, y)) {
       return null;
     }
     return this.playerIdAt(x, y);
@@ -531,6 +548,7 @@ export class Game {
     this.drawZones(ctx);
     this.drawDragArrow(ctx);
     this.undoControl.draw(ctx, this.canUndo);
+    this.shortcutControl.draw(ctx);
   }
 
   private drawZones(ctx: CanvasRenderingContext2D): void {
