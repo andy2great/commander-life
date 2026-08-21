@@ -3,6 +3,7 @@ import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
 import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyPoisonDelta } from './game/poison';
+import { applyBoardShortcutDelta } from './game/boardShortcut';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
 
 /** Records every sound-trigger call so tests can assert on game events without a real AudioContext. */
@@ -900,6 +901,22 @@ describe('end of game', () => {
 
     game.update(10);
     expect(game.stats?.durationS).toBeCloseTo(5, 5);
+  });
+
+  it('ends with no winner rather than softlocking when a board-wide shortcut eliminates every remaining player at once (issue #84)', () => {
+    const game = makeThreePlayerGame(5);
+
+    applyBoardShortcutDelta(game.players, game.activeIndex, 'all', 10, game.undoStack, undefined);
+    game.update(0.016);
+
+    expect(game.ended).toBe(true);
+    expect(game.stats?.winnerId).toBeNull();
+    expect(game.stats?.eliminationOrder.map((entry) => entry.playerId)).toEqual([
+      game.players[0].id,
+      game.players[1].id,
+      game.players[2].id,
+    ]);
+    game.players.forEach((player) => expect(player.life).toBe(-5));
   });
 });
 
