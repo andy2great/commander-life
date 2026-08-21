@@ -50,21 +50,25 @@ function injectStylesOnce(): void {
   const style = document.createElement('style');
   style.textContent = `
     .cmdr-bsc-overlay { position: fixed; inset: 0; background: rgba(8, 7, 12, 0.55); z-index: 30; display: flex; align-items: flex-end; }
-    .cmdr-bsc-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: #1b1822; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); }
+    .cmdr-bsc-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
     .cmdr-bsc-head { display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #2d2938; }
-    .cmdr-bsc-title { color: #f5f3f7; font-size: 16px; font-weight: 800; flex: 1; font-family: system-ui, sans-serif; }
-    .cmdr-bsc-close { box-sizing: border-box; width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; font-size: 14px; font-weight: 700; }
+    .cmdr-bsc-title { color: #f5f3f7; font-size: 15px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; flex: 1; font-family: system-ui, sans-serif; }
+    .cmdr-bsc-close { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; transition: transform 100ms ease, filter 100ms ease; }
+    .cmdr-bsc-close:active { transform: scale(0.9); filter: brightness(1.2); }
+    .cmdr-bsc-close svg { width: 14px; height: 14px; }
     .cmdr-bsc-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .cmdr-bsc-toggle { box-sizing: border-box; flex: 1 1 auto; min-width: 84px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; }
+    .cmdr-bsc-toggle { box-sizing: border-box; flex: 1 1 auto; min-width: 84px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; transition: border-color 150ms ease, background 150ms ease, color 150ms ease; }
     .cmdr-bsc-toggle svg { width: 26px; height: 26px; }
-    .cmdr-bsc-toggle.active { border-color: #5b8cff; color: #f5f3f7; background: #2d2938; }
+    .cmdr-bsc-toggle.active { border-color: #d7a54c; color: #f5f3f7; background: #2d2938; box-shadow: 0 0 0 1px #d7a54c inset; }
     .cmdr-bsc-row { display: flex; flex-direction: column; gap: 12px; background: #241f2d; border-radius: 20px; padding: 12px; }
     .cmdr-bsc-stepper { position: relative; display: flex; align-items: stretch; gap: 6px; width: 100%; height: 72px; }
-    .cmdr-bsc-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 16px; background: #2d2938; color: #f5f3f7; font-size: 28px; font-weight: 800; }
+    .cmdr-bsc-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 16px; background: #2d2938; color: #f5f3f7; font-size: 28px; font-weight: 800; transition: transform 100ms ease, filter 100ms ease; }
+    .cmdr-bsc-stepper button:active { transform: scale(0.96); filter: brightness(1.15); }
     .cmdr-bsc-stepper button.cmdr-bsc-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
     .cmdr-bsc-stepper button.cmdr-bsc-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
-    .cmdr-bsc-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 32px; text-align: center; color: #fff; font-size: 22px; font-weight: 800; font-family: system-ui, sans-serif; background: #1b1822; padding: 6px 12px; border-radius: 12px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); }
-    .cmdr-bsc-apply { box-sizing: border-box; border-radius: 14px; border: none; padding: 14px 16px; width: 100%; background: #5b8cff; color: #fff; font-size: 14px; font-weight: 800; font-family: system-ui, sans-serif; }
+    .cmdr-bsc-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 32px; text-align: center; color: #f0c98a; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: system-ui, sans-serif; background: #1b1822; padding: 6px 12px; border-radius: 12px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(215, 165, 76, 0.25); }
+    .cmdr-bsc-apply { box-sizing: border-box; border-radius: 14px; border: none; padding: 14px 16px; width: 100%; background: linear-gradient(135deg, #d7a54c, #e2673f); color: #fff; font-size: 14px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; font-family: system-ui, sans-serif; transition: transform 100ms ease, filter 100ms ease; }
+    .cmdr-bsc-apply:active { transform: scale(0.97); filter: brightness(1.08); }
   `;
   document.head.appendChild(style);
 }
@@ -119,7 +123,8 @@ export class BoardShortcutMenu {
     const closeButton = document.createElement('button');
     closeButton.type = 'button';
     closeButton.className = 'cmdr-bsc-close';
-    closeButton.textContent = '✕';
+    closeButton.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="19" x2="19" y2="5"/><line x1="5" y1="5" x2="19" y2="19"/></svg>';
     closeButton.addEventListener('pointerdown', (event) => {
       event.stopPropagation();
       this.close();

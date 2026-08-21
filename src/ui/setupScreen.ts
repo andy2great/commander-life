@@ -34,28 +34,34 @@ function injectStylesOnce(): void {
   stylesInjected = true;
   const style = document.createElement('style');
   style.textContent = `
-    .setup-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: #121016; z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
-    .setup-title { margin: 0; font-size: 26px; font-weight: 800; color: #f5f3f7; text-align: center; }
-    .setup-sub { margin: -8px 0 0; text-align: center; color: #948fa3; font-size: 13px; }
-    .setup-card { background: #1b1822; border-radius: 18px; padding: 16px 18px; }
+    .setup-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(ellipse 140% 60% at 50% -10%, #211a2c 0%, #121016 55%); z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
+    .setup-title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: #f5f3f7; text-align: center; }
+    .setup-title-rule { width: 40px; height: 3px; margin: 8px auto 0; border-radius: 2px; background: linear-gradient(135deg, #d7a54c, #e2673f); }
+    .setup-sub { margin: 2px 0 0; text-align: center; color: #948fa3; font-size: 13px; }
+    .setup-card { background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 16px 18px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.4); }
     .setup-row { display: flex; flex-direction: column; gap: 10px; }
     .setup-row + .setup-row { margin-top: 18px; }
     .setup-label { color: #f5f3f7; font-size: 15px; font-weight: 600; }
     .setup-label small { display: block; color: #948fa3; font-weight: 400; font-size: 11px; margin-top: 2px; }
     .setup-stepper { position: relative; display: flex; align-items: stretch; gap: 6px; width: 100%; height: 64px; background: #211d29; border-radius: 16px; padding: 4px; }
-    .setup-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 12px; background: #2d2938; color: #f5f3f7; font-size: 26px; font-weight: 800; }
+    .setup-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 12px; background: #2d2938; color: #f5f3f7; font-size: 26px; font-weight: 800; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-stepper button:active { transform: scale(0.96); filter: brightness(1.15); }
     .setup-stepper button.setup-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
     .setup-stepper button.setup-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
-    .setup-stepper .setup-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 34px; text-align: center; color: #fff; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; background: #17141d; padding: 6px 12px; border-radius: 10px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3); }
+    .setup-stepper .setup-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 34px; text-align: center; color: #fff; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; background: #17141d; padding: 6px 12px; border-radius: 10px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(215, 165, 76, 0.25); }
     .setup-players { display: flex; flex-direction: column; gap: 10px; }
-    .setup-player-row { display: flex; align-items: center; gap: 12px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; }
+    .setup-player-row { display: flex; align-items: center; gap: 12px; background: #211d29; border-radius: 14px; padding: 10px 12px; border-left: 3px solid transparent; transition: border-color 150ms ease; }
     .setup-swatch { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); }
     .setup-name-field { flex: 1; min-width: 0; color: #f5f3f7; font-size: 14px; font-weight: 600; background: transparent; border: none; outline: none; font-family: system-ui, sans-serif; }
     .setup-name-field::placeholder { color: #948fa3; font-weight: 400; }
     .setup-swatch-row { display: flex; gap: 8px; }
-    .setup-mini-swatch { width: 18px; height: 18px; border-radius: 50%; border: none; padding: 0; }
+    .setup-mini-swatch { width: 18px; height: 18px; border-radius: 50%; border: none; padding: 0; transition: transform 100ms ease, box-shadow 150ms ease; }
+    .setup-mini-swatch:active { transform: scale(0.85); }
     .setup-spacer { flex: 1; }
-    .setup-cta { box-sizing: border-box; margin-top: auto; background: linear-gradient(135deg, #0091ff, #8e4ec6); color: #fff; border: none; border-radius: 18px; padding: 18px; font-size: 17px; font-weight: 800; letter-spacing: 0.4px; text-align: center; }
+    .setup-cta { box-sizing: border-box; position: relative; overflow: hidden; margin-top: auto; background: linear-gradient(135deg, #d7a54c, #e2673f); color: #fff; border: none; clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); padding: 18px; font-size: 17px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; text-align: center; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-cta:active { transform: scale(0.98); filter: brightness(1.08); }
+    .setup-cta::after { content: ''; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%); background-size: 220% 100%; animation: cmdr-shimmer 3.2s ease-in-out infinite; }
+    @keyframes cmdr-shimmer { 0% { background-position: 160% 0; } 60%, 100% { background-position: -60% 0; } }
   `;
   document.head.appendChild(style);
 }
@@ -99,6 +105,10 @@ export class SetupScreen {
     title.className = 'setup-title';
     title.textContent = 'Commander Life';
     overlay.appendChild(title);
+
+    const titleRule = document.createElement('div');
+    titleRule.className = 'setup-title-rule';
+    overlay.appendChild(titleRule);
 
     const sub = document.createElement('div');
     sub.className = 'setup-sub';
@@ -229,7 +239,7 @@ export class SetupScreen {
 
     const swatch = document.createElement('div');
     swatch.className = 'setup-swatch';
-    swatch.style.background = player.color;
+    swatch.style.background = gemBackground(player.color);
 
     const nameField = document.createElement('input');
     nameField.type = 'text';
@@ -250,13 +260,13 @@ export class SetupScreen {
       const mini = document.createElement('button');
       mini.type = 'button';
       mini.className = 'setup-mini-swatch';
-      mini.style.background = color;
+      mini.style.background = gemBackground(color);
       if (color === player.color) {
         selectSwatch(mini, color);
       }
       mini.addEventListener('pointerdown', () => {
         player.color = color;
-        swatch.style.background = color;
+        swatch.style.background = gemBackground(color);
         row.style.borderLeftColor = color;
         nameField.style.caretColor = color;
         for (const sibling of Array.from(swatchRow.children)) {
@@ -281,6 +291,11 @@ export class SetupScreen {
     });
     this.close();
   }
+}
+
+/** A soft top-left highlight over the flat accent color, so swatches read as a gem/foil chip rather than a flat dot — echoes concept.md's radial-gradient player zone fill. */
+function gemBackground(color: string): string {
+  return `radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.45), transparent 55%), ${color}`;
 }
 
 function clampPlayerCount(count: number): number {
