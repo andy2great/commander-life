@@ -17,6 +17,7 @@ import {
   applyCommanderDamageDelta,
   type CommanderDamageState,
   type Player,
+  type UndoAction,
   type UndoStack,
 } from '../game/commanderDamage';
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from '../game/life';
@@ -137,6 +138,45 @@ export function buildDamageTypeDefs(
   return types;
 }
 
+export interface AttackMenuSession {
+  /** Pass as the `undoStack` for `buildDamageTypeDefs` so every stepper tap made during this session is collected here instead of pushed straight onto the shared stack. */
+  undoStack: UndoStack;
+  /** Commits every action collected so far as one entry on the real undo stack (no-op if none were made). */
+  commit(): void;
+}
+
+/**
+ * Batches every stepper tap made while the attack/self-target menu is open
+ * (issue #94) into a single undo entry, the same way `applyBoardShortcutDelta`
+ * (issue #80) batches one "Apply" press's per-player changes. Taps across
+ * different damage types within the same session all land in the same
+ * collected list, in the order applied, so switching the selected type
+ * mid-session doesn't lose or merge any type's pending change — undoing the
+ * committed entry replays every sub-action's own `undo` in reverse order.
+ */
+export function createAttackMenuSession(undoStack: UndoStack): AttackMenuSession {
+  let actions: UndoAction[] = [];
+  return {
+    undoStack: {
+      push: (action) => actions.push(action),
+    },
+    commit(): void {
+      if (actions.length === 0) {
+        return;
+      }
+      const committed = actions;
+      actions = [];
+      undoStack.push({
+        undo(): void {
+          for (let i = committed.length - 1; i >= 0; i -= 1) {
+            committed[i].undo();
+          }
+        },
+      });
+    },
+  };
+}
+
 export interface AttackMenuOptions {
   /** Element the overlay is appended to (e.g. document.body). */
   root: HTMLElement;
@@ -184,6 +224,7 @@ export class AttackMenu {
   private readonly zoneEffects?: ZoneEffectTrigger;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
+  private session: AttackMenuSession | null = null;
 
   constructor(options: AttackMenuOptions) {
     this.root = options.root;
@@ -250,6 +291,7 @@ export class AttackMenu {
     head.appendChild(closeButton);
     panel.appendChild(head);
 
+    this.session = createAttackMenuSession(this.undoStack);
     const types = buildDamageTypeDefs(
       attacker,
       target,
@@ -257,7 +299,7 @@ export class AttackMenu {
       this.damageState,
       this.poisonState,
       this.players,
-      this.undoStack,
+      this.session.undoStack,
       this.sound,
       this.shake,
       this.zoneEffects,
@@ -278,6 +320,10 @@ export class AttackMenu {
       detach();
     }
     this.holdToRepeatDetachFns = [];
+    if (this.session) {
+      this.session.commit();
+      this.session = null;
+    }
   }
 
   /**
