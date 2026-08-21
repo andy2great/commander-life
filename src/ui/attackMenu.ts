@@ -34,15 +34,15 @@ function injectStylesOnce(): void {
   style.textContent = `
     .cmdr-atk-overlay { position: fixed; inset: 0; background: rgba(8, 7, 12, 0.55); z-index: 30; display: flex; align-items: flex-end; }
     .cmdr-atk-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: #1b1822; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); }
-    .cmdr-atk-head { display: flex; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid transparent; }
+    .cmdr-atk-head { display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid transparent; }
     .cmdr-atk-title { color: #f5f3f7; font-size: 16px; font-weight: 800; flex: 1; font-family: system-ui, sans-serif; }
     .cmdr-atk-close { width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; font-size: 14px; font-weight: 700; }
-    .cmdr-atk-row { display: flex; align-items: center; gap: 12px; background: #241f2d; border-radius: 16px; padding: 10px 12px; border-left: 3px solid transparent; }
-    .cmdr-atk-row + .cmdr-atk-row { margin-top: 10px; }
-    .cmdr-atk-name { flex: 1; color: #f5f3f7; font-size: 14px; font-weight: 700; font-family: system-ui, sans-serif; }
-    .cmdr-atk-stepper { display: flex; align-items: center; gap: 10px; }
-    .cmdr-atk-stepper button { width: 28px; height: 28px; border-radius: 9px; border: none; background: #2d2938; color: #f5f3f7; font-size: 16px; font-weight: 700; }
-    .cmdr-atk-val { min-width: 22px; text-align: center; color: #fff; font-size: 15px; font-weight: 800; font-family: system-ui, sans-serif; }
+    .cmdr-atk-row { display: flex; align-items: center; gap: 16px; background: #241f2d; border-radius: 20px; padding: 20px; border-left: 3px solid transparent; }
+    .cmdr-atk-row + .cmdr-atk-row { margin-top: 16px; }
+    .cmdr-atk-name { flex: 1; color: #f5f3f7; font-size: 15px; font-weight: 700; font-family: system-ui, sans-serif; }
+    .cmdr-atk-stepper { display: flex; align-items: center; gap: 16px; }
+    .cmdr-atk-stepper button { width: 56px; height: 56px; border-radius: 50%; border: none; background: #2d2938; color: #f5f3f7; font-size: 24px; font-weight: 700; }
+    .cmdr-atk-val { min-width: 44px; text-align: center; color: #fff; font-size: 30px; font-weight: 800; font-family: system-ui, sans-serif; }
   `;
   document.head.appendChild(style);
 }
