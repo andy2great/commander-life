@@ -22,6 +22,7 @@ import {
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from '../game/life';
 import { applyPoisonDelta, type PoisonState } from '../game/poison';
 import type { SoundPlayer } from '../audio/soundPlayer';
+import { attachHoldToRepeat } from './holdToRepeat';
 
 export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison';
 
@@ -164,6 +165,7 @@ export class AttackMenu {
   private readonly undoStack: UndoStack;
   private readonly sound?: SoundPlayer;
   private overlay: HTMLElement | null = null;
+  private holdToRepeatDetachFns: Array<() => void> = [];
 
   constructor(options: AttackMenuOptions) {
     this.root = options.root;
@@ -250,6 +252,10 @@ export class AttackMenu {
       this.overlay.remove();
       this.overlay = null;
     }
+    for (const detach of this.holdToRepeatDetachFns) {
+      detach();
+    }
+    this.holdToRepeatDetachFns = [];
   }
 
   /**
@@ -302,20 +308,22 @@ export class AttackMenu {
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
     minusButton.textContent = '−';
-    minusButton.addEventListener('pointerdown', (event) => {
-      event.stopPropagation();
-      active.apply(-1);
-      refreshValue();
-    });
+    this.holdToRepeatDetachFns.push(
+      attachHoldToRepeat(minusButton, () => {
+        active.apply(-1);
+        refreshValue();
+      }),
+    );
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
     plusButton.textContent = '+';
-    plusButton.addEventListener('pointerdown', (event) => {
-      event.stopPropagation();
-      active.apply(1);
-      refreshValue();
-    });
+    this.holdToRepeatDetachFns.push(
+      attachHoldToRepeat(plusButton, () => {
+        active.apply(1);
+        refreshValue();
+      }),
+    );
 
     const stepper = document.createElement('div');
     stepper.className = 'cmdr-atk-stepper';

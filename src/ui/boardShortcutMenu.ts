@@ -8,6 +8,7 @@
 import { BOARD_SHORTCUT_OPTIONS, applyBoardShortcutDelta, type BoardShortcutOption } from '../game/boardShortcut';
 import type { Player, UndoStack } from '../game/commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
+import { attachHoldToRepeat } from './holdToRepeat';
 
 export interface BoardShortcutMenuOptions {
   /** Element the overlay is appended to (e.g. document.body). */
@@ -49,6 +50,7 @@ export class BoardShortcutMenu {
   private readonly undoStack: UndoStack;
   private readonly sound?: SoundPlayer;
   private overlay: HTMLElement | null = null;
+  private holdToRepeatDetachFns: Array<() => void> = [];
 
   constructor(options: BoardShortcutMenuOptions) {
     this.root = options.root;
@@ -108,6 +110,10 @@ export class BoardShortcutMenu {
       this.overlay.remove();
       this.overlay = null;
     }
+    for (const detach of this.holdToRepeatDetachFns) {
+      detach();
+    }
+    this.holdToRepeatDetachFns = [];
   }
 
   private buildOptionRow(option: BoardShortcutOption): HTMLElement {
@@ -127,20 +133,22 @@ export class BoardShortcutMenu {
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
     minusButton.textContent = '−';
-    minusButton.addEventListener('pointerdown', (event) => {
-      event.stopPropagation();
-      amount -= 1;
-      valueEl.textContent = String(amount);
-    });
+    this.holdToRepeatDetachFns.push(
+      attachHoldToRepeat(minusButton, () => {
+        amount -= 1;
+        valueEl.textContent = String(amount);
+      }),
+    );
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
     plusButton.textContent = '+';
-    plusButton.addEventListener('pointerdown', (event) => {
-      event.stopPropagation();
-      amount += 1;
-      valueEl.textContent = String(amount);
-    });
+    this.holdToRepeatDetachFns.push(
+      attachHoldToRepeat(plusButton, () => {
+        amount += 1;
+        valueEl.textContent = String(amount);
+      }),
+    );
 
     const stepper = document.createElement('div');
     stepper.className = 'cmdr-bsc-stepper';
