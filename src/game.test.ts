@@ -1080,3 +1080,116 @@ describe('Game overlay safe area', () => {
     expect(game.overlaySafeArea.maxHeight).toBeLessThan(375);
   });
 });
+
+describe('pause/resume (issue #97)', () => {
+  it('starts unpaused', () => {
+    const game = new Game();
+    expect(game.paused).toBe(false);
+  });
+
+  it('togglePause() flips the paused state', () => {
+    const game = new Game();
+
+    game.togglePause();
+    expect(game.paused).toBe(true);
+
+    game.togglePause();
+    expect(game.paused).toBe(false);
+  });
+
+  it('tapping the pause control toggles paused, same as togglePause()', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    // Mirrors PauseControl's reflow math (just clear of UndoControl, opposite ShortcutControl).
+    const pauseX = 200 - 0.079 * 400 - 0.02 * 400 - 0.079 * 400;
+    const pauseY = 400;
+
+    game.onTap(pauseX, pauseY);
+    expect(game.paused).toBe(true);
+
+    game.onTap(pauseX, pauseY);
+    expect(game.paused).toBe(false);
+  });
+
+  it('freezes the turn timer while paused and resumes without a time-jump', () => {
+    const game = new Game();
+
+    game.update(3);
+    expect(game.turnTimerS).toBeCloseTo(3, 5);
+
+    game.togglePause();
+    game.update(5); // frozen while paused
+    expect(game.turnTimerS).toBeCloseTo(3, 5);
+
+    game.togglePause();
+    game.update(2); // resumes exactly where it left off
+    expect(game.turnTimerS).toBeCloseTo(5, 5);
+  });
+
+  it('resets the turn timer to 0 each time the turn passes', () => {
+    const game = new Game();
+
+    game.update(4);
+    game.passTurn();
+
+    expect(game.turnTimerS).toBeCloseTo(0, 5);
+  });
+
+  it('freezes match duration while paused and resumes without a time-jump', () => {
+    const game = new Game({
+      playerCount: 3,
+      startingLife: 1,
+      players: [
+        { name: 'Alara', color: '#111111' },
+        { name: 'Kess', color: '#222222' },
+        { name: 'Yorion', color: '#333333' },
+      ],
+    });
+    const alara = game.players[0];
+    const kess = game.players[1];
+    const yorion = game.players[2];
+
+    game.update(2);
+    game.togglePause();
+    game.update(10); // frozen while paused
+    game.togglePause();
+    game.update(3); // resumes exactly where it left off
+
+    dealDamage(game, kess.id, alara.id, 1); // eliminate Alara
+    dealDamage(game, kess.id, yorion.id, 1); // eliminate Yorion, Kess wins
+    game.update(0); // checkEndConditions runs every frame; dt=0 keeps duration exact
+
+    expect(game.stats?.durationS).toBeCloseTo(5, 5);
+  });
+
+  it('disables long-press pass-turn while paused', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
+
+    game.togglePause();
+    game.passTurnFromZoneLongPress(50, zoneHeight - 10); // seat 0's zone, the active seat
+
+    expect(game.activeIndex).toBe(0);
+  });
+
+  it('disables drag-to-attack (resolveZoneDrag) while paused', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
+
+    game.togglePause();
+
+    expect(game.resolveZoneDrag(50, zoneHeight + 10, 50, zoneHeight * 2 + 10)).toBeNull();
+  });
+
+  it('disables the live drag-arrow preview (beginDrag) while paused', () => {
+    const game = new Game();
+    game.resize(400, 800);
+
+    game.togglePause();
+    game.beginDrag(50, 10);
+
+    expect(game.dragArrow).toBeNull();
+  });
+});

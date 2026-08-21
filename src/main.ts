@@ -60,6 +60,7 @@ function startGame(config: GameConfig): void {
   const isOverUndoControl = (event: PointerEvent): boolean => game.isOverUndoControl(event.clientX, event.clientY);
   const isOverShortcutControl = (event: PointerEvent): boolean =>
     game.isOverShortcutControl(event.clientX, event.clientY);
+  const isOverPauseControl = (event: PointerEvent): boolean => game.isOverPauseControl(event.clientX, event.clientY);
 
   // Tracks where the current press started so onTap (pointerup) can tell a
   // plain tap from a zone-to-zone drag: released in the same zone (or a
@@ -68,7 +69,7 @@ function startGame(config: GameConfig): void {
 
   const detachGesture = attachTapAndLongPress(canvas, {
     onPressStart: (event) => {
-      if (isOverUndoControl(event) || isOverShortcutControl(event)) {
+      if (isOverUndoControl(event) || isOverShortcutControl(event) || isOverPauseControl(event)) {
         pressStart = null;
         return;
       }
@@ -79,12 +80,14 @@ function startGame(config: GameConfig): void {
       game.updateDragPointer(event.clientX, event.clientY);
     },
     onTap: (event) => {
-      if (isOverUndoControl(event)) {
+      if (isOverUndoControl(event) || isOverPauseControl(event)) {
         game.onTap(event.clientX, event.clientY);
         return;
       }
       if (isOverShortcutControl(event)) {
-        boardShortcutMenu.open();
+        if (!game.paused) {
+          boardShortcutMenu.open();
+        }
         return;
       }
       if (!pressStart) {
