@@ -12,9 +12,43 @@ export function createTurnState(): TurnState {
   return { activeIndex: 0, turnCount: 0 };
 }
 
-/** Returns the seat index after `currentIndex`, wrapping from the last seat back to the first. */
+// Table-like grid layout per docs/concept.md: always two rows (top row
+// rotated 180° to face the opposite seat, bottom row upright), each sized to
+// fill half the canvas height, split into this many equal-width columns.
+// This is also src/game.ts's computeZoneRects layout table (seats are stored
+// and rendered in this same row-major order) — it lives here because
+// clockwiseSeatOrder below needs it to know which raw seat indices sit in
+// the top vs. bottom row.
+export const ROW_COUNTS_BY_PLAYER_COUNT: Record<number, [number, number]> = {
+  3: [1, 2],
+  4: [2, 2],
+  5: [2, 3],
+  6: [3, 3],
+};
+
+function rowCountsFor(playerCount: number): [number, number] {
+  return ROW_COUNTS_BY_PLAYER_COUNT[playerCount] ?? [Math.ceil(playerCount / 2), Math.floor(playerCount / 2)];
+}
+
+/**
+ * Raw seat indices (row-major left-to-right, as computeZoneRects lays them
+ * out) reordered into a clockwise loop around the table: top row
+ * left-to-right, then bottom row right-to-left (issue #68) — e.g. for 4
+ * players, raw seats [0, 1, 2, 3] (top-left, top-right, bottom-left,
+ * bottom-right) become the clockwise loop [0, 1, 3, 2].
+ */
+export function clockwiseSeatOrder(playerCount: number): number[] {
+  const [topCount] = rowCountsFor(playerCount);
+  const top = Array.from({ length: topCount }, (_, i) => i);
+  const bottom = Array.from({ length: playerCount - topCount }, (_, i) => playerCount - 1 - i);
+  return [...top, ...bottom];
+}
+
+/** Returns the seat index after `currentIndex` in clockwise table order, wrapping from the last seat back to the first. */
 export function nextPlayerIndex(currentIndex: number, playerCount: number): number {
-  return (currentIndex + 1) % playerCount;
+  const order = clockwiseSeatOrder(playerCount);
+  const position = order.indexOf(currentIndex);
+  return order[(position + 1) % order.length];
 }
 
 /**

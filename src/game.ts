@@ -1,7 +1,7 @@
 // Core game logic. Keep this file free of DOM globals so it stays unit-testable;
 // everything that touches the canvas element lives in main.ts.
 
-import { advanceTurn, createTurnState, type TurnState } from './game/turn';
+import { advanceTurn, createTurnState, ROW_COUNTS_BY_PLAYER_COUNT, type TurnState } from './game/turn';
 import {
   createCommanderDamageState,
   type CommanderDamageState,
@@ -66,16 +66,6 @@ export const DEFAULT_STARTING_LIFE = 40;
 // The 6 preset saturated accent colors from docs/concept.md, assigned to
 // seats in order (crimson, teal, amber, violet, lime, sky).
 export const PLAYER_COLORS = ['#e11d48', '#14b8a6', '#f59e0b', '#8b5cf6', '#84cc16', '#38bdf8'];
-
-// Table-like grid layout per docs/concept.md: always two rows (top row
-// rotated 180° to face the opposite seat, bottom row upright), each sized to
-// fill half the canvas height, split into this many equal-width columns.
-export const ROW_COUNTS_BY_PLAYER_COUNT: Record<number, [number, number]> = {
-  3: [1, 2],
-  4: [2, 2],
-  5: [2, 3],
-  6: [3, 3],
-};
 
 // Landscape phones have far less vertical space than portrait, so a DOM
 // overlay (setup screen, commander-damage panel, stats screen) sized for a
