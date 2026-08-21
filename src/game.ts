@@ -901,6 +901,9 @@ export class Game {
 
     if (this.pausedFlag) {
       this.drawPauseOverlay(ctx, width, height);
+      // Redraw on top of the overlay (issue #125) so the resume affordance
+      // stays clearly visible instead of being dimmed/covered by it.
+      this.pauseControl.draw(ctx, this.pausedFlag);
     }
   }
 
