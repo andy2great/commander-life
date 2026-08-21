@@ -98,24 +98,63 @@ export interface ZoneRect {
   y: number;
   width: number;
   height: number;
-  /** Top row zones render rotated 180° so their contents read upright from that seat. */
-  rotated: boolean;
+  /**
+   * Clockwise rotation, in degrees, applied so this zone's contents read
+   * upright from that seat's own position: 0 for bottom-row/upright seats,
+   * 180 for top-row seats (facing the opposite end of the table), 90 for a
+   * full-height left-edge seat (issue #81).
+   */
+  rotation: 0 | 90 | 180;
 }
 
-/** Computes each seat's zone rect (in row-major, left-to-right order) for the current canvas size. */
+/**
+ * Computes each seat's zone rect for the current canvas size, in the raw
+ * seat-index order `clockwiseSeatOrder` (src/game/turn.ts) expects.
+ *
+ * Every player count except 5 lays out as a simple row grid (row-major,
+ * left-to-right, top row rotated 180°). 5 players uses a distinct shape
+ * (issue #81): 2 seats along the top edge, 2 along the bottom edge, and 1
+ * full-height seat along the left edge — see computeFivePlayerZoneRects.
+ */
 export function computeZoneRects(playerCount: number, width: number, height: number): ZoneRect[] {
+  if (playerCount === 5) {
+    return computeFivePlayerZoneRects(width, height);
+  }
   const rowCounts = ROW_COUNTS_BY_PLAYER_COUNT[playerCount] ?? [Math.ceil(playerCount / 2), Math.floor(playerCount / 2)];
   const rowHeight = height / rowCounts.length;
   const rects: ZoneRect[] = [];
   rowCounts.forEach((count, rowIndex) => {
     const y = rowIndex * rowHeight;
     const colWidth = width / count;
-    const rotated = rowIndex === 0;
+    const rotation = rowIndex === 0 ? 180 : 0;
     for (let col = 0; col < count; col += 1) {
-      rects.push({ x: col * colWidth, y, width: colWidth, height: rowHeight, rotated });
+      rects.push({ x: col * colWidth, y, width: colWidth, height: rowHeight, rotation });
     }
   });
   return rects;
+}
+
+/**
+ * 5-player layout (issue #81, replacing #77's "1 lone seat on top + 4
+ * upright below" shape): 2 seats along the top edge (rotated 180°), 2 along
+ * the bottom edge (upright), and 1 full-height seat along the left edge
+ * (rotated 90° so its life total reads upright from that seat's position).
+ * The left seat's width matches the top/bottom columns' width, so all three
+ * columns tile the canvas evenly. Raw seat order — top-left, top-right,
+ * bottom-left, bottom-right, left — is what clockwiseSeatOrder(5) in
+ * src/game/turn.ts reorders into a true clockwise loop.
+ */
+function computeFivePlayerZoneRects(width: number, height: number): ZoneRect[] {
+  const leftWidth = width / 3;
+  const colWidth = (width - leftWidth) / 2;
+  const rowHeight = height / 2;
+  return [
+    { x: leftWidth, y: 0, width: colWidth, height: rowHeight, rotation: 180 },
+    { x: leftWidth + colWidth, y: 0, width: colWidth, height: rowHeight, rotation: 180 },
+    { x: leftWidth, y: rowHeight, width: colWidth, height: rowHeight, rotation: 0 },
+    { x: leftWidth + colWidth, y: rowHeight, width: colWidth, height: rowHeight, rotation: 0 },
+    { x: 0, y: 0, width: leftWidth, height, rotation: 90 },
+  ];
 }
 
 export interface PlayerConfig {
@@ -336,9 +375,12 @@ export class Game {
     this.canvasWidth = width;
     this.canvasHeight = height;
     this.zoneRects = computeZoneRects(this.playerCount, width, height);
-    // The grid is always two rows filling half the canvas height each, so
-    // height / 2 is exactly the boundary between them — never a zone's own
-    // center (where its life total is drawn) — for every player count.
+    // The top/bottom rows always fill half the canvas height each, so
+    // height / 2 is exactly the boundary between them for every player
+    // count. The 5-player left seat (issue #81) spans full height, so its
+    // center y also falls on height / 2 — but its center x (leftWidth / 2)
+    // is far enough from the control's centerX (width / 2) that the disc
+    // still doesn't sit on that zone's own center point.
     const controlCenterY = height / 2;
     this.undoControl.reflow(width, height, controlCenterY);
 
@@ -568,8 +610,8 @@ export class Game {
 
       ctx.save();
       ctx.translate(cx, cy);
-      if (rect.rotated) {
-        ctx.rotate(Math.PI);
+      if (rect.rotation !== 0) {
+        ctx.rotate((rect.rotation * Math.PI) / 180);
       }
 
       ctx.fillStyle = '#ffffff';

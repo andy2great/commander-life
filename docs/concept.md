@@ -25,7 +25,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 ## Layout by player count (portrait canvas, all code-drawn, no external assets)
 - 3 players: one zone spans the full width at the top (rotated 180°), two zones split the bottom half vertically
 - 4 players: 2x2 grid; top row rotated 180°, bottom row upright
-- 5 players: top row = 1 zone spanning the full width (the fifth player sits alone at that end of the table, rotated 180°), bottom row = 4 zones upright (each row sized to fill its half)
+- 5 players: 2 zones along the top edge (rotated 180°), 2 zones along the bottom edge (upright), and 1 full-height zone along the left edge (rotated 90° so its life total and name read upright from that seat), with all three columns equal width
 - 6 players: 3x2 grid; top row rotated 180°, bottom row upright
 - A shared circular control disc sits where all zones meet, at the vertical center of the canvas, hosting the undo icon
 

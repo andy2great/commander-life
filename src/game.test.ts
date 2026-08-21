@@ -626,45 +626,71 @@ describe('Game', () => {
     },
   );
 
-  describe('5-player lone seat layout (issue #77)', () => {
-    it('gives the fifth seat its own full-width rotated zone at the top, with the other four upright below it', () => {
+  describe('5-player 2-top/2-bottom/1-left layout (issue #81)', () => {
+    it('gives 2 zones across the top (rotated 180°), 2 across the bottom (upright), and 1 full-height zone on the left (rotated 90°), tiling the canvas with no gaps or overlaps', () => {
       const width = 400;
       const height = 900;
       const rects = computeZoneRects(5, width, height);
+      const leftWidth = width / 3;
+      const colWidth = (width - leftWidth) / 2;
 
       expect(rects).toEqual([
-        { x: 0, y: 0, width, height: height / 2, rotated: true },
-        { x: 0, width: width / 4, y: height / 2, height: height / 2, rotated: false },
-        { x: width / 4, width: width / 4, y: height / 2, height: height / 2, rotated: false },
-        { x: (width / 4) * 2, width: width / 4, y: height / 2, height: height / 2, rotated: false },
-        { x: (width / 4) * 3, width: width / 4, y: height / 2, height: height / 2, rotated: false },
+        { x: leftWidth, y: 0, width: colWidth, height: height / 2, rotation: 180 },
+        { x: leftWidth + colWidth, y: 0, width: colWidth, height: height / 2, rotation: 180 },
+        { x: leftWidth, y: height / 2, width: colWidth, height: height / 2, rotation: 0 },
+        { x: leftWidth + colWidth, y: height / 2, width: colWidth, height: height / 2, rotation: 0 },
+        { x: 0, y: 0, width: leftWidth, height, rotation: 90 },
       ]);
     });
 
-    it('resolves taps and drags to the lone seat (seat 0) from anywhere in its full-width zone', () => {
-      const game = new Game({ playerCount: 5, startingLife: 40, players: [] });
-      const width = 400;
-      const height = 900;
-      game.resize(width, height);
-      const loneSeat = game.players[0];
-
-      const dragToLoneSeat = game.resolveZoneDrag(width - 20, height - 20, 20, 20);
-
-      expect(dragToLoneSeat).toEqual({ fromPlayerId: game.players[4].id, toPlayerId: loneSeat.id });
-    });
-
-    it('resolves taps and drags to each of the four upright seats sharing the bottom row', () => {
+    it('resolves taps and drags to the left-edge seat (seat 4) from anywhere in its full-height zone', () => {
       const game = new Game({ playerCount: 5, startingLife: 40, players: [] });
       const width = 400;
       const height = 900;
       game.resize(width, height);
       const rects = computeZoneRects(5, width, height);
+      const topLeftRect = rects[0];
+      const topLeftCenter = { x: topLeftRect.x + topLeftRect.width / 2, y: topLeftRect.y + topLeftRect.height / 2 };
+      const topLeftSeat = game.players[0];
+      const leftSeat = game.players[4];
 
-      for (let seat = 1; seat <= 4; seat += 1) {
+      const dragFromNearTopOfLeftZone = game.resolveZoneDrag(topLeftCenter.x, topLeftCenter.y, 20, 20);
+      expect(dragFromNearTopOfLeftZone).toEqual({ fromPlayerId: topLeftSeat.id, toPlayerId: leftSeat.id });
+
+      const dragFromNearBottomOfLeftZone = game.resolveZoneDrag(topLeftCenter.x, topLeftCenter.y, 20, height - 20);
+      expect(dragFromNearBottomOfLeftZone).toEqual({ fromPlayerId: topLeftSeat.id, toPlayerId: leftSeat.id });
+    });
+
+    it('resolves taps and drags to each of the 2 top and 2 bottom seats', () => {
+      const game = new Game({ playerCount: 5, startingLife: 40, players: [] });
+      const width = 400;
+      const height = 900;
+      game.resize(width, height);
+      const rects = computeZoneRects(5, width, height);
+      const leftSeatCenter = { x: rects[4].x + rects[4].width / 2, y: rects[4].y + rects[4].height / 2 };
+
+      for (let seat = 0; seat <= 3; seat += 1) {
         const rect = rects[seat];
-        const drag = game.resolveZoneDrag(20, 20, rect.x + rect.width / 2, rect.y + rect.height / 2);
+        const drag = game.resolveZoneDrag(
+          leftSeatCenter.x,
+          leftSeatCenter.y,
+          rect.x + rect.width / 2,
+          rect.y + rect.height / 2,
+        );
 
-        expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[seat].id });
+        expect(drag).toEqual({ fromPlayerId: game.players[4].id, toPlayerId: game.players[seat].id });
+      }
+    });
+
+    it('walks the 5 seats in true clockwise order — top-left, top-right, bottom-right, bottom-left, left — when passing turns', () => {
+      const game = new Game({ playerCount: 5, startingLife: 40, players: [] });
+      game.resize(400, 900);
+
+      const order = [0, 1, 3, 2, 4];
+      expect(game.activeIndex).toBe(order[0]);
+      for (let i = 1; i < order.length; i += 1) {
+        game.passTurn();
+        expect(game.activeIndex).toBe(order[i]);
       }
     });
   });
