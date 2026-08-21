@@ -288,6 +288,8 @@ class ArrayUndoStack implements UndoStack {
 
 interface DragState {
   fromPlayerId: string;
+  originX: number;
+  originY: number;
   pointerX: number;
   pointerY: number;
 }
@@ -309,6 +311,7 @@ interface TurnHoldState {
 /** Live preview of a zone-to-zone drag (issue #55), previewing what resolveZoneDrag would resolve if released now. */
 export interface DragArrowState {
   fromPlayerId: string;
+  /** The exact point where the press started (beginDrag's origin), not the zone's center. */
   originX: number;
   originY: number;
   /** Snapped to the target zone's center when targetPlayerId is set; otherwise the raw pointer position. */
@@ -757,7 +760,13 @@ export class Game {
     if (Math.hypot(x - this.dragOrigin.x, y - this.dragOrigin.y) <= LONG_PRESS_MOVE_TOLERANCE_PX) {
       return;
     }
-    this.dragState = { fromPlayerId: this.dragOrigin.fromPlayerId, pointerX: x, pointerY: y };
+    this.dragState = {
+      fromPlayerId: this.dragOrigin.fromPlayerId,
+      originX: this.dragOrigin.x,
+      originY: this.dragOrigin.y,
+      pointerX: x,
+      pointerY: y,
+    };
   }
 
   /** Clears the live drag arrow (and any pending origin). Call on pointerup/pointercancel/pointerleave so it disappears immediately, whether or not the drag resolved into an opened menu. */
@@ -771,14 +780,11 @@ export class Game {
     if (!this.dragState) {
       return null;
     }
-    const { fromPlayerId, pointerX, pointerY } = this.dragState;
+    const { fromPlayerId, originX, originY, pointerX, pointerY } = this.dragState;
     const fromSeat = this.playersList.findIndex((player) => player.id === fromPlayerId);
-    const fromRect = this.zoneRects[fromSeat];
-    if (!fromRect) {
+    if (fromSeat === -1) {
       return null;
     }
-    const originX = fromRect.x + fromRect.width / 2;
-    const originY = fromRect.y + fromRect.height / 2;
     const color = this.playersList[fromSeat].color ?? PLAYER_COLORS[fromSeat % PLAYER_COLORS.length];
 
     const pointedPlayerId = this.onLongPress(pointerX, pointerY);
