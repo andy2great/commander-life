@@ -33,6 +33,15 @@ const START_PLAYER_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d=
 const REMOVE_PLAYER_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="19" x2="19" y2="5"/><line x1="5" y1="5" x2="19" y2="19"/></svg>';
 
+/**
+ * Flanks the setup-screen wordmark (issue #135), echoing the faceted "gem"
+ * look already established by the player-color swatches (`gemBackground()`)
+ * so the new title mark reads as part of the same foil/felt visual
+ * language rather than a one-off decoration.
+ */
+const TITLE_GEM_ICON =
+  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 L20 12 L12 22 L4 12 Z"/><path d="M12 2 L16.5 9 L7.5 9 Z" fill="#fff" opacity="0.4"/></svg>';
+
 export interface SetupScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
   root: HTMLElement;
@@ -51,7 +60,9 @@ function injectStylesOnce(): void {
   const style = document.createElement('style');
   style.textContent = `
     .setup-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(ellipse 130% 60% at 12% -12%, #241b30 0%, rgba(18, 16, 22, 0) 55%), repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.018) 0px, rgba(255, 255, 255, 0.018) 1px, transparent 1px, transparent 8px); background-color: #121016; z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
-    .setup-title { margin: 0; font-size: 34px; font-weight: 400; letter-spacing: 1.4px; text-transform: uppercase; color: #f5f3f7; text-align: center; font-family: ${DISPLAY_FONT_STACK}; }
+    .setup-title { margin: 0; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; font-size: clamp(26px, 8vw, 34px); font-weight: 400; letter-spacing: 1.4px; text-transform: uppercase; text-align: center; font-family: ${DISPLAY_FONT_STACK}; }
+    .setup-title-text { background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .setup-title-gem { flex: 0 0 auto; width: 12px; height: 12px; color: #d7a54c; }
     .setup-title-rule { width: 40px; height: 3px; margin: 8px auto 0; border-radius: 2px; background: linear-gradient(135deg, #d7a54c, #e2673f); }
     .setup-sub { margin: 2px 0 0; text-align: center; color: #948fa3; font-size: 13px; }
     .setup-card { background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 16px 18px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.4); }
@@ -135,10 +146,7 @@ export class SetupScreen {
     const overlay = document.createElement('div');
     overlay.className = 'setup-screen';
 
-    const title = document.createElement('h1');
-    title.className = 'setup-title';
-    title.textContent = 'Commander Life';
-    overlay.appendChild(title);
+    overlay.appendChild(this.buildTitleWordmark());
 
     const titleRule = document.createElement('div');
     titleRule.className = 'setup-title-rule';
@@ -178,6 +186,41 @@ export class SetupScreen {
       this.overlay = null;
       this.playersContainer = null;
     }
+  }
+
+  /**
+   * The setup screen's wordmark (issue #135): a foil-gradient text fill —
+   * the same "engraved plaque" treatment the visual-identity pass
+   * (docs/design/visual-identity.md) already uses for hero names on the
+   * stats screen — flanked by small vector gem ornaments, so the title
+   * reads as a designed logotype rather than plain bold system-font text.
+   * Still an `<h1>` for document structure; the accessible name comes from
+   * `aria-label` since the visible text lives in a decorative gradient span.
+   */
+  private buildTitleWordmark(): HTMLElement {
+    const title = document.createElement('h1');
+    title.className = 'setup-title';
+    title.setAttribute('aria-label', 'Commander Life');
+
+    const leftGem = document.createElement('span');
+    leftGem.className = 'setup-title-gem';
+    leftGem.innerHTML = TITLE_GEM_ICON;
+    leftGem.setAttribute('aria-hidden', 'true');
+
+    const text = document.createElement('span');
+    text.className = 'setup-title-text';
+    text.textContent = 'Commander Life';
+    text.setAttribute('aria-hidden', 'true');
+
+    const rightGem = document.createElement('span');
+    rightGem.className = 'setup-title-gem';
+    rightGem.innerHTML = TITLE_GEM_ICON;
+    rightGem.setAttribute('aria-hidden', 'true');
+
+    title.appendChild(leftGem);
+    title.appendChild(text);
+    title.appendChild(rightGem);
+    return title;
   }
 
   private buildConfigCard(): HTMLElement {
