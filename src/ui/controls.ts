@@ -123,7 +123,10 @@ export class UndoControl {
 // Explicit "end game" icon beside the shared center control, mirroring
 // UndoControl but on the opposite side. Needed because long-press on the
 // center control now passes the turn (issue #48) instead of ending the
-// game, so ending the game needs its own discoverable tap target.
+// game, so ending the game needs its own discoverable tap target. A plain
+// tap on this icon no longer ends the game outright — like the center
+// control, it takes a long-press to actually commit (issue #56), so an
+// accidental tap on the flag can't end the game.
 export class EndGameControl {
   private layout: ControlLayout = { centerX: 0, centerY: 0, radius: 0 };
 

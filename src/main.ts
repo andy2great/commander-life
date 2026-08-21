@@ -94,6 +94,14 @@ function startGame(config: GameConfig): void {
     onLongPress: (event) => {
       if (game.isOverControl(event.clientX, event.clientY)) {
         game.passTurn();
+        return;
+      }
+      if (game.isOverEndControl(event.clientX, event.clientY)) {
+        // Long-press, not a plain tap, actually ends the game — mirrors the
+        // center control's tap/long-press split so the flag icon can't be
+        // hit by accident (#56).
+        game.endGame();
+        return;
       }
       // Zone long-presses now just continue the tap-and-hold ramp already
       // armed by onPressStart — commander-damage/poison assignment moved to
