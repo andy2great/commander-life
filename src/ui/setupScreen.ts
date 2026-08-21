@@ -50,7 +50,7 @@ function injectStylesOnce(): void {
   injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
-    .setup-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(ellipse 140% 60% at 50% -10%, #211a2c 0%, #121016 55%); z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
+    .setup-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(ellipse 130% 60% at 12% -12%, #241b30 0%, rgba(18, 16, 22, 0) 55%), repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.018) 0px, rgba(255, 255, 255, 0.018) 1px, transparent 1px, transparent 8px); background-color: #121016; z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
     .setup-title { margin: 0; font-size: 34px; font-weight: 400; letter-spacing: 1.4px; text-transform: uppercase; color: #f5f3f7; text-align: center; font-family: ${DISPLAY_FONT_STACK}; }
     .setup-title-rule { width: 40px; height: 3px; margin: 8px auto 0; border-radius: 2px; background: linear-gradient(135deg, #d7a54c, #e2673f); }
     .setup-sub { margin: 2px 0 0; text-align: center; color: #948fa3; font-size: 13px; }

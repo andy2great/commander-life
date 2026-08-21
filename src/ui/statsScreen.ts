@@ -24,7 +24,7 @@ function injectStylesOnce(): void {
   injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
-    .stats-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(ellipse 140% 60% at 50% -10%, #211a2c 0%, #121016 55%); z-index: 40; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 14px; overflow-y: auto; font-family: system-ui, sans-serif; }
+    .stats-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(circle at 50% -8%, rgba(215, 165, 76, 0.18) 0%, rgba(18, 16, 22, 0) 45%), radial-gradient(ellipse 160% 65% at 50% 118%, #2a1a1a 0%, rgba(18, 16, 22, 0) 62%); background-color: #121016; z-index: 40; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 14px; overflow-y: auto; font-family: system-ui, sans-serif; }
     .stats-winner-card { position: relative; background: linear-gradient(135deg, rgba(215,165,76,.18), rgba(226,103,63,.14)); border: 1px solid rgba(215,165,76,.4); clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); padding: 16px; text-align: center; }
     .stats-winner-tag { color: #d7a54c; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
     .stats-winner-name { background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 32px; font-weight: 400; margin-top: 4px; font-family: ${DISPLAY_FONT_STACK}; }
