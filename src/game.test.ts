@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
-import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
+import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS } from './ui/damagePanel';
 import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './game/life';
@@ -182,6 +182,88 @@ describe('Game', () => {
       game.passTurnFromZoneLongPress(50, zoneHeight * 2 + 10); // non-active zone
 
       expect(game.passTurnFlashSeat).toBeNull();
+    });
+  });
+
+  describe('turn-hold ring (issue #109)', () => {
+    it('shows a ring at the touch point that fills up over the hold duration when pressing the active zone', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      expect(game.turnHoldRing).toBeNull();
+
+      game.beginTurnHold(50, zoneHeight - 10); // seat 0's zone, the active seat
+
+      expect(game.turnHoldRing).toEqual({ x: 50, y: zoneHeight - 10, progress: 0 });
+
+      game.update(LONG_PRESS_MS / 1000 / 2);
+
+      expect(game.turnHoldRing?.progress).toBeCloseTo(0.5);
+    });
+
+    it('shows no ring when pressing a non-active zone', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.beginTurnHold(50, zoneHeight * 2 + 10); // seat 2's zone, not active
+
+      expect(game.turnHoldRing).toBeNull();
+    });
+
+    it('shows no ring when pressing outside any zone (e.g. the shared undo control)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.beginTurnHold(200, 400);
+
+      expect(game.turnHoldRing).toBeNull();
+    });
+
+    it('cancels the ring on endTurnHold before it completes, with no turn change', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.beginTurnHold(50, zoneHeight - 10);
+      game.update(0.1);
+      expect(game.turnHoldRing).not.toBeNull();
+
+      game.endTurnHold();
+
+      expect(game.turnHoldRing).toBeNull();
+      expect(game.activeIndex).toBe(0);
+    });
+
+    it('cancels the ring once the pointer moves past the long-press movement tolerance', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.beginTurnHold(50, zoneHeight - 10);
+      expect(game.turnHoldRing).not.toBeNull();
+
+      game.updateTurnHold(50, zoneHeight - 10 + LONG_PRESS_MOVE_TOLERANCE_PX); // still within tolerance
+      expect(game.turnHoldRing).not.toBeNull();
+
+      game.updateTurnHold(50, zoneHeight - 10 + LONG_PRESS_MOVE_TOLERANCE_PX + 1); // past tolerance
+      expect(game.turnHoldRing).toBeNull();
+    });
+
+    it('clears the ring the moment the hold commits and the turn passes, leaving the commit flash to play', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.beginTurnHold(50, zoneHeight - 10);
+      game.update(LONG_PRESS_MS / 1000);
+
+      game.passTurnFromZoneLongPress(50, zoneHeight - 10);
+
+      expect(game.turnHoldRing).toBeNull();
+      expect(game.activeIndex).toBe(1);
+      expect(game.passTurnFlashSeat).toBe(0);
     });
   });
 

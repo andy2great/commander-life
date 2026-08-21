@@ -20,7 +20,7 @@ import {
   UNDO_RADIUS_RATIO,
   UndoControl,
 } from './ui/controls';
-import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
+import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS } from './ui/damagePanel';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 import {
   createScreenShakeState,
@@ -237,6 +237,13 @@ const PULSE_MAX_WIDTH = 7;
 // border above.
 const PASS_TURN_FLASH_DURATION_S = 0.35;
 
+// Turn-hold progress ring (issue #109): circular ring centered on the touch
+// point, filling clockwise over the hold's LONG_PRESS_MS duration so a
+// player can see — and interrupt, by releasing or dragging away — an
+// in-progress turn pass before it commits and the flash above takes over.
+const TURN_HOLD_RING_RADIUS_RATIO = 0.07;
+const TURN_HOLD_RING_LINE_WIDTH_RATIO = 0.014;
+
 class ArrayUndoStack implements UndoStack {
   private readonly actions: UndoAction[] = [];
 
@@ -272,6 +279,13 @@ interface DragOrigin {
   y: number;
 }
 
+/** An in-progress turn-hold ring (issue #109), tracked from beginTurnHold until it's cancelled or the turn commits. */
+interface TurnHoldState {
+  originX: number;
+  originY: number;
+  elapsedS: number;
+}
+
 /** Live preview of a zone-to-zone drag (issue #55), previewing what resolveZoneDrag would resolve if released now. */
 export interface DragArrowState {
   fromPlayerId: string;
@@ -305,6 +319,7 @@ export class Game {
   private dragOrigin: DragOrigin | null = null;
   private passTurnFlashSeatIndex: number | null = null;
   private passTurnFlashTime = 0;
+  private turnHoldState: TurnHoldState | null = null;
   private readonly shakeState: ScreenShakeState = createScreenShakeState();
   private readonly shakeTriggerObj: ScreenShakeTrigger = {
     trigger: (intensity) => triggerScreenShake(this.shakeState, intensity),
@@ -439,6 +454,18 @@ export class Game {
     return this.passTurnFlashSeatIndex;
   }
 
+  /** The in-progress turn-hold ring's touch point and fill progress (0-1), or null when no hold is in progress (issue #109). Exposed for tests independent of canvas rendering. */
+  get turnHoldRing(): { x: number; y: number; progress: number } | null {
+    if (!this.turnHoldState) {
+      return null;
+    }
+    return {
+      x: this.turnHoldState.originX,
+      y: this.turnHoldState.originY,
+      progress: clamp(this.turnHoldState.elapsedS / (LONG_PRESS_MS / 1000), 0, 1),
+    };
+  }
+
   /** Triggers the canvas-wide screen-shake (issue #88); passed to UI menus so damage/poison actions can shake on impact. */
   get shakeTrigger(): ScreenShakeTrigger {
     return this.shakeTriggerObj;
@@ -492,6 +519,10 @@ export class Game {
       if (this.passTurnFlashTime >= PASS_TURN_FLASH_DURATION_S) {
         this.passTurnFlashSeatIndex = null;
       }
+    }
+
+    if (this.turnHoldState) {
+      this.turnHoldState.elapsedS += dt;
     }
   }
 
@@ -573,9 +604,52 @@ export class Game {
     if (playerId === null || playerId !== this.playersList[activeSeat].id) {
       return;
     }
+    // The hold ring's job ends the instant the turn commits — the existing
+    // flash (below) takes over from here (issue #109).
+    this.turnHoldState = null;
     this.passTurnFlashSeatIndex = activeSeat;
     this.passTurnFlashTime = 0;
     this.passTurn();
+  }
+
+  /**
+   * Starts the turn-hold progress ring (issue #109), e.g. from main.ts's
+   * onPressStart, when the press lands inside the currently active player's
+   * own zone — the same target passTurnFromZoneLongPress requires to commit.
+   * No-op (ring stays hidden) for any other press location, or while paused.
+   */
+  beginTurnHold(x: number, y: number): void {
+    if (this.pausedFlag) {
+      this.turnHoldState = null;
+      return;
+    }
+    const playerId = this.onLongPress(x, y);
+    const activeSeat = this.turnState.activeIndex;
+    this.turnHoldState =
+      playerId !== null && playerId === this.playersList[activeSeat].id ? { originX: x, originY: y, elapsedS: 0 } : null;
+  }
+
+  /**
+   * Cancels the turn-hold ring once the pointer has moved past the same
+   * LONG_PRESS_MOVE_TOLERANCE_PX threshold that already cancels the
+   * long-press itself (issue #109). Call from main.ts's onMove.
+   */
+  updateTurnHold(x: number, y: number): void {
+    if (!this.turnHoldState) {
+      return;
+    }
+    if (Math.hypot(x - this.turnHoldState.originX, y - this.turnHoldState.originY) > LONG_PRESS_MOVE_TOLERANCE_PX) {
+      this.turnHoldState = null;
+    }
+  }
+
+  /**
+   * Cancels the turn-hold ring, e.g. from main.ts's onPressEnd. No-op if the
+   * hold already completed — passTurnFromZoneLongPress clears it as soon as
+   * the turn commits, before the matching pointerup fires (issue #109).
+   */
+  endTurnHold(): void {
+    this.turnHoldState = null;
   }
 
   /**
@@ -766,6 +840,7 @@ export class Game {
 
     this.drawZones(ctx);
     this.drawDragArrow(ctx);
+    this.drawTurnHoldRing(ctx);
     this.undoControl.draw(ctx, this.canUndo);
     this.shortcutControl.draw(ctx);
     this.pauseControl.draw(ctx, this.pausedFlag);
@@ -881,6 +956,37 @@ export class Game {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = effect.color;
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.restore();
+  }
+
+  /**
+   * Draws the turn-hold progress ring (issue #109): a circular ring centered
+   * on the touch point that fills clockwise as the hold approaches
+   * LONG_PRESS_MS. Drawn only while turnHoldRing is non-null — beginTurnHold/
+   * updateTurnHold/endTurnHold/passTurnFromZoneLongPress all keep that in
+   * sync with the hold's lifecycle, so there's nothing further to gate here.
+   */
+  private drawTurnHoldRing(ctx: CanvasRenderingContext2D): void {
+    const ring = this.turnHoldRing;
+    if (!ring) {
+      return;
+    }
+    const shortSide = Math.min(this.canvasWidth, this.canvasHeight);
+    const radius = shortSide * TURN_HOLD_RING_RADIUS_RATIO;
+    const lineWidth = shortSide * TURN_HOLD_RING_LINE_WIDTH_RATIO;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.beginPath();
+    ctx.arc(ring.x, ring.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(ring.x, ring.y, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ring.progress);
+    ctx.stroke();
     ctx.restore();
   }
 
