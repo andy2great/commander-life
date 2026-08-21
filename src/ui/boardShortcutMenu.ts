@@ -58,11 +58,13 @@ function injectStylesOnce(): void {
     .cmdr-bsc-toggle { box-sizing: border-box; flex: 1 1 auto; min-width: 84px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; }
     .cmdr-bsc-toggle svg { width: 26px; height: 26px; }
     .cmdr-bsc-toggle.active { border-color: #5b8cff; color: #f5f3f7; background: #2d2938; }
-    .cmdr-bsc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #241f2d; border-radius: 20px; padding: 16px; }
-    .cmdr-bsc-stepper { display: flex; align-items: center; gap: 12px; }
-    .cmdr-bsc-stepper button { box-sizing: border-box; width: 44px; height: 44px; border-radius: 50%; border: none; background: #2d2938; color: #f5f3f7; font-size: 20px; font-weight: 700; }
-    .cmdr-bsc-val { min-width: 32px; text-align: center; color: #fff; font-size: 22px; font-weight: 800; font-family: system-ui, sans-serif; }
-    .cmdr-bsc-apply { box-sizing: border-box; border-radius: 14px; border: none; padding: 10px 16px; background: #5b8cff; color: #fff; font-size: 13px; font-weight: 800; font-family: system-ui, sans-serif; }
+    .cmdr-bsc-row { display: flex; flex-direction: column; gap: 12px; background: #241f2d; border-radius: 20px; padding: 12px; }
+    .cmdr-bsc-stepper { position: relative; display: flex; align-items: stretch; gap: 6px; width: 100%; height: 72px; }
+    .cmdr-bsc-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 16px; background: #2d2938; color: #f5f3f7; font-size: 28px; font-weight: 800; }
+    .cmdr-bsc-stepper button.cmdr-bsc-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
+    .cmdr-bsc-stepper button.cmdr-bsc-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
+    .cmdr-bsc-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 32px; text-align: center; color: #fff; font-size: 22px; font-weight: 800; font-family: system-ui, sans-serif; background: #1b1822; padding: 6px 12px; border-radius: 12px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); }
+    .cmdr-bsc-apply { box-sizing: border-box; border-radius: 14px; border: none; padding: 14px 16px; width: 100%; background: #5b8cff; color: #fff; font-size: 14px; font-weight: 800; font-family: system-ui, sans-serif; }
   `;
   document.head.appendChild(style);
 }
@@ -193,6 +195,7 @@ export class BoardShortcutMenu {
 
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
+    minusButton.className = 'cmdr-bsc-minus';
     minusButton.textContent = '−';
     this.holdToRepeatDetachFns.push(
       attachHoldToRepeat(minusButton, () => {
@@ -203,6 +206,7 @@ export class BoardShortcutMenu {
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
+    plusButton.className = 'cmdr-bsc-plus';
     plusButton.textContent = '+';
     this.holdToRepeatDetachFns.push(
       attachHoldToRepeat(plusButton, () => {
