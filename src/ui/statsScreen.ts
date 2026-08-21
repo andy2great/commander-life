@@ -108,7 +108,7 @@ export class StatsScreen {
   }
 
   private buildWinnerCard(): HTMLElement {
-    const winner = this.findPlayer(this.stats.winnerId);
+    const winner = this.stats.winnerId ? this.findPlayer(this.stats.winnerId) : undefined;
     const winnerColor = winner?.color;
 
     const card = document.createElement('div');
@@ -120,13 +120,13 @@ export class StatsScreen {
 
     const tag = document.createElement('div');
     tag.className = 'stats-winner-tag';
-    tag.textContent = 'Winner';
+    tag.textContent = this.stats.winnerId ? 'Winner' : 'Draw';
     card.appendChild(tag);
 
     const name = document.createElement('div');
     name.className = 'stats-winner-name';
     name.style.color = winnerColor ?? '#fff';
-    name.textContent = winner?.name ?? 'Unknown';
+    name.textContent = this.stats.winnerId ? winner?.name ?? 'Unknown' : 'No survivors';
     card.appendChild(name);
 
     const sub = document.createElement('div');

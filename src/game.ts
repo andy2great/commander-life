@@ -174,7 +174,8 @@ export interface EliminationEntry {
 }
 
 export interface GameStats {
-  winnerId: string;
+  /** Null when a board-wide effect eliminated every remaining player in the same action, per issue #84. */
+  winnerId: string | null;
   durationS: number;
   /** Seconds each player spent as the active player, keyed by player id. */
   activeTimeS: Record<string, number>;
@@ -315,7 +316,7 @@ export class Game {
 
   /** Stats for the end-game screen, or null until the game has ended. */
   get stats(): GameStats | null {
-    if (!this.endedFlag || this.winnerId === null) {
+    if (!this.endedFlag) {
       return null;
     }
     const activeTimeS: Record<string, number> = {};
@@ -550,7 +551,9 @@ export class Game {
    * Records newly-eliminated players (life at or below 0, or poison at or
    * above the lethal threshold), clears the record for anyone since restored
    * below both thresholds (e.g. via undo), and ends the game automatically
-   * once only one player remains, per docs/concept.md step 6.
+   * once at most one player remains, per docs/concept.md step 6. A board-wide
+   * effect (issue #80) can eliminate every remaining player in the same
+   * action; that ends the game with no winner rather than softlocking.
    */
   private checkEndConditions(): void {
     if (this.endedFlag) {
@@ -568,12 +571,12 @@ export class Game {
       }
     }
     const alive = this.playersList.filter((player) => !this.isEliminated(player));
-    if (alive.length === 1) {
-      this.finishGame(alive[0].id);
+    if (alive.length <= 1) {
+      this.finishGame(alive.length === 1 ? alive[0].id : null);
     }
   }
 
-  private finishGame(winnerId: string): void {
+  private finishGame(winnerId: string | null): void {
     if (this.endedFlag) {
       return;
     }
