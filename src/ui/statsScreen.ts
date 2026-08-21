@@ -5,6 +5,7 @@
 
 import type { GameStats } from '../game';
 import type { Player } from '../game/commanderDamage';
+import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
 export interface StatsScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
@@ -20,15 +21,16 @@ function injectStylesOnce(): void {
     return;
   }
   stylesInjected = true;
+  injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
     .stats-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(ellipse 140% 60% at 50% -10%, #211a2c 0%, #121016 55%); z-index: 40; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 14px; overflow-y: auto; font-family: system-ui, sans-serif; }
     .stats-winner-card { position: relative; background: linear-gradient(135deg, rgba(215,165,76,.18), rgba(226,103,63,.14)); border: 1px solid rgba(215,165,76,.4); clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); padding: 16px; text-align: center; }
     .stats-winner-tag { color: #d7a54c; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
-    .stats-winner-name { background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 26px; font-weight: 800; margin-top: 4px; }
+    .stats-winner-name { background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 32px; font-weight: 400; margin-top: 4px; font-family: ${DISPLAY_FONT_STACK}; }
     .stats-winner-sub { color: #948fa3; font-size: 12px; margin-top: 4px; }
     .stats-card { background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 14px 16px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.4); }
-    .stats-card h3 { margin: 0 0 12px; padding-bottom: 8px; color: #f5f3f7; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid #2d2938; }
+    .stats-card h3 { margin: 0 0 12px; padding-bottom: 8px; color: #f5f3f7; font-size: 14px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid #2d2938; font-family: ${DISPLAY_FONT_STACK}; }
     .stats-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .stats-bar-row:last-child { margin-bottom: 0; }
     .stats-bar-label { width: 64px; color: #948fa3; font-size: 11px; font-weight: 600; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -43,7 +45,7 @@ function injectStylesOnce(): void {
     .stats-elim-turn { color: #948fa3; font-size: 11px; font-variant-numeric: tabular-nums; }
     .stats-hit-card { position: relative; background: linear-gradient(135deg, rgba(226,103,63,.2), rgba(215,165,76,.12)); border: 1px solid rgba(226,103,63,.4); clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); padding: 16px; text-align: center; }
     .stats-hit-tag { color: #e2673f; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
-    .stats-hit-name { color: #fff; font-size: 26px; font-weight: 800; margin-top: 4px; }
+    .stats-hit-name { color: #fff; font-size: 32px; font-weight: 400; margin-top: 4px; font-family: ${DISPLAY_FONT_STACK}; }
     .stats-hit-sub { color: #948fa3; font-size: 12px; margin-top: 4px; }
     .stats-cta { box-sizing: border-box; position: relative; overflow: hidden; margin-top: auto; background: linear-gradient(135deg, #d7a54c, #e2673f); color: #fff; border: none; clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); padding: 18px; font-size: 17px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; text-align: center; transition: transform 100ms ease, filter 100ms ease; }
     .stats-cta:active { transform: scale(0.98); filter: brightness(1.08); }

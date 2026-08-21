@@ -27,6 +27,7 @@ import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger } from '../game/zoneEffect';
 import type { StatsTrigger } from '../game/stats';
 import { attachHoldToRepeat } from './holdToRepeat';
+import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
 export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison';
 
@@ -199,12 +200,13 @@ function injectStylesOnce(): void {
     return;
   }
   stylesInjected = true;
+  injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
     .cmdr-atk-overlay { position: fixed; inset: 0; background: rgba(8, 7, 12, 0.55); z-index: 30; display: flex; align-items: flex-end; }
     .cmdr-atk-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
     .cmdr-atk-head { display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid transparent; }
-    .cmdr-atk-title { color: #f5f3f7; font-size: 15px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; flex: 1; font-family: system-ui, sans-serif; }
+    .cmdr-atk-title { color: #f5f3f7; font-size: 18px; font-weight: 400; letter-spacing: 0.6px; text-transform: uppercase; flex: 1; font-family: ${DISPLAY_FONT_STACK}; }
     .cmdr-atk-close { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; transition: transform 100ms ease, filter 100ms ease; }
     .cmdr-atk-close:active { transform: scale(0.9); filter: brightness(1.2); }
     .cmdr-atk-close svg { width: 14px; height: 14px; }
@@ -217,7 +219,7 @@ function injectStylesOnce(): void {
     .cmdr-atk-stepper button:active { transform: scale(0.96); filter: brightness(1.15); }
     .cmdr-atk-stepper button.cmdr-atk-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
     .cmdr-atk-stepper button.cmdr-atk-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
-    .cmdr-atk-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 44px; text-align: center; color: #f0c98a; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: system-ui, sans-serif; background: #1b1822; padding: 6px 14px; border-radius: 14px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(215, 165, 76, 0.25); }
+    .cmdr-atk-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 44px; text-align: center; color: #f0c98a; font-size: 30px; font-weight: 400; font-variant-numeric: tabular-nums; font-family: ${DISPLAY_FONT_STACK}; background: #1b1822; padding: 6px 14px; border-radius: 14px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(215, 165, 76, 0.25); }
   `;
   document.head.appendChild(style);
 }
