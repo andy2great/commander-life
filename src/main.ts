@@ -46,9 +46,7 @@ function startGame(config: GameConfig): void {
   canvas.style.display = 'block';
 
   const isOverAnyControl = (event: PointerEvent): boolean =>
-    game.isOverControl(event.clientX, event.clientY) ||
-    game.isOverUndoControl(event.clientX, event.clientY) ||
-    game.isOverEndControl(event.clientX, event.clientY);
+    game.isOverControl(event.clientX, event.clientY) || game.isOverUndoControl(event.clientX, event.clientY);
 
   // Tracks where the current press started so onTap (pointerup) can tell a
   // plain tap from a zone-to-zone drag: released in the same zone (or a
@@ -83,13 +81,6 @@ function startGame(config: GameConfig): void {
     onLongPress: (event) => {
       if (game.isOverControl(event.clientX, event.clientY)) {
         game.passTurn();
-        return;
-      }
-      if (game.isOverEndControl(event.clientX, event.clientY)) {
-        // Long-press, not a plain tap, actually ends the game — mirrors the
-        // center control's tap/long-press split so the flag icon can't be
-        // hit by accident (#56).
-        game.endGame();
         return;
       }
       // Zone long-presses are a no-op: tapping/holding a player's own zone no

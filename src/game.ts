@@ -10,7 +10,7 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
-import { EndGameControl, PassTurnControl, UndoControl } from './ui/controls';
+import { PassTurnControl, UndoControl } from './ui/controls';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 
 export function clamp(value: number, min: number, max: number): number {
@@ -197,7 +197,6 @@ export class Game {
   private turnState: TurnState = createTurnState();
   private readonly control = new PassTurnControl();
   private readonly undoControl = new UndoControl();
-  private readonly endControl = new EndGameControl();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
@@ -298,31 +297,9 @@ export class Game {
     return this.undoControl.containsPoint(x, y);
   }
 
-  /** True when (x, y) — in the same coordinate space passed to resize — is over the end-game icon beside the shared center control. */
-  isOverEndControl(x: number, y: number): boolean {
-    return this.endControl.containsPoint(x, y);
-  }
-
   /** Reverts the most recent life or commander-damage change. No-op if nothing to undo. */
   undo(): void {
     this.stack.undo();
-  }
-
-  /** Ends the game, e.g. from a long-press on the end-game icon. No-op once already ended. */
-  endGame(): void {
-    if (this.endedFlag) {
-      return;
-    }
-    this.checkEndConditions();
-    if (this.endedFlag) {
-      return;
-    }
-    // Per docs/concept.md: manually ending the game picks the highest-life player as winner,
-    // among players not already eliminated by poison (life-eliminated players can't be highest).
-    const contenders = this.playersList.filter((player) => !this.isEliminated(player));
-    const pool = contenders.length > 0 ? contenders : this.playersList;
-    const winner = pool.reduce((best, player) => (player.life > best.life ? player : best));
-    this.finishGame(winner.id);
   }
 
   update(dt: number): void {
@@ -349,20 +326,11 @@ export class Game {
     const controlCenterY = height / 2;
     this.control.reflow(width, height, controlCenterY);
     this.undoControl.reflow(width, height, controlCenterY);
-    this.endControl.reflow(width, height, controlCenterY);
   }
 
   onTap(x: number, y: number): void {
     if (this.undoControl.containsPoint(x, y)) {
       this.undo();
-      return;
-    }
-
-    if (this.endControl.containsPoint(x, y)) {
-      // Tapping the end-game icon no longer ends the game outright — a
-      // long-press does instead (see endGame(), called from main.ts's
-      // onLongPress), mirroring the center control's tap/long-press split
-      // so an accidental tap can't end the game (#56).
       return;
     }
 
@@ -395,7 +363,7 @@ export class Game {
    * resolveZoneDrag() below, to resolve either end of a zone-to-zone drag.
    */
   onLongPress(x: number, y: number): string | null {
-    if (this.control.containsPoint(x, y) || this.undoControl.containsPoint(x, y) || this.endControl.containsPoint(x, y)) {
+    if (this.control.containsPoint(x, y) || this.undoControl.containsPoint(x, y)) {
       return null;
     }
     return this.playerIdAt(x, y);
@@ -536,7 +504,6 @@ export class Game {
     this.drawDragArrow(ctx);
     this.control.draw(ctx);
     this.undoControl.draw(ctx, this.canUndo);
-    this.endControl.draw(ctx);
   }
 
   private drawZones(ctx: CanvasRenderingContext2D): void {
