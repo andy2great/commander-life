@@ -25,6 +25,8 @@ export interface TapGestureHandlers {
    * press resolved as a tap or a long-press. Pairs with `onPressStart`.
    */
   onPressEnd?: (event: PointerEvent) => void;
+  /** Called on every pointermove during a press (e.g. to update a live zone-to-zone drag arrow, issue #55). */
+  onMove?: (event: PointerEvent) => void;
 }
 
 /**
@@ -71,6 +73,7 @@ export function attachTapAndLongPress(
     if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE_PX) {
       cancelTimer();
     }
+    handlers.onMove?.(event);
   };
 
   const onPointerUp = (event: PointerEvent): void => {
