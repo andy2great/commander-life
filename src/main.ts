@@ -1,6 +1,7 @@
 import { computeOverlaySafeArea, Game, type GameConfig } from './game';
 import { attachTapAndLongPress } from './ui/damagePanel';
 import { AttackMenu } from './ui/attackMenu';
+import { BoardShortcutMenu } from './ui/boardShortcutMenu';
 import { SetupScreen } from './ui/setupScreen';
 import { StatsScreen } from './ui/statsScreen';
 import { WebAudioSoundPlayer } from './audio/webAudioSoundPlayer';
@@ -42,10 +43,19 @@ function startGame(config: GameConfig): void {
     undoStack: game.undoStack,
     sound,
   });
+  const boardShortcutMenu = new BoardShortcutMenu({
+    root: document.body,
+    players: game.players,
+    getActiveIndex: () => game.activeIndex,
+    undoStack: game.undoStack,
+    sound,
+  });
 
   canvas.style.display = 'block';
 
   const isOverUndoControl = (event: PointerEvent): boolean => game.isOverUndoControl(event.clientX, event.clientY);
+  const isOverShortcutControl = (event: PointerEvent): boolean =>
+    game.isOverShortcutControl(event.clientX, event.clientY);
 
   // Tracks where the current press started so onTap (pointerup) can tell a
   // plain tap from a zone-to-zone drag: released in the same zone (or a
@@ -54,7 +64,7 @@ function startGame(config: GameConfig): void {
 
   const detachGesture = attachTapAndLongPress(canvas, {
     onPressStart: (event) => {
-      if (isOverUndoControl(event)) {
+      if (isOverUndoControl(event) || isOverShortcutControl(event)) {
         pressStart = null;
         return;
       }
@@ -67,6 +77,10 @@ function startGame(config: GameConfig): void {
     onTap: (event) => {
       if (isOverUndoControl(event)) {
         game.onTap(event.clientX, event.clientY);
+        return;
+      }
+      if (isOverShortcutControl(event)) {
+        boardShortcutMenu.open();
         return;
       }
       if (!pressStart) {
@@ -108,6 +122,7 @@ function startGame(config: GameConfig): void {
     cancelAnimationFrame(rafId);
     detachGesture();
     attackMenu.close();
+    boardShortcutMenu.close();
     canvas.style.display = 'none';
   };
 

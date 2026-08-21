@@ -1,0 +1,106 @@
+import { describe, expect, it } from 'vitest';
+import { applyBoardShortcutDelta, BOARD_SHORTCUT_OPTIONS, boardShortcutTargets } from './boardShortcut';
+import type { Player, UndoAction } from './commanderDamage';
+
+function makePlayers(count: number): Player[] {
+  return Array.from({ length: count }, (_, seat) => ({
+    id: `p${seat + 1}`,
+    name: `Player ${seat + 1}`,
+    life: 40,
+  }));
+}
+
+class FakeUndoStack {
+  actions: UndoAction[] = [];
+  push(action: UndoAction): void {
+    this.actions.push(action);
+  }
+  undoLast(): void {
+    this.actions.pop()?.undo();
+  }
+}
+
+describe('BOARD_SHORTCUT_OPTIONS', () => {
+  it('offers exactly the two documented shortcuts', () => {
+    expect(BOARD_SHORTCUT_OPTIONS).toEqual([
+      { scope: 'opponents', label: 'Damage each opponent' },
+      { scope: 'all', label: 'Damage all players' },
+    ]);
+  });
+});
+
+describe('boardShortcutTargets', () => {
+  it.each([3, 4, 5])('excludes only the active player for "opponents" at %i players', (count) => {
+    const players = makePlayers(count);
+    const activeIndex = 1;
+
+    const targets = boardShortcutTargets(players, activeIndex, 'opponents');
+
+    expect(targets.map((player) => player.id)).toEqual(
+      players.filter((_, seat) => seat !== activeIndex).map((player) => player.id),
+    );
+    expect(targets).not.toContainEqual(players[activeIndex]);
+    expect(targets).toHaveLength(count - 1);
+  });
+
+  it.each([3, 4, 5])('includes every player, including the active one, for "all" at %i players', (count) => {
+    const players = makePlayers(count);
+    const activeIndex = 2 % count;
+
+    const targets = boardShortcutTargets(players, activeIndex, 'all');
+
+    expect(targets).toEqual(players);
+    expect(targets).toHaveLength(count);
+  });
+});
+
+describe('applyBoardShortcutDelta', () => {
+  it('applies the delta to every opponent and reverts all of them with a single undo tap', () => {
+    const players = makePlayers(4);
+    const activeIndex = 0;
+    const undoStack = new FakeUndoStack();
+
+    applyBoardShortcutDelta(players, activeIndex, 'opponents', 3, undoStack);
+
+    expect(players.map((player) => player.life)).toEqual([40, 37, 37, 37]);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.undoLast();
+
+    expect(players.map((player) => player.life)).toEqual([40, 40, 40, 40]);
+  });
+
+  it('applies the delta to every player, including the active one, and reverts all with a single undo tap', () => {
+    const players = makePlayers(3);
+    const activeIndex = 1;
+    const undoStack = new FakeUndoStack();
+
+    applyBoardShortcutDelta(players, activeIndex, 'all', 5, undoStack);
+
+    expect(players.map((player) => player.life)).toEqual([35, 35, 35]);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.undoLast();
+
+    expect(players.map((player) => player.life)).toEqual([40, 40, 40]);
+  });
+
+  it('is a no-op for a zero delta', () => {
+    const players = makePlayers(4);
+    const undoStack = new FakeUndoStack();
+
+    applyBoardShortcutDelta(players, 0, 'all', 0, undoStack);
+
+    expect(players.map((player) => player.life)).toEqual([40, 40, 40, 40]);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('applies a negative delta as healing to every affected player', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+
+    applyBoardShortcutDelta(players, 0, 'opponents', -2, undoStack);
+
+    expect(players.map((player) => player.life)).toEqual([40, 42, 42]);
+  });
+});
