@@ -9,7 +9,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 ## Core loop
 1. Host configures the game (player count 3-6, starting life, names/colors) on the setup screen.
 2. The canvas splits into N player zones, each rotated to face that player's seat.
-3. A shared center "pass turn" control shows whose turn it is; long-pressing it advances the active-player highlight clockwise around the table, and the turn counter increments each full lap.
+3. The active player's zone is highlighted with a pulsing border; long-pressing anywhere inside that zone advances the active-player highlight clockwise around the table (with a brief flash animation as the press commits), and the turn counter increments each full lap.
 4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log commander damage or poison dealt in that direction. A drag that starts and ends in the same zone, or that's released outside any player zone, is ignored. This drag gesture is the only way life totals change — tapping a zone does nothing.
 5. Every life, commander-damage, or poison change pushes onto an undo stack; a center undo icon reverts the most recent action ("retour en arrière").
 6. The game ends automatically when only one player remains above 0 life. A stats screen shows total duration, time-per-turn breakdown, most damage dealt/received, biggest single hit, and elimination order.
@@ -17,8 +17,8 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 
 ## Controls (touch-only, one-thumb per player)
 - Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for commander damage and for poison — the only way life totals change; a plain tap on your own zone does nothing
-- Center shared control: long-press (~500ms) = pass turn; a plain tap does nothing
-- Small icon beside the center control: tap = undo last action (dimmed/disabled when nothing to undo)
+- Long-press (~500ms) anywhere inside the active player's own zone = pass turn, with a brief flash animation as it commits; long-pressing a non-active zone does nothing
+- Center shared control: tap = undo last action (dimmed/disabled when nothing to undo)
 - Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a name field to rename via the soft keyboard
 
 ## Layout by player count (portrait canvas, all code-drawn, no external assets)
@@ -26,7 +26,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 - 4 players: 2x2 grid; top row rotated 180°, bottom row upright
 - 5 players: top row = 2 zones rotated 180°, bottom row = 3 zones upright (uneven split, each row sized to fill its half)
 - 6 players: 3x2 grid; top row rotated 180°, bottom row upright
-- A shared circular control disc sits where all zones meet, at the vertical center of the canvas, hosting the pass-turn and undo icons
+- A shared circular control disc sits where all zones meet, at the vertical center of the canvas, hosting the undo icon
 
 ## Scoring / "impact" stats (shown only at game end, never mid-game)
 - Match duration (mm:ss)
@@ -44,8 +44,8 @@ Not applicable in the traditional score-chasing sense — this is a utility, not
 - Dark neutral background (near-black, #121016) so colored player zones pop like felt on a card table
 - Each player zone is assigned one of 6 preset saturated accent colors (crimson, teal, amber, violet, lime, sky), rendered as a soft radial gradient fill
 - Life numbers: huge, bold, centered, drawn with canvas text using a heavy sans stack, white with a subtle drop shadow, rotated 180° for top-row zones so every player reads their own number upright from their seat
-- The active player's zone renders an animated pulsing border (canvas stroke with a sine-driven width/opacity)
-- Center control disc: circular, translucent dark fill, with a hand-drawn arrow icon (pass turn) and a curved-arrow icon (undo) beside it, all vector-drawn with canvas path calls — no icon fonts or bitmap images
+- The active player's zone renders an animated pulsing border (canvas stroke with a sine-driven width/opacity); a long-press that commits a turn pass also plays a brief flash animation on that zone, distinct from the idle pulse
+- Center control disc: circular, translucent dark fill, hosting a curved-arrow icon (undo), vector-drawn with canvas path calls — no icon fonts or bitmap images
 - Stats screen reuses the same dark background and per-player accent colors for its horizontal bar charts, so results are instantly recognizable against the in-game colors
 
 ## Ad monetization potential

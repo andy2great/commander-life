@@ -10,7 +10,7 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
-import { PassTurnControl, UndoControl } from './ui/controls';
+import { UndoControl } from './ui/controls';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 
 export function clamp(value: number, min: number, max: number): number {
@@ -150,6 +150,11 @@ const PULSE_SPEED_RAD_S = 4;
 const PULSE_MIN_WIDTH = 3;
 const PULSE_MAX_WIDTH = 7;
 
+// Brief flash on the active zone the moment a long-press commits the turn
+// pass (issue #64) — distinct from, and layered on top of, the idle pulsing
+// border above.
+const PASS_TURN_FLASH_DURATION_S = 0.35;
+
 class ArrayUndoStack implements UndoStack {
   private readonly actions: UndoAction[] = [];
 
@@ -195,7 +200,6 @@ export interface DragArrowState {
 export class Game {
   readonly playerCount: number;
   private turnState: TurnState = createTurnState();
-  private readonly control = new PassTurnControl();
   private readonly undoControl = new UndoControl();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
@@ -207,6 +211,8 @@ export class Game {
   private canvasHeight = 0;
   private animTime = 0;
   private dragState: DragState | null = null;
+  private passTurnFlashSeatIndex: number | null = null;
+  private passTurnFlashTime = 0;
   private readonly activeTimeList: number[];
   private readonly eliminationOrderList: EliminationEntry[] = [];
   private endedFlag = false;
@@ -287,14 +293,14 @@ export class Game {
     };
   }
 
-  /** True when (x, y) — in the same coordinate space passed to resize — is over the shared center control. */
-  isOverControl(x: number, y: number): boolean {
-    return this.control.containsPoint(x, y);
-  }
-
-  /** True when (x, y) — in the same coordinate space passed to resize — is over the undo icon beside the shared center control. */
+  /** True when (x, y) — in the same coordinate space passed to resize — is over the shared center undo control. */
   isOverUndoControl(x: number, y: number): boolean {
     return this.undoControl.containsPoint(x, y);
+  }
+
+  /** The seat currently playing the turn-pass flash animation (issue #64), or null. */
+  get passTurnFlashSeat(): number | null {
+    return this.passTurnFlashSeatIndex;
   }
 
   /** Reverts the most recent life or commander-damage change. No-op if nothing to undo. */
@@ -313,6 +319,13 @@ export class Game {
 
     this.animTime += dt;
     this.activeTimeList[this.turnState.activeIndex] += dt;
+
+    if (this.passTurnFlashSeatIndex !== null) {
+      this.passTurnFlashTime += dt;
+      if (this.passTurnFlashTime >= PASS_TURN_FLASH_DURATION_S) {
+        this.passTurnFlashSeatIndex = null;
+      }
+    }
   }
 
   /** Recomputes zone and control placement for the current canvas size. Also called by render(). */
@@ -324,7 +337,6 @@ export class Game {
     // height / 2 is exactly the boundary between them — never a zone's own
     // center (where its life total is drawn) — for every player count.
     const controlCenterY = height / 2;
-    this.control.reflow(width, height, controlCenterY);
     this.undoControl.reflow(width, height, controlCenterY);
   }
 
@@ -334,18 +346,12 @@ export class Game {
       return;
     }
 
-    if (this.control.containsPoint(x, y)) {
-      // Tapping the center control no longer passes the turn — a long-press
-      // does instead (see passTurn()), so plain taps here are a no-op.
-      return;
-    }
-
     // Tapping a player's own zone no longer changes life — the zone-to-zone
     // drag → damage-type menu flow (resolveZoneDrag()) is the only way life
     // totals change (issue #54).
   }
 
-  /** Advances the active player, e.g. from a long-press on the shared center control. */
+  /** Advances the active player, e.g. from a long-press on the active player's zone. */
   passTurn(): void {
     const previousTurnState = this.turnState;
     this.turnState = advanceTurn(this.turnState, this.playerCount);
@@ -358,12 +364,30 @@ export class Game {
   }
 
   /**
+   * Long-pressing (~LONG_PRESS_MS) inside the currently active player's own
+   * zone passes the turn and triggers a brief flash animation on that zone
+   * (issue #64, replacing the removed center PassTurnControl). No-op for a
+   * long-press anywhere else — a non-active zone, empty space, or the undo
+   * control.
+   */
+  passTurnFromZoneLongPress(x: number, y: number): void {
+    const playerId = this.onLongPress(x, y);
+    const activeSeat = this.turnState.activeIndex;
+    if (playerId === null || playerId !== this.playersList[activeSeat].id) {
+      return;
+    }
+    this.passTurnFlashSeatIndex = activeSeat;
+    this.passTurnFlashTime = 0;
+    this.passTurn();
+  }
+
+  /**
    * Returns the id of the player zone under (x, y), or null over a shared
    * control or outside any zone. Used both to target a long-press and, by
    * resolveZoneDrag() below, to resolve either end of a zone-to-zone drag.
    */
   onLongPress(x: number, y: number): string | null {
-    if (this.control.containsPoint(x, y) || this.undoControl.containsPoint(x, y)) {
+    if (this.undoControl.containsPoint(x, y)) {
       return null;
     }
     return this.playerIdAt(x, y);
@@ -502,7 +526,6 @@ export class Game {
 
     this.drawZones(ctx);
     this.drawDragArrow(ctx);
-    this.control.draw(ctx);
     this.undoControl.draw(ctx, this.canUndo);
   }
 
@@ -554,7 +577,22 @@ export class Game {
         ctx.strokeStyle = IDLE_ZONE_COLOR;
       }
       ctx.strokeRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
+
+      if (seat === this.passTurnFlashSeatIndex) {
+        this.drawPassTurnFlash(ctx, rect);
+      }
     }
+  }
+
+  /** Brief white flash on a zone the moment its long-press commits the turn pass (issue #64), fading out over PASS_TURN_FLASH_DURATION_S. */
+  private drawPassTurnFlash(ctx: CanvasRenderingContext2D, rect: ZoneRect): void {
+    const progress = clamp(this.passTurnFlashTime / PASS_TURN_FLASH_DURATION_S, 0, 1);
+    const alpha = (1 - progress) * 0.6;
+
+    ctx.save();
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.restore();
   }
 
   /** Draws the live zone-to-zone drag arrow (issue #55), plus a target-zone highlight when the pointer is over a valid target. */

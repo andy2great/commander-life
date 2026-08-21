@@ -41,24 +41,34 @@ describe('docs/concept.md touch-control spec (#40)', () => {
     expect(player.life).toBe(40);
   });
 
-  it('center control: tap no longer passes the turn (issue #48)', () => {
+  it('shared undo control: tap no longer passes the turn (issue #48)', () => {
     const game = new Game();
     game.resize(400, 800);
 
-    expect(game.isOverControl(200, 400)).toBe(true);
+    expect(game.isOverUndoControl(200, 400)).toBe(true);
     game.onTap(200, 400);
 
     expect(game.activeIndex).toBe(0);
   });
 
-  it('center control: long-press passes the turn (issue #48)', () => {
+  it('active player\'s zone: long-press passes the turn (issue #64)', () => {
     const game = new Game();
     game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
 
-    expect(game.isOverControl(200, 400)).toBe(true);
-    game.passTurn();
+    game.passTurnFromZoneLongPress(50, zoneHeight - 10); // seat 0's zone, the active seat
 
     expect(game.activeIndex).toBe(1);
+  });
+
+  it('non-active zone: long-press does not pass the turn (issue #64)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const zoneHeight = 800 / game.playerCount;
+
+    game.passTurnFromZoneLongPress(50, zoneHeight * 2 + 10); // seat 2's zone, not active
+
+    expect(game.activeIndex).toBe(0);
   });
 
   it('zone-to-zone drag: releasing in a different player\'s zone resolves to that attacker/target pair, without changing any totals itself', () => {

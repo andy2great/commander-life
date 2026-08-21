@@ -45,8 +45,7 @@ function startGame(config: GameConfig): void {
 
   canvas.style.display = 'block';
 
-  const isOverAnyControl = (event: PointerEvent): boolean =>
-    game.isOverControl(event.clientX, event.clientY) || game.isOverUndoControl(event.clientX, event.clientY);
+  const isOverUndoControl = (event: PointerEvent): boolean => game.isOverUndoControl(event.clientX, event.clientY);
 
   // Tracks where the current press started so onTap (pointerup) can tell a
   // plain tap from a zone-to-zone drag: released in the same zone (or a
@@ -55,7 +54,7 @@ function startGame(config: GameConfig): void {
 
   const detachGesture = attachTapAndLongPress(canvas, {
     onPressStart: (event) => {
-      if (isOverAnyControl(event)) {
+      if (isOverUndoControl(event)) {
         pressStart = null;
         return;
       }
@@ -66,7 +65,7 @@ function startGame(config: GameConfig): void {
       game.updateDragPointer(event.clientX, event.clientY);
     },
     onTap: (event) => {
-      if (isOverAnyControl(event)) {
+      if (isOverUndoControl(event)) {
         game.onTap(event.clientX, event.clientY);
         return;
       }
@@ -79,13 +78,10 @@ function startGame(config: GameConfig): void {
       }
     },
     onLongPress: (event) => {
-      if (game.isOverControl(event.clientX, event.clientY)) {
-        game.passTurn();
-        return;
-      }
-      // Zone long-presses are a no-op: tapping/holding a player's own zone no
-      // longer changes life (issue #54) — the zone-to-zone drag gesture,
-      // resolved by onTap above on release, is the only way life changes.
+      // Long-pressing the currently active player's zone passes the turn
+      // (issue #64, replacing the removed center PassTurnControl); any other
+      // zone, or a shared control, is a no-op inside passTurnFromZoneLongPress.
+      game.passTurnFromZoneLongPress(event.clientX, event.clientY);
     },
     onPressEnd: () => {
       game.endDrag();
