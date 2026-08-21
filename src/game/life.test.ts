@@ -4,6 +4,7 @@ import type { Player, UndoAction } from './commanderDamage';
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
 import { DAMAGE_EFFECT_COLOR, HEAL_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
+import { createStatsState, createStatsTrigger } from './stats';
 
 class MockSoundPlayer implements SoundPlayer {
   readonly events: SoundEvent[] = [];
@@ -132,6 +133,54 @@ describe('applyDamageDelta', () => {
 
     expect(zoneEffects.calls).toHaveLength(0);
   });
+
+  it('records life lost on the target for a positive delta (issue #98)', () => {
+    const [attacker, target] = makePlayers();
+    const state = createStatsState([attacker.id, target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyDamageDelta(target, 6, new FakeUndoStack(), undefined, undefined, undefined, attacker.id, stats);
+
+    expect(state.lifeLost[target.id]).toBe(6);
+  });
+
+  it('records a biggest-hit candidate attributed to the given attacker id, with no target id (issue #98)', () => {
+    const [attacker, target] = makePlayers();
+    const state = createStatsState([attacker.id, target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyDamageDelta(target, 6, new FakeUndoStack(), undefined, undefined, undefined, attacker.id, stats);
+
+    expect(state.biggestHit).toEqual({ attackerId: attacker.id, amount: 6, targetId: null });
+  });
+
+  it('does not record a hit when no attacker id is given', () => {
+    const [, target] = makePlayers();
+    const state = createStatsState([target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyDamageDelta(target, 6, new FakeUndoStack(), undefined, undefined, undefined, undefined, stats);
+
+    expect(state.biggestHit).toBeNull();
+    expect(state.lifeLost[target.id]).toBe(6);
+  });
+
+  it('does not record stats for a negative (correction) delta', () => {
+    const [attacker, target] = makePlayers();
+    const state = createStatsState([attacker.id, target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyDamageDelta(target, -3, new FakeUndoStack(), undefined, undefined, undefined, attacker.id, stats);
+
+    expect(state.lifeLost[target.id]).toBe(0);
+    expect(state.biggestHit).toBeNull();
+  });
+
+  it('does not require a stats trigger: omitting it never throws', () => {
+    const [, target] = makePlayers();
+
+    expect(() => applyDamageDelta(target, 3, new FakeUndoStack())).not.toThrow();
+  });
 });
 
 describe('applyHealDelta', () => {
@@ -195,6 +244,26 @@ describe('applyHealDelta', () => {
     applyHealDelta(target, -2, undoStack, undefined, zoneEffects);
 
     expect(zoneEffects.calls).toHaveLength(0);
+  });
+
+  it('records life gained on the target for a positive delta (issue #98)', () => {
+    const [, target] = makePlayers();
+    const state = createStatsState([target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyHealDelta(target, 5, new FakeUndoStack(), undefined, undefined, stats);
+
+    expect(state.lifeGained[target.id]).toBe(5);
+  });
+
+  it('does not record stats for a negative (correction) delta', () => {
+    const [, target] = makePlayers();
+    const state = createStatsState([target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyHealDelta(target, -5, new FakeUndoStack(), undefined, undefined, stats);
+
+    expect(state.lifeGained[target.id]).toBe(0);
   });
 });
 
@@ -294,5 +363,29 @@ describe('applyLifelinkDelta', () => {
     applyLifelinkDelta(attacker, target, -2, undoStack, undefined, undefined, zoneEffects);
 
     expect(zoneEffects.calls).toHaveLength(0);
+  });
+
+  it('records life lost on the target, life gained on the attacker, and a biggest-hit candidate for a positive delta (issue #98)', () => {
+    const [attacker, target] = makePlayers();
+    const state = createStatsState([attacker.id, target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyLifelinkDelta(attacker, target, 4, new FakeUndoStack(), undefined, undefined, undefined, stats);
+
+    expect(state.lifeLost[target.id]).toBe(4);
+    expect(state.lifeGained[attacker.id]).toBe(4);
+    expect(state.biggestHit).toEqual({ attackerId: attacker.id, amount: 4, targetId: null });
+  });
+
+  it('does not record stats for a negative delta', () => {
+    const [attacker, target] = makePlayers();
+    const state = createStatsState([attacker.id, target.id]);
+    const stats = createStatsTrigger(state);
+
+    applyLifelinkDelta(attacker, target, -4, new FakeUndoStack(), undefined, undefined, undefined, stats);
+
+    expect(state.lifeLost[target.id]).toBe(0);
+    expect(state.lifeGained[attacker.id]).toBe(0);
+    expect(state.biggestHit).toBeNull();
   });
 });

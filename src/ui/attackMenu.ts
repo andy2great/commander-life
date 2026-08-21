@@ -25,6 +25,7 @@ import { applyPoisonDelta, type PoisonState } from '../game/poison';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger } from '../game/zoneEffect';
+import type { StatsTrigger } from '../game/stats';
 import { attachHoldToRepeat } from './holdToRepeat';
 
 export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison';
@@ -64,6 +65,7 @@ export function buildDamageTypeDefs(
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
   zoneEffects?: ZoneEffectTrigger,
+  stats?: StatsTrigger,
 ): DamageTypeDef[] {
   const localCounts: Partial<Record<DamageTypeKey, number>> = {};
   const localType = (
@@ -91,7 +93,7 @@ export function buildDamageTypeDefs(
 
   const types: DamageTypeDef[] = [
     localType('damage', 'Damage', target.color ?? '#948fa3', (delta) =>
-      applyDamageDelta(target, delta, undoStack, sound, shake, zoneEffects),
+      applyDamageDelta(target, delta, undoStack, sound, shake, zoneEffects, attacker.id, stats),
     ),
   ];
 
@@ -112,18 +114,19 @@ export function buildDamageTypeDefs(
           sound,
           shake,
           zoneEffects,
+          stats,
         ),
     });
     types.push(
       localType('lifelink', 'Lifelink damage', attacker.color ?? '#948fa3', (delta) =>
-        applyLifelinkDelta(attacker, target, delta, undoStack, sound, shake, zoneEffects),
+        applyLifelinkDelta(attacker, target, delta, undoStack, sound, shake, zoneEffects, stats),
       ),
     );
   }
 
   types.push(
     localType('heal', 'Heal', target.color ?? '#948fa3', (delta) =>
-      applyHealDelta(target, delta, undoStack, sound, zoneEffects),
+      applyHealDelta(target, delta, undoStack, sound, zoneEffects, stats),
     ),
   );
 
@@ -187,6 +190,7 @@ export interface AttackMenuOptions {
   sound?: SoundPlayer;
   shake?: ScreenShakeTrigger;
   zoneEffects?: ZoneEffectTrigger;
+  stats?: StatsTrigger;
 }
 
 let stylesInjected = false;
@@ -224,6 +228,7 @@ export class AttackMenu {
   private readonly sound?: SoundPlayer;
   private readonly shake?: ScreenShakeTrigger;
   private readonly zoneEffects?: ZoneEffectTrigger;
+  private readonly stats?: StatsTrigger;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
   private session: AttackMenuSession | null = null;
@@ -237,6 +242,7 @@ export class AttackMenu {
     this.sound = options.sound;
     this.shake = options.shake;
     this.zoneEffects = options.zoneEffects;
+    this.stats = options.stats;
   }
 
   get isOpen(): boolean {
@@ -305,6 +311,7 @@ export class AttackMenu {
       this.sound,
       this.shake,
       this.zoneEffects,
+      this.stats,
     );
     panel.appendChild(this.buildTogglesAndCounter(types));
 

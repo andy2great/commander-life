@@ -10,6 +10,7 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
+import { createStatsState, createStatsTrigger, type BiggestHit, type StatsState, type StatsTrigger } from './game/stats';
 import {
   CONTROL_GAP_RATIO,
   PAUSE_RADIUS_RATIO,
@@ -214,6 +215,16 @@ export interface GameStats {
   /** Seconds each player spent as the active player, keyed by player id. */
   activeTimeS: Record<string, number>;
   eliminationOrder: EliminationEntry[];
+  /** Total life lost per player, from plain damage, lifelink, and healing (issue #98). Keyed by player id. */
+  lifeLost: Record<string, number>;
+  /** Total life gained per player, from plain damage, lifelink, and healing (issue #98). Keyed by player id. */
+  lifeGained: Record<string, number>;
+  /** Total commander damage dealt per player (issue #98). Keyed by player id. */
+  commanderDamageDealt: Record<string, number>;
+  /** Total commander damage received per player (issue #98). Keyed by player id. */
+  commanderDamageReceived: Record<string, number>;
+  /** The single biggest hit of the match, or null if none landed (issue #98). */
+  biggestHit: BiggestHit | null;
 }
 
 // Active zone's pulsing border: sine-driven width/opacity per docs/concept.md.
@@ -296,6 +307,8 @@ export class Game {
   };
   private readonly activeTimeList: number[];
   private readonly eliminationOrderList: EliminationEntry[] = [];
+  private readonly statsState: StatsState;
+  private readonly statsTriggerObj: StatsTrigger;
   private endedFlag = false;
   private winnerId: string | null = null;
   private durationS = 0;
@@ -318,6 +331,8 @@ export class Game {
     this.damage = createCommanderDamageState(this.playersList.map((player) => player.id));
     this.poison = createPoisonState(this.playersList.map((player) => player.id));
     this.activeTimeList = new Array(this.playerCount).fill(0);
+    this.statsState = createStatsState(this.playersList.map((player) => player.id));
+    this.statsTriggerObj = createStatsTrigger(this.statsState);
   }
 
   get activeIndex(): number {
@@ -373,6 +388,11 @@ export class Game {
       durationS: this.durationS,
       activeTimeS,
       eliminationOrder: [...this.eliminationOrderList],
+      lifeLost: { ...this.statsState.lifeLost },
+      lifeGained: { ...this.statsState.lifeGained },
+      commanderDamageDealt: { ...this.statsState.commanderDamageDealt },
+      commanderDamageReceived: { ...this.statsState.commanderDamageReceived },
+      biggestHit: this.statsState.biggestHit ? { ...this.statsState.biggestHit } : null,
     };
   }
 
@@ -429,6 +449,11 @@ export class Game {
   /** `playerId`'s current zone flash, or null when idle; exposed for tests independent of canvas rendering. */
   zoneEffectFor(playerId: string): ZoneEffectRender | null {
     return getZoneEffect(this.zoneEffectState, playerId);
+  }
+
+  /** Records life/commander-damage stats (issue #98); passed to UI menus so damage/heal/lifelink/commander actions accumulate the end-game stats totals. */
+  get statsTrigger(): StatsTrigger {
+    return this.statsTriggerObj;
   }
 
   /** Reverts the most recent life or commander-damage change. No-op if nothing to undo. */

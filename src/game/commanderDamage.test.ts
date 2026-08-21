@@ -8,6 +8,7 @@ import {
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
 import { DAMAGE_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
+import { createStatsState, createStatsTrigger } from './stats';
 
 /** Records every sound-trigger call so tests can assert without a real AudioContext. */
 class MockSoundPlayer implements SoundPlayer {
@@ -238,5 +239,33 @@ describe('applyCommanderDamageDelta', () => {
     applyCommanderDamageDelta(state, players, 'p1', 'p2', -2, undoStack, undefined, undefined, zoneEffects);
 
     expect(zoneEffects.calls).toHaveLength(0);
+  });
+
+  it('records commander damage dealt/received and a biggest-hit candidate with the target set, for an increase (issue #98)', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const statsState = createStatsState(players.map((p) => p.id));
+    const stats = createStatsTrigger(statsState);
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 5, undoStack, undefined, undefined, undefined, stats);
+
+    expect(statsState.commanderDamageDealt.p2).toBe(5);
+    expect(statsState.commanderDamageReceived.p1).toBe(5);
+    expect(statsState.biggestHit).toEqual({ attackerId: 'p2', amount: 5, targetId: 'p1' });
+  });
+
+  it('does not record stats when a clamped decrease applies no actual change', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const statsState = createStatsState(players.map((p) => p.id));
+    const stats = createStatsTrigger(statsState);
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -1, undoStack, undefined, undefined, undefined, stats);
+
+    expect(statsState.commanderDamageDealt.p2).toBe(0);
+    expect(statsState.commanderDamageReceived.p1).toBe(0);
+    expect(statsState.biggestHit).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { createCommanderDamageState, type Player, type UndoAction } from '../gam
 import { createPoisonState } from '../game/poison';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger, ZoneEffectType } from '../game/zoneEffect';
+import { createStatsState, createStatsTrigger } from '../game/stats';
 
 class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
@@ -247,6 +248,75 @@ describe('buildDamageTypeDefs', () => {
       'heal',
       'poison',
     ]);
+  });
+
+  it('attributes damage/commander/lifelink hits to the attacker on stats, but not heal or poison (issue #98)', () => {
+    const [attacker, target] = makePlayers();
+    const statsState = createStatsState([attacker.id, target.id]);
+    const stats = createStatsTrigger(statsState);
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState(['a', 'b']),
+      createPoisonState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+      undefined,
+      undefined,
+      undefined,
+      stats,
+    );
+
+    types.find((type) => type.key === 'damage')!.apply(1);
+    const commander = types.find((type) => type.key === 'commander')!;
+    commander.apply(1);
+    commander.apply(1);
+    const lifelink = types.find((type) => type.key === 'lifelink')!;
+    lifelink.apply(1);
+    lifelink.apply(1);
+    lifelink.apply(1);
+    types.find((type) => type.key === 'heal')!.apply(1);
+    types.find((type) => type.key === 'poison')!.apply(1);
+
+    expect(statsState.lifeLost[target.id]).toBe(4); // 1 plain damage + 3 lifelink
+    expect(statsState.lifeGained[target.id]).toBe(1); // the heal
+    expect(statsState.lifeGained[attacker.id]).toBe(3); // lifelink's attacker-side gain
+    expect(statsState.commanderDamageDealt[attacker.id]).toBe(2);
+    expect(statsState.commanderDamageReceived[target.id]).toBe(2);
+    // Every +1 tap is its own hit; ties keep the first recorded (the plain damage tap).
+    expect(statsState.biggestHit).toEqual({ attackerId: attacker.id, amount: 1, targetId: null });
+  });
+
+  it('attributes a self-target damage hit to the player themself, with no attacker/target distinction', () => {
+    const [attacker] = makePlayers();
+    const statsState = createStatsState([attacker.id]);
+    const stats = createStatsTrigger(statsState);
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState(['a']),
+      createPoisonState(['a']),
+      [attacker],
+      makeUndoStack(),
+      undefined,
+      undefined,
+      undefined,
+      stats,
+    );
+
+    const damage = types.find((type) => type.key === 'damage')!;
+    damage.apply(1);
+    damage.apply(1);
+    damage.apply(1);
+    damage.apply(1);
+    damage.apply(1);
+
+    expect(statsState.lifeLost[attacker.id]).toBe(5);
+    expect(statsState.biggestHit).toEqual({ attackerId: attacker.id, amount: 1, targetId: null });
   });
 });
 

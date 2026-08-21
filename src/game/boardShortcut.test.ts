@@ -3,6 +3,7 @@ import { applyBoardShortcutDelta, BOARD_SHORTCUT_OPTIONS, boardShortcutTargets }
 import type { Player, UndoAction } from './commanderDamage';
 import type { ScreenShakeTrigger } from './screenShake';
 import { DAMAGE_EFFECT_COLOR, HEAL_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
+import { createStatsState, createStatsTrigger } from './stats';
 
 class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
@@ -165,5 +166,31 @@ describe('applyBoardShortcutDelta', () => {
       { playerId: players[1].id, type: 'heal', color: HEAL_EFFECT_COLOR },
       { playerId: players[2].id, type: 'heal', color: HEAL_EFFECT_COLOR },
     ]);
+  });
+
+  it('attributes life-lost/biggest-hit stats to the active player for a positive (damage) delta (issue #98)', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const statsState = createStatsState(players.map((p) => p.id));
+    const stats = createStatsTrigger(statsState);
+
+    applyBoardShortcutDelta(players, 0, 'opponents', 3, undoStack, undefined, undefined, undefined, stats);
+
+    expect(statsState.lifeLost[players[1].id]).toBe(3);
+    expect(statsState.lifeLost[players[2].id]).toBe(3);
+    expect(statsState.biggestHit).toEqual({ attackerId: players[0].id, amount: 3, targetId: null });
+  });
+
+  it('records life gained for the affected players for a negative (healing) delta, without a biggest hit', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const statsState = createStatsState(players.map((p) => p.id));
+    const stats = createStatsTrigger(statsState);
+
+    applyBoardShortcutDelta(players, 0, 'opponents', -2, undoStack, undefined, undefined, undefined, stats);
+
+    expect(statsState.lifeGained[players[1].id]).toBe(2);
+    expect(statsState.lifeGained[players[2].id]).toBe(2);
+    expect(statsState.biggestHit).toBeNull();
   });
 });

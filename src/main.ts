@@ -44,6 +44,7 @@ function startGame(config: GameConfig): void {
     sound,
     shake: game.shakeTrigger,
     zoneEffects: game.zoneEffectTrigger,
+    stats: game.statsTrigger,
   });
   const boardShortcutMenu = new BoardShortcutMenu({
     root: document.body,
@@ -53,6 +54,7 @@ function startGame(config: GameConfig): void {
     sound,
     shake: game.shakeTrigger,
     zoneEffects: game.zoneEffectTrigger,
+    stats: game.statsTrigger,
   });
 
   canvas.style.display = 'block';
