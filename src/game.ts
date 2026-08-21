@@ -11,6 +11,7 @@ import {
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
 import { UndoControl } from './ui/controls';
+import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 
 export function clamp(value: number, min: number, max: number): number {
@@ -393,12 +394,16 @@ export class Game {
    * Resolves a zone-to-zone drag gesture: `from`/`to` are the pointer-down
    * and pointer-up positions, in the same coordinate space as resize().
    * Returns the attacking and target player ids when the press started in
-   * one player's zone and released in a *different* player's zone; returns
-   * null when it starts and ends in the same zone, either end is outside
-   * every zone, or either end is over a shared control. Never itself
-   * changes any life or damage total — the caller applies the confirmed
-   * damage via applyCommanderDamageDelta/applyPoisonDelta once the dragging
-   * player picks a damage type.
+   * one player's zone and released in a different player's zone, or a
+   * self-target pair (both ids equal) when it started and released in the
+   * *same* zone after moving past LONG_PRESS_MOVE_TOLERANCE_PX (issue #70)
+   * — this is what lets a player log self-damage/healing/poison. Returns
+   * null for a same-zone press that never moved past that threshold (a
+   * plain tap, which does nothing), when either end is outside every zone,
+   * or when either end is over a shared control. Never itself changes any
+   * life or damage total — the caller applies the confirmed damage via
+   * applyCommanderDamageDelta/applyPoisonDelta once the dragging player
+   * picks a damage type.
    */
   resolveZoneDrag(
     fromX: number,
@@ -408,7 +413,10 @@ export class Game {
   ): { fromPlayerId: string; toPlayerId: string } | null {
     const fromPlayerId = this.onLongPress(fromX, fromY);
     const toPlayerId = this.onLongPress(toX, toY);
-    if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) {
+    if (!fromPlayerId || !toPlayerId) {
+      return null;
+    }
+    if (fromPlayerId === toPlayerId && Math.hypot(toX - fromX, toY - fromY) <= LONG_PRESS_MOVE_TOLERANCE_PX) {
       return null;
     }
     return { fromPlayerId, toPlayerId };

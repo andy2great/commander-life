@@ -70,7 +70,14 @@ export class AttackMenu {
     return this.overlay !== null;
   }
 
-  /** Opens the damage-type menu for a drag from `fromId`'s zone into `toId`'s zone. */
+  /**
+   * Opens the damage-type menu for a drag from `fromId`'s zone into `toId`'s
+   * zone. `fromId === toId` (issue #70) opens a self-target menu instead:
+   * the commander-damage and lifelink rows are omitted (both are meaningless
+   * against yourself, and applyCommanderDamageDelta/applyLifelinkDelta
+   * no-op for a self pair anyway), and the title shows the player's name
+   * once with a "(self)" label instead of the usual attacker → target pair.
+   */
   open(fromId: string, toId: string): void {
     injectStylesOnce();
     this.close();
@@ -80,6 +87,7 @@ export class AttackMenu {
     if (!attacker || !target) {
       return;
     }
+    const isSelfTarget = fromId === toId;
 
     const overlay = document.createElement('div');
     overlay.className = 'cmdr-atk-overlay';
@@ -100,7 +108,7 @@ export class AttackMenu {
     const title = document.createElement('div');
     title.className = 'cmdr-atk-title';
     title.style.color = targetColor;
-    title.textContent = `${attacker.name} → ${target.name}`;
+    title.textContent = isSelfTarget ? `${target.name} (self)` : `${attacker.name} → ${target.name}`;
     const closeButton = document.createElement('button');
     closeButton.type = 'button';
     closeButton.className = 'cmdr-atk-close';
@@ -114,8 +122,10 @@ export class AttackMenu {
     panel.appendChild(head);
 
     panel.appendChild(this.buildDamageRow(target));
-    panel.appendChild(this.buildCommanderDamageRow(attacker, target));
-    panel.appendChild(this.buildLifelinkRow(attacker, target));
+    if (!isSelfTarget) {
+      panel.appendChild(this.buildCommanderDamageRow(attacker, target));
+      panel.appendChild(this.buildLifelinkRow(attacker, target));
+    }
     panel.appendChild(this.buildHealRow(target));
     panel.appendChild(this.buildPoisonRow(target));
 

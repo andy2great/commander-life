@@ -360,12 +360,38 @@ describe('Game', () => {
       expect(game.damageState[game.players[2].id][game.players[0].id]).toBe(0);
     });
 
-    it('returns null when the drag starts and ends in the same zone', () => {
+    it('resolves a drag that starts and ends in the same zone as a self-target pair once past the move tolerance (issue #70)', () => {
       const game = new Game();
       game.resize(400, 800);
       const zoneHeight = 800 / game.playerCount;
+      const player = game.players[0];
 
-      expect(game.resolveZoneDrag(50, 10, 70, zoneHeight - 10)).toBeNull();
+      const drag = game.resolveZoneDrag(50, 10, 70, zoneHeight - 10);
+
+      expect(drag).toEqual({ fromPlayerId: player.id, toPlayerId: player.id });
+    });
+
+    it('returns null for a same-zone press that never moved past the long-press tolerance, i.e. a plain tap (issue #70)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      expect(game.resolveZoneDrag(50, 10, 55, 15)).toBeNull(); // dx=5, dy=5, well under the 10px tolerance
+    });
+
+    it('applying commander damage to a resolved self-target pair leaves life and commander-damage state untouched (issue #70)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const player = game.players[0];
+      const lifeBefore = player.life;
+
+      const drag = game.resolveZoneDrag(50, 10, 70, zoneHeight - 10);
+      expect(drag).not.toBeNull();
+
+      dealDamage(game, drag!.fromPlayerId, drag!.toPlayerId, 3);
+
+      expect(player.life).toBe(lifeBefore);
+      expect(game.damageState[player.id][player.id]).toBeUndefined();
     });
 
     it('returns null when either end is outside every player zone', () => {

@@ -83,13 +83,24 @@ describe('docs/concept.md touch-control spec (#40)', () => {
     expect(game.players.map((player) => player.life)).toEqual(livesBefore);
   });
 
-  it('zone-to-zone drag: starting and ending in the same zone opens no menu and changes nothing', () => {
+  it('zone-to-zone drag: starting and ending in the same zone past the move tolerance opens a self-target menu, without changing any totals itself (issue #70)', () => {
     const game = new Game();
     game.resize(400, 800);
     const zoneHeight = 800 / game.playerCount;
     const livesBefore = game.players.map((player) => player.life);
 
     const drag = game.resolveZoneDrag(50, 10, 60, zoneHeight - 10);
+
+    expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[0].id });
+    expect(game.players.map((player) => player.life)).toEqual(livesBefore);
+  });
+
+  it('zone-to-zone drag: a same-zone press that never moves past the tolerance is a plain tap, opening no menu (issue #70)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const livesBefore = game.players.map((player) => player.life);
+
+    const drag = game.resolveZoneDrag(50, 10, 55, 15); // dx=5, dy=5, well under the 10px tolerance
 
     expect(drag).toBeNull();
     expect(game.players.map((player) => player.life)).toEqual(livesBefore);
