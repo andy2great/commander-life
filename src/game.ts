@@ -27,15 +27,6 @@ const ACTIVE_ZONE_COLOR_RGB = '91, 140, 255';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
 const BACKGROUND_COLOR = '#121016';
 
-// Half-boundary affordance (issue #32): a subtle dividing line at the tap
-// boundary plus persistent +/- glyphs, so each zone shows before any tap
-// which half adds life and which removes it. The divider line is symmetric
-// under a 180° turn so it stays put, but the +/- glyphs swap ends for a
-// rotated (top-row) zone, mirroring zoneAt()'s rotation-aware half split
-// below, so + always sits on that seat's own perceived "upper" side.
-const HALF_DIVIDER_COLOR = 'rgba(255, 255, 255, 0.35)';
-const HALF_GLYPH_BADGE_COLOR = 'rgba(0, 0, 0, 0.38)';
-
 export const MIN_PLAYER_COUNT = 3;
 export const MAX_PLAYER_COUNT = 6;
 export const DEFAULT_PLAYER_COUNT = 4;
@@ -128,34 +119,6 @@ const PULSE_SPEED_RAD_S = 4;
 const PULSE_MIN_WIDTH = 3;
 const PULSE_MAX_WIDTH = 7;
 
-// Tap-and-hold ramp: repeated ticks start after RAMP_DELAY_S of holding, then
-// speed up from RAMP_START_INTERVAL_S down to RAMP_MIN_INTERVAL_S per docs/concept.md.
-export const RAMP_DELAY_S = 0.6;
-const RAMP_START_INTERVAL_S = 0.2;
-const RAMP_MIN_INTERVAL_S = 0.05;
-const RAMP_ACCEL_S = 1;
-
-// Delta popup: floats upward and fades out over ~500ms using eased alpha, per docs/concept.md.
-const POPUP_DURATION_S = 0.5;
-const POPUP_RISE_PX = 46;
-
-interface HoldState {
-  playerId: string;
-  delta: 1 | -1;
-  heldFor: number;
-  sinceLastTick: number;
-  /** Number of applyLifeDelta calls made by this hold so far (initial tap + each ramp tick), each of which pushed one undo-stack entry; lets cancelTap() pop exactly those entries to fully and cleanly revert a long hold. */
-  pushCount: number;
-}
-
-interface DeltaPopup {
-  playerId: string;
-  x: number;
-  y: number;
-  delta: number;
-  age: number;
-}
-
 class ArrayUndoStack implements UndoStack {
   private readonly actions: UndoAction[] = [];
 
@@ -189,11 +152,9 @@ export class Game {
   private readonly poison: PoisonState;
   private readonly sound: SoundPlayer;
   private readonly stack = new ArrayUndoStack();
-  private readonly popupsList: DeltaPopup[] = [];
   private zoneRects: ZoneRect[] = [];
   private canvasWidth = 0;
   private canvasHeight = 0;
-  private hold: HoldState | undefined;
   private animTime = 0;
   private readonly activeTimeList: number[];
   private readonly eliminationOrderList: EliminationEntry[] = [];
@@ -241,10 +202,6 @@ export class Game {
 
   get undoStack(): UndoStack {
     return this.stack;
-  }
-
-  get popups(): DeltaPopup[] {
-    return this.popupsList;
   }
 
   /** True when there is at least one action to undo. */
@@ -327,36 +284,6 @@ export class Game {
 
     this.animTime += dt;
     this.activeTimeList[this.turnState.activeIndex] += dt;
-
-    for (let i = this.popupsList.length - 1; i >= 0; i -= 1) {
-      this.popupsList[i].age += dt;
-      if (this.popupsList[i].age >= POPUP_DURATION_S) {
-        this.popupsList.splice(i, 1);
-      }
-    }
-
-    if (!this.hold) {
-      return;
-    }
-
-    this.hold.heldFor += dt;
-    if (this.hold.heldFor < RAMP_DELAY_S) {
-      return;
-    }
-
-    this.hold.sinceLastTick += dt;
-    const rampElapsed = this.hold.heldFor - RAMP_DELAY_S;
-    const interval = Math.max(
-      RAMP_MIN_INTERVAL_S,
-      RAMP_START_INTERVAL_S -
-        (RAMP_START_INTERVAL_S - RAMP_MIN_INTERVAL_S) * Math.min(1, rampElapsed / RAMP_ACCEL_S),
-    );
-
-    while (this.hold.sinceLastTick >= interval) {
-      this.hold.sinceLastTick -= interval;
-      this.applyLifeDelta(this.hold.playerId, this.hold.delta);
-      this.hold.pushCount += 1;
-    }
   }
 
   /** Recomputes zone and control placement for the current canvas size. Also called by render(). */
@@ -393,15 +320,9 @@ export class Game {
       return;
     }
 
-    const zone = this.zoneAt(x, y);
-    if (!zone) {
-      return;
-    }
-
-    const delta = zone.half === 'upper' ? 1 : -1;
-    this.applyLifeDelta(zone.playerId, delta);
-    this.popupsList.push({ playerId: zone.playerId, x, y, delta, age: 0 });
-    this.hold = { playerId: zone.playerId, delta, heldFor: 0, sinceLastTick: 0, pushCount: 1 };
+    // Tapping a player's own zone no longer changes life — the zone-to-zone
+    // drag → damage-type menu flow (resolveZoneDrag()) is the only way life
+    // totals change (issue #54).
   }
 
   /** Advances the active player, e.g. from a long-press on the shared center control. */
@@ -414,37 +335,6 @@ export class Game {
         this.turnState = previousTurnState;
       },
     });
-  }
-
-  /** Call on pointerup/pointercancel/pointerleave to stop any in-progress ramp. */
-  onTapEnd(): void {
-    this.hold = undefined;
-  }
-
-  /**
-   * Reverts the life change from the current zone tap and disarms its ramp.
-   * Call when a drag or a control action on the same press supersedes the
-   * paired tap (e.g. before opening the commander-damage panel, or before a
-   * release lands on a shared control), so the tap that had to fire on
-   * pointerdown to support tap-and-hold ramping leaves no trace — including
-   * on the undo stack, so a follow-up undo() still targets whatever action
-   * actually precedes it rather than this reverted tap. No-op if the current
-   * press isn't a zone hold.
-   */
-  cancelTap(): void {
-    if (!this.hold) {
-      return;
-    }
-    const { playerId, delta, pushCount } = this.hold;
-    this.hold = undefined;
-    for (let i = 0; i < pushCount; i += 1) {
-      this.stack.undo();
-    }
-    this.checkEndConditions();
-    const lastPopup = this.popupsList[this.popupsList.length - 1];
-    if (lastPopup && lastPopup.playerId === playerId && lastPopup.delta === delta) {
-      this.popupsList.pop();
-    }
   }
 
   /**
@@ -498,38 +388,6 @@ export class Game {
     return this.playersList[seat].id;
   }
 
-  /** Returns the player zone and which half (x, y) falls in, or null outside any zone. */
-  private zoneAt(x: number, y: number): { playerId: string; half: 'upper' | 'lower' } | null {
-    const seat = this.seatAt(x, y);
-    if (seat === -1) {
-      return null;
-    }
-    const rect = this.zoneRects[seat];
-    const offsetInZone = y - rect.y;
-    const nearRectStart = offsetInZone < rect.height / 2;
-    // Top-row zones render rotated 180° to face that seat, so the small-offset
-    // side of the rect (physically closest to the top edge of the phone) is
-    // that player's own perceived "lower" half, the opposite of a bottom-row
-    // (upright) zone where the small-offset side is their perceived "upper".
-    const half = nearRectStart !== rect.rotated ? 'upper' : 'lower';
-    return { playerId: this.playersList[seat].id, half };
-  }
-
-  private applyLifeDelta(playerId: string, delta: number): void {
-    const player = this.playersList.find((candidate) => candidate.id === playerId);
-    if (!player) {
-      return;
-    }
-    player.life += delta;
-    this.sound.play(delta > 0 ? 'lifeUp' : 'lifeDown');
-    this.stack.push({
-      undo(): void {
-        player.life -= delta;
-      },
-    });
-    this.checkEndConditions();
-  }
-
   /** True once a player's life is at or below 0, or their poison counter has reached the lethal threshold. */
   private isEliminated(player: Player): boolean {
     return player.life <= 0 || (this.poison[player.id] ?? 0) >= POISON_LETHAL;
@@ -577,39 +435,9 @@ export class Game {
     ctx.clearRect(0, 0, width, height);
 
     this.drawZones(ctx);
-    this.drawPopups(ctx);
     this.control.draw(ctx);
     this.undoControl.draw(ctx, this.canUndo);
     this.endControl.draw(ctx);
-  }
-
-  private drawPopups(ctx: CanvasRenderingContext2D): void {
-    for (const popup of this.popupsList) {
-      const seat = this.playersList.findIndex((player) => player.id === popup.playerId);
-      const rect = this.zoneRects[seat];
-      if (!rect) {
-        continue;
-      }
-      const progress = clamp(popup.age / POPUP_DURATION_S, 0, 1);
-      const eased = 1 - (1 - progress) * (1 - progress);
-      const shortSide = Math.min(rect.width, rect.height);
-
-      ctx.save();
-      ctx.translate(popup.x, popup.y);
-      if (rect.rotated) {
-        ctx.rotate(Math.PI);
-      }
-      ctx.globalAlpha = 1 - eased;
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetY = 2;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `800 ${Math.round(shortSide * 0.16)}px "Arial Black", system-ui, sans-serif`;
-      ctx.fillText(popup.delta > 0 ? `+${popup.delta}` : `${popup.delta}`, 0, -POPUP_RISE_PX * eased);
-      ctx.restore();
-    }
   }
 
   private drawZones(ctx: CanvasRenderingContext2D): void {
@@ -626,8 +454,6 @@ export class Game {
       gradient.addColorStop(1, BACKGROUND_COLOR);
       ctx.fillStyle = gradient;
       ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-
-      this.drawHalfAffordance(ctx, rect);
 
       ctx.save();
       ctx.translate(cx, cy);
@@ -663,48 +489,5 @@ export class Game {
       }
       ctx.strokeRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
     }
-  }
-
-  /** Draws the always-visible +/- half-boundary affordance for one zone. See HALF_DIVIDER_COLOR above. */
-  private drawHalfAffordance(ctx: CanvasRenderingContext2D, rect: ZoneRect): void {
-    const midY = rect.y + rect.height / 2;
-    const cx = rect.x + rect.width / 2;
-
-    ctx.save();
-    ctx.strokeStyle = HALF_DIVIDER_COLOR;
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 4;
-    ctx.beginPath();
-    ctx.moveTo(rect.x, midY);
-    ctx.lineTo(rect.x + rect.width, midY);
-    ctx.stroke();
-    ctx.restore();
-
-    const shortSide = Math.min(rect.width, rect.height);
-    const glyphSize = Math.max(14, Math.round(shortSide * 0.1));
-    const margin = Math.max(glyphSize * 1.3, rect.height * 0.12);
-    const plusY = rect.rotated ? rect.y + rect.height - margin : rect.y + margin;
-    const minusY = rect.rotated ? rect.y + margin : rect.y + rect.height - margin;
-    this.drawHalfGlyph(ctx, '+', cx, plusY, glyphSize);
-    this.drawHalfGlyph(ctx, '−', cx, minusY, glyphSize);
-  }
-
-  /** Draws one +/- glyph on a small translucent badge for contrast against any of the 6 accent colors. */
-  private drawHalfGlyph(ctx: CanvasRenderingContext2D, glyph: string, x: number, y: number, size: number): void {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, size * 0.62, 0, Math.PI * 2);
-    ctx.fillStyle = HALF_GLYPH_BADGE_COLOR;
-    ctx.fill();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 4;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `800 ${size}px "Arial Black", system-ui, sans-serif`;
-    ctx.fillText(glyph, x, y);
-    ctx.restore();
   }
 }

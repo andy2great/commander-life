@@ -6,7 +6,7 @@
 // values is a deliberate, visible edit here rather than an incidental side
 // effect elsewhere.
 import { describe, expect, it } from 'vitest';
-import { Game, RAMP_DELAY_S, computeZoneRects } from './game';
+import { Game, computeZoneRects } from './game';
 import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO, UndoControl } from './ui/controls';
 import { LONG_PRESS_MS } from './ui/damagePanel';
 
@@ -32,22 +32,18 @@ function createFakeCtx(): CanvasRenderingContext2D {
 }
 
 describe('docs/concept.md touch-control spec (#40)', () => {
-  it('ramps tap-and-hold starting after ~600ms, per "tap-and-hold ramps continuously, accelerating after ~600ms"', () => {
-    expect(RAMP_DELAY_S).toBe(0.6);
-  });
-
   it('resolves the long-press/drag gesture threshold at ~500ms, per "Long-press own zone (~500ms)"', () => {
     expect(LONG_PRESS_MS).toBe(500);
   });
 
-  it('tap upper half of own zone: +1 life; tap lower half: -1 life', () => {
+  it('tapping either half of own zone changes nothing, per "a plain tap on your own zone does nothing" (issue #54)', () => {
     const game = new Game();
     game.resize(400, 800);
     const player = game.players[2];
     const rect = computeZoneRects(game.playerCount, 400, 800)[2];
 
     game.onTap(rect.x + 10, rect.y + 10); // upper half
-    expect(player.life).toBe(41);
+    expect(player.life).toBe(40);
 
     game.onTap(rect.x + 10, rect.y + rect.height - 10); // lower half
     expect(player.life).toBe(40);

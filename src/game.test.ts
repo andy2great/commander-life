@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Game, RAMP_DELAY_S, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
+import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
+import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyPoisonDelta } from './game/poison';
 import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
@@ -10,6 +11,11 @@ class MockSoundPlayer implements SoundPlayer {
   play(event: SoundEvent): void {
     this.events.push(event);
   }
+}
+
+/** Deals commander damage from one player to another — the only sanctioned way life changes (issue #54). */
+function dealDamage(game: Game, fromId: string, toId: string, amount: number, sound?: SoundPlayer): void {
+  applyCommanderDamageDelta(game.damageState, game.players, toId, fromId, amount, game.undoStack, sound);
 }
 
 /** Mirrors UndoControl's reflow math so tests can tap the icon by coordinate. */
@@ -125,48 +131,30 @@ describe('Game', () => {
     expect(game.onLongPress(200, 400)).toBeNull();
   });
 
-  it('increments life when the upper half of a bottom-row (non-rotated) zone is tapped', () => {
+  it('does not change life when the upper or lower half of a bottom-row (non-rotated) zone is tapped (issue #54)', () => {
     const game = new Game();
     game.resize(400, 800);
     const player = game.players[2];
     const rect = computeZoneRects(game.playerCount, 400, 800)[2];
 
-    game.onTap(rect.x + 10, rect.y + 10); // near the row divider: away from this seat's body = upper
+    game.onTap(rect.x + 10, rect.y + 10); // upper half
+    expect(player.life).toBe(40);
 
-    expect(player.life).toBe(41);
+    game.onTap(rect.x + 10, rect.y + rect.height - 10); // lower half
+    expect(player.life).toBe(40);
   });
 
-  it('decrements life when the lower half of a bottom-row (non-rotated) zone is tapped', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const player = game.players[2];
-    const rect = computeZoneRects(game.playerCount, 400, 800)[2];
-
-    game.onTap(rect.x + 10, rect.y + rect.height - 10); // near the phone's bottom edge: this seat's own body = lower
-
-    expect(player.life).toBe(39);
-  });
-
-  it('increments life when the upper half of a top-row (rotated) zone is tapped', () => {
+  it('does not change life when the upper or lower half of a top-row (rotated) zone is tapped (issue #54)', () => {
     const game = new Game();
     game.resize(400, 800);
     const player = game.players[0];
     const rect = computeZoneRects(game.playerCount, 400, 800)[0];
 
-    game.onTap(rect.x + 10, rect.y + rect.height - 10); // near the row divider: away from this seat's body = upper
+    game.onTap(rect.x + 10, rect.y + rect.height - 10); // upper half
+    expect(player.life).toBe(40);
 
-    expect(player.life).toBe(41);
-  });
-
-  it('decrements life when the lower half of a top-row (rotated) zone is tapped', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const player = game.players[0];
-    const rect = computeZoneRects(game.playerCount, 400, 800)[0];
-
-    game.onTap(rect.x + 10, rect.y + 10); // near the phone's top edge: this seat's own body = lower
-
-    expect(player.life).toBe(39);
+    game.onTap(rect.x + 10, rect.y + 10); // lower half
+    expect(player.life).toBe(40);
   });
 
   it('does not change any life total or active player when tapping the shared center control', () => {
@@ -202,38 +190,34 @@ describe('Game', () => {
     const game = new Game();
     game.resize(400, 800);
     const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
+    const attackerId = game.players[1].id;
 
-    game.onTap(50, zoneHeight + 10); // life: 40 -> 41
-    game.onTapEnd();
+    dealDamage(game, attackerId, player.id, 1); // life: 40 -> 39
     game.passTurn(); // pass turn: activeIndex 0 -> 1
-    game.onTap(50, zoneHeight + 10); // life: 41 -> 42
-    game.onTapEnd();
+    dealDamage(game, attackerId, player.id, 1); // life: 39 -> 38
 
-    expect(player.life).toBe(42);
+    expect(player.life).toBe(38);
     expect(game.activeIndex).toBe(1);
 
-    game.undo(); // reverts life: 42 -> 41
-    expect(player.life).toBe(41);
+    game.undo(); // reverts life: 38 -> 39
+    expect(player.life).toBe(39);
     expect(game.activeIndex).toBe(1);
 
     game.undo(); // reverts turn pass: activeIndex 1 -> 0
-    expect(player.life).toBe(41);
+    expect(player.life).toBe(39);
     expect(game.activeIndex).toBe(0);
 
-    game.undo(); // reverts life: 41 -> 40
+    game.undo(); // reverts life: 39 -> 40
     expect(player.life).toBe(40);
     expect(game.activeIndex).toBe(0);
   });
 
-  it('pushes an undo action onto the shared stack that reverts a zone life change', () => {
+  it('pushes an undo action onto the shared stack that reverts a commander-damage life change', () => {
     const game = new Game();
-    game.resize(400, 800);
     const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight + 10);
-    expect(player.life).toBe(41);
+    dealDamage(game, game.players[1].id, player.id, 1);
+    expect(player.life).toBe(39);
 
     const stack = game.undoStack as unknown as { actions: { undo(): void }[] };
     stack.actions[stack.actions.length - 1].undo();
@@ -243,14 +227,12 @@ describe('Game', () => {
 
   it('reports canUndo and reverts the most recent life change via undo()', () => {
     const game = new Game();
-    game.resize(400, 800);
     const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
 
     expect(game.canUndo).toBe(false);
 
-    game.onTap(50, zoneHeight + 10);
-    expect(player.life).toBe(41);
+    dealDamage(game, game.players[1].id, player.id, 1);
+    expect(player.life).toBe(39);
     expect(game.canUndo).toBe(true);
 
     game.undo();
@@ -261,18 +243,15 @@ describe('Game', () => {
 
   it('undoes multiple changes in last-in-first-out order', () => {
     const game = new Game();
-    game.resize(400, 800);
     const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
+    const attackerId = game.players[1].id;
 
-    game.onTap(50, zoneHeight + 10); // +1
-    game.onTapEnd();
-    game.onTap(50, zoneHeight + 10); // +1
-    game.onTapEnd();
-    expect(player.life).toBe(42);
+    dealDamage(game, attackerId, player.id, 1); // -1
+    dealDamage(game, attackerId, player.id, 1); // -1
+    expect(player.life).toBe(38);
 
     game.undo();
-    expect(player.life).toBe(41);
+    expect(player.life).toBe(39);
 
     game.undo();
     expect(player.life).toBe(40);
@@ -291,7 +270,6 @@ describe('Game', () => {
     const game = new Game();
     game.resize(400, 800);
     const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
     const undoCenter = undoControlCenter(400, 800);
 
     expect(game.isOverUndoControl(undoCenter.x, undoCenter.y)).toBe(true);
@@ -300,8 +278,8 @@ describe('Game', () => {
     game.onTap(undoCenter.x, undoCenter.y);
     expect(player.life).toBe(40);
 
-    game.onTap(50, zoneHeight + 10);
-    expect(player.life).toBe(41);
+    dealDamage(game, game.players[1].id, player.id, 1);
+    expect(player.life).toBe(39);
 
     game.onTap(undoCenter.x, undoCenter.y);
     expect(player.life).toBe(40);
@@ -381,189 +359,16 @@ describe('Game', () => {
     });
   });
 
-  describe('drag release onto a shared control (PR #53 review)', () => {
-    // main.ts applies a zone tap optimistically on pointerdown (so a held
-    // press can ramp), then reverts it with cancelTap() if the press
-    // resolves as something other than a plain zone tap — a zone-to-zone
-    // drag, or (per this fix) a release over a shared control. This mirrors
-    // main.ts's onTap(pointerup) handler for the isOverAnyControl branch:
-    // cancelTap() runs before the control's own action.
-    function simulatePressReleasedOverControl(
-      game: Game,
-      press: { x: number; y: number },
-      release: { x: number; y: number },
-    ): void {
-      game.onTap(press.x, press.y); // onPressStart's optimistic zone tap
-      game.cancelTap(); // main.ts's onTap handler reverts it first
-      game.onTap(release.x, release.y); // then runs the control's action
-      game.onTapEnd();
-    }
-
-    it('leaves life and popups untouched when a drag from a zone releases on the center control', () => {
-      const game = new Game();
-      game.resize(400, 800);
-      const zoneHeight = 800 / game.playerCount;
-      const livesBefore = game.players.map((player) => player.life);
-
-      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, { x: 200, y: 400 });
-
-      expect(game.players.map((player) => player.life)).toEqual(livesBefore);
-      expect(game.popups).toHaveLength(0);
-    });
-
-    it('leaves life and the game unended when a drag from a zone releases on the end-game icon (a genuine tap there no longer ends the game either, issue #56)', () => {
-      const game = new Game();
-      game.resize(400, 800);
-      const zoneHeight = 800 / game.playerCount;
-      const livesBefore = game.players.map((player) => player.life);
-      const endCenter = endControlCenter(400, 800);
-
-      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, endCenter);
-
-      expect(game.players.map((player) => player.life)).toEqual(livesBefore);
-      expect(game.ended).toBe(false);
-    });
-
-    it('leaves life untouched, and does not silently consume an unrelated undo, when a drag from a zone releases on the undo icon', () => {
-      const game = new Game();
-      game.resize(400, 800);
-      const zoneHeight = 800 / game.playerCount;
-      const undoCenter = undoControlCenter(400, 800);
-
-      // An unrelated action already sits on top of the undo stack.
-      game.passTurn();
-      const activeIndexBeforeUndo = game.activeIndex;
-
-      simulatePressReleasedOverControl(game, { x: 50, y: zoneHeight + 10 }, undoCenter);
-
-      expect(game.players[0].life).toBe(40);
-      // The undo icon undoes the real last action (the turn pass), not a
-      // pending zone tap that happened to also be sitting on the stack.
-      expect(game.activeIndex).not.toBe(activeIndexBeforeUndo);
-    });
-  });
-
-  it('cancelTap fully reverts a hold even after the ramp has ticked (needed so a slow zone-to-zone drag leaves no residual life change)', () => {
+  it('leaves life unchanged when a zone is tapped, even right before a release over a shared control (issue #54)', () => {
     const game = new Game();
     game.resize(400, 800);
-    const player = game.players[0];
     const zoneHeight = 800 / game.playerCount;
-
-    game.onTap(50, zoneHeight + 10); // life: 40 -> 41
-    game.update(RAMP_DELAY_S + 0.25); // ramp ticks at least once more
-    expect(player.life).toBeGreaterThan(41);
-
-    game.cancelTap();
-
-    expect(player.life).toBe(40);
-    expect(game.popups).toHaveLength(0);
-  });
-
-  it('ramps repeated life changes while a zone tap is held, accelerating after ~600ms', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
-
-    game.onTap(50, zoneHeight + 10);
-    expect(player.life).toBe(41);
-
-    game.update(0.3);
-    expect(player.life).toBe(41);
-
-    game.update(0.4);
-    const afterRampStarts = player.life;
-    expect(afterRampStarts).toBeGreaterThan(41);
-
-    game.update(0.5);
-    expect(player.life).toBeGreaterThan(afterRampStarts);
-
-    game.onTapEnd();
-    const afterRelease = player.life;
-    game.update(1);
-    expect(player.life).toBe(afterRelease);
-  });
-
-  it('cancelTap reverts the zone life change and popup, and disarms the ramp', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const player = game.players[0];
-    const zoneHeight = 800 / game.playerCount;
-
-    game.onTap(50, zoneHeight + 10);
-    expect(player.life).toBe(41);
-    expect(game.popups).toHaveLength(1);
-
-    game.cancelTap();
-    expect(player.life).toBe(40);
-    expect(game.popups).toHaveLength(0);
-
-    game.update(1);
-    expect(player.life).toBe(40);
-  });
-
-  it('cancelTap is a no-op when no zone tap is currently held', () => {
-    const game = new Game();
-    game.resize(400, 800);
     const livesBefore = game.players.map((player) => player.life);
 
-    game.cancelTap();
+    game.onTap(50, zoneHeight + 10); // tap a player's own zone
+    game.onTap(200, 400); // release over the shared center control
 
     expect(game.players.map((player) => player.life)).toEqual(livesBefore);
-  });
-
-  it('spawns a delta popup at the tap location when a zone tap changes life', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const zoneHeight = 800 / game.playerCount;
-
-    game.onTap(50, zoneHeight + 10);
-
-    expect(game.popups).toHaveLength(1);
-    expect(game.popups[0]).toMatchObject({
-      playerId: game.players[0].id,
-      x: 50,
-      y: zoneHeight + 10,
-      delta: 1,
-    });
-  });
-
-  it('does not spawn a popup when tapping the shared center control', () => {
-    const game = new Game();
-    game.resize(400, 800);
-
-    game.onTap(200, 400);
-
-    expect(game.popups).toHaveLength(0);
-  });
-
-  it('fades a popup out and removes it after ~500ms', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const zoneHeight = 800 / game.playerCount;
-
-    game.onTap(50, zoneHeight + 10);
-    expect(game.popups).toHaveLength(1);
-
-    game.update(0.4);
-    expect(game.popups).toHaveLength(1);
-
-    game.update(0.2);
-    expect(game.popups).toHaveLength(0);
-  });
-
-  it('supports multiple concurrent popups from rapid taps without error', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const zoneHeight = 800 / game.playerCount;
-
-    game.onTap(50, zoneHeight + 10);
-    game.onTapEnd();
-    game.onTap(60, zoneHeight - 10);
-    game.onTapEnd();
-
-    expect(game.popups).toHaveLength(2);
-    expect(() => game.update(0.016)).not.toThrow();
   });
 
   it('launches with the configured player count, starting life, names, and colors', () => {
@@ -594,7 +399,7 @@ describe('Game', () => {
   });
 
   it.each([3, 4, 5, 6])(
-    'keeps the shared control off every zone center in a %i-player game, so taps there still reach that zone',
+    'keeps the shared control off every zone center in a %i-player game',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
       const width = 400;
@@ -602,59 +407,55 @@ describe('Game', () => {
       game.resize(width, height);
       const rects = computeZoneRects(playerCount, width, height);
 
-      rects.forEach((rect, seat) => {
+      rects.forEach((rect) => {
         const centerX = rect.x + rect.width / 2;
         const centerY = rect.y + rect.height / 2;
 
         expect(game.isOverControl(centerX, centerY)).toBe(false);
-
-        const player = game.players[seat];
-        const lifeBefore = player.life;
-        // 1px toward this zone's own top edge from center: for a bottom-row
-        // (upright) zone that's away from the seat's body = upper = +1; for a
-        // top-row (rotated) zone that's near the seat's own body = lower = -1.
-        game.onTap(centerX, centerY - 1);
-        expect(player.life).toBe(lifeBefore + (rect.rotated ? -1 : 1));
       });
     },
   );
 
-  it.each([3, 4, 5, 6])('lays out %i players in the table-like grid from docs/concept.md', (playerCount) => {
-    const game = new Game({ playerCount, startingLife: 40, players: [] });
-    game.resize(400, 900);
-    const rects = computeZoneRects(playerCount, 400, 900);
+  it.each([3, 4, 5, 6])(
+    'lays out %i players in the table-like grid from docs/concept.md, and tapping either half changes nothing (issue #54)',
+    (playerCount) => {
+      const game = new Game({ playerCount, startingLife: 40, players: [] });
+      game.resize(400, 900);
+      const rects = computeZoneRects(playerCount, 400, 900);
 
-    rects.forEach((rect, seat) => {
-      // Each zone's own upper half increments and lower half decrements, from
-      // that seat's own seated orientation: for a top-row (rotated) zone the
-      // near-to-body (small canvas-offset) side is that seat's lower half,
-      // the opposite of a bottom-row (upright) zone. Taps land a quarter-
-      // height into each half, well clear of the shared control disc that
-      // sits where the two rows meet.
-      const player = game.players[seat];
-      const nearBodyDelta = rect.rotated ? -1 : 1;
+      rects.forEach((rect, seat) => {
+        const player = game.players[seat];
 
-      game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.25);
-      expect(player.life).toBe(40 + nearBodyDelta);
+        game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.25);
+        expect(player.life).toBe(40);
 
-      game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.75);
-      expect(player.life).toBe(40);
-    });
-  });
+        game.onTap(rect.x + rect.width / 2, rect.y + rect.height * 0.75);
+        expect(player.life).toBe(40);
+      });
+    },
+  );
 });
 
 describe('sound triggers', () => {
-  it('plays lifeUp on increment and lifeDown on decrement, distinguishing direction', () => {
+  it('plays no sound when a player\'s own zone is tapped (issue #54)', () => {
     const sound = new MockSoundPlayer();
     const game = new Game(undefined, sound);
     game.resize(400, 800);
     const zoneHeight = 800 / game.playerCount;
 
-    game.onTap(50, zoneHeight + 10); // upper half: +1
-    expect(sound.events).toEqual(['lifeUp']);
+    game.onTap(50, zoneHeight + 10); // upper half
+    game.onTap(50, 10); // lower half
 
-    game.onTap(50, 10); // lower half (near this rotated seat's own body): -1
-    expect(sound.events).toEqual(['lifeUp', 'lifeDown']);
+    expect(sound.events).toEqual([]);
+  });
+
+  it('plays commanderDamageUp when commander damage is dealt via the zone-to-zone drag flow', () => {
+    const sound = new MockSoundPlayer();
+    const game = new Game(undefined, sound);
+
+    dealDamage(game, game.players[1].id, game.players[0].id, 1, sound);
+
+    expect(sound.events).toEqual(['commanderDamageUp']);
   });
 
   it('plays turnPass when passTurn() is called (e.g. long-pressing the shared center control)', () => {
@@ -680,10 +481,9 @@ describe('sound triggers', () => {
   it('plays eliminate exactly once when a player newly drops out, not again on later frames', () => {
     const sound = new MockSoundPlayer();
     const game = new Game({ playerCount: 3, startingLife: 1, players: [] }, sound);
-    game.resize(400, 900);
-    const rects = computeZoneRects(3, 400, 900);
 
-    game.onTap(rects[0].x + 50, rects[0].y + 10); // Alara: 1 -> 0
+    dealDamage(game, game.players[1].id, game.players[0].id, 1); // Alara: 1 -> 0
+    game.update(0.016); // checkEndConditions runs every frame; commander damage changes bypass Game directly
 
     expect(sound.events.filter((event) => event === 'eliminate')).toHaveLength(1);
 
@@ -741,13 +541,14 @@ describe('end of game', () => {
 
   it('ends automatically when only one player remains above 0 life, recording elimination order', () => {
     const game = makeThreePlayerGame(1);
-    game.resize(400, 900);
-    const rects = computeZoneRects(3, 400, 900);
+    const yorion = game.players[2];
 
-    game.onTap(rects[0].x + 50, rects[0].y + 10); // Alara: 1 -> 0 (lower half, near this rotated seat's own body)
+    dealDamage(game, yorion.id, game.players[0].id, 1); // Alara: 1 -> 0
+    game.update(0.016); // checkEndConditions runs every frame; commander damage changes bypass Game directly
     expect(game.ended).toBe(false);
 
-    game.onTap(rects[1].x + 50, rects[1].y + rects[1].height - 10); // Kess: 1 -> 0 (lower half), only Yorion remains
+    dealDamage(game, yorion.id, game.players[1].id, 1); // Kess: 1 -> 0, only Yorion remains
+    game.update(0.016);
     expect(game.ended).toBe(true);
 
     expect(game.stats?.winnerId).toBe(game.players[2].id);
@@ -806,13 +607,13 @@ describe('end of game', () => {
 
   it('drops a player from eliminationOrder once undo restores their life above 0', () => {
     const game = makeThreePlayerGame(1);
-    game.resize(400, 900);
-    const rects = computeZoneRects(3, 400, 900);
 
-    game.onTap(rects[0].x + 50, rects[0].y + 10); // Alara: 1 -> 0, recorded as eliminated
+    dealDamage(game, game.players[2].id, game.players[0].id, 1); // Alara: 1 -> 0
+    game.update(0.016); // checkEndConditions runs every frame; commander damage changes bypass Game directly
     expect(game.stats).toBeNull();
 
     game.undo(); // Alara: 0 -> 1
+    game.update(0.016);
 
     game.endGame();
 
@@ -823,14 +624,16 @@ describe('end of game', () => {
 
   it('ends manually via endGame, picking the highest-life player as winner', () => {
     const game = makeThreePlayerGame(40);
-    game.resize(400, 900);
+    const alara = game.players[0];
 
-    game.onTap(50, 310); // Alara upper half (rotated seat, large canvas offset): 40 -> 41
+    // Alara deals commander damage to the other two, leaving her strictly highest.
+    dealDamage(game, alara.id, game.players[1].id, 1); // Kess: 40 -> 39
+    dealDamage(game, alara.id, game.players[2].id, 1); // Yorion: 40 -> 39
 
     game.endGame();
 
     expect(game.ended).toBe(true);
-    expect(game.stats?.winnerId).toBe(game.players[0].id);
+    expect(game.stats?.winnerId).toBe(alara.id);
   });
 
   it('is a no-op to end an already-ended game', () => {
@@ -845,15 +648,15 @@ describe('end of game', () => {
 
   it('accumulates time-as-active-player and freezes match duration once ended', () => {
     const game = makeThreePlayerGame(1);
-    game.resize(400, 900);
-    const rects = computeZoneRects(3, 400, 900);
+    const yorion = game.players[2];
 
     game.update(2); // Alara active for 2s
     game.passTurn(); // pass turn to Kess
     game.update(3); // Kess active for 3s
 
-    game.onTap(rects[0].x + 50, rects[0].y + 10); // eliminate Alara
-    game.onTap(rects[1].x + 50, rects[1].y + rects[1].height - 10); // eliminate Kess, Yorion wins
+    dealDamage(game, yorion.id, game.players[0].id, 1); // eliminate Alara
+    dealDamage(game, yorion.id, game.players[1].id, 1); // eliminate Kess, Yorion wins
+    game.update(0); // checkEndConditions runs every frame; commander damage changes bypass Game directly. dt=0 keeps duration exact.
 
     const stats = game.stats;
     expect(stats).not.toBeNull();
