@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDamageTypeDefs } from './attackMenu';
+import { buildDamageTypeDefs, createAttackMenuSession } from './attackMenu';
 import { createCommanderDamageState, type Player, type UndoAction } from '../game/commanderDamage';
 import { createPoisonState } from '../game/poison';
 import type { ScreenShakeTrigger } from '../game/screenShake';
@@ -247,5 +247,73 @@ describe('buildDamageTypeDefs', () => {
       'heal',
       'poison',
     ]);
+  });
+});
+
+describe('createAttackMenuSession', () => {
+  it('collects every stepper tap made during a session into a single undo entry, across damage types (issue #94)', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = makeUndoStack();
+    const session = createAttackMenuSession(undoStack);
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState(['a', 'b']),
+      createPoisonState(['a', 'b']),
+      [attacker, target],
+      session.undoStack,
+    );
+
+    types.find((type) => type.key === 'damage')!.apply(1);
+    types.find((type) => type.key === 'damage')!.apply(1);
+    types.find((type) => type.key === 'heal')!.apply(1);
+    expect(target.life).toBe(39);
+    expect(undoStack.actions).toHaveLength(0);
+
+    session.commit();
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.actions[0].undo();
+    expect(target.life).toBe(40);
+  });
+
+  it('does not push anything onto the real undo stack when no taps were made', () => {
+    const undoStack = makeUndoStack();
+    const session = createAttackMenuSession(undoStack);
+
+    session.commit();
+
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('starts a fresh batch after committing, so a later session commits separately', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = makeUndoStack();
+    const session = createAttackMenuSession(undoStack);
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState(['a', 'b']),
+      createPoisonState(['a', 'b']),
+      [attacker, target],
+      session.undoStack,
+    );
+
+    types.find((type) => type.key === 'damage')!.apply(1);
+    session.commit();
+    types.find((type) => type.key === 'damage')!.apply(1);
+    session.commit();
+
+    expect(undoStack.actions).toHaveLength(2);
+    expect(target.life).toBe(38);
+
+    undoStack.actions[1].undo();
+    expect(target.life).toBe(39);
+    undoStack.actions[0].undo();
+    expect(target.life).toBe(40);
   });
 });
