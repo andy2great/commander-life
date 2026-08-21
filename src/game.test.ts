@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyPoisonDelta } from './game/poison';
-import { RADIUS_RATIO, UNDO_GAP_RATIO, UNDO_RADIUS_RATIO } from './ui/controls';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
 
 /** Records every sound-trigger call so tests can assert on game events without a real AudioContext. */
@@ -18,12 +17,9 @@ function dealDamage(game: Game, fromId: string, toId: string, amount: number, so
   applyCommanderDamageDelta(game.damageState, game.players, toId, fromId, amount, game.undoStack, sound);
 }
 
-/** Mirrors UndoControl's reflow math so tests can tap the icon by coordinate. */
+/** Mirrors UndoControl's reflow math (it's the sole occupant of the shared disc, issue #64) so tests can tap the icon by coordinate. */
 function undoControlCenter(width: number, height: number): { x: number; y: number } {
-  const shortSide = Math.min(width, height);
-  const mainRadius = shortSide * RADIUS_RATIO;
-  const undoRadius = shortSide * UNDO_RADIUS_RATIO;
-  return { x: width / 2 + mainRadius + shortSide * UNDO_GAP_RATIO + undoRadius, y: height / 2 };
+  return { x: width / 2, y: height / 2 };
 }
 
 describe('clamp', () => {
@@ -41,23 +37,13 @@ describe('clamp', () => {
 });
 
 describe('Game', () => {
-  it('advances the active player when passTurn() is called (e.g. long-pressing the center control)', () => {
+  it('advances the active player when passTurn() is called (e.g. long-pressing the active player\'s zone)', () => {
     const game = new Game();
     game.resize(400, 800);
 
     game.passTurn();
 
     expect(game.activeIndex).toBe(1);
-  });
-
-  it('no longer advances the active player on a plain tap of the center control (issue #48)', () => {
-    const game = new Game();
-    game.resize(400, 800);
-
-    expect(game.isOverControl(200, 400)).toBe(true);
-    game.onTap(200, 400);
-
-    expect(game.activeIndex).toBe(0);
   });
 
   it('ignores taps outside the control', () => {
@@ -116,11 +102,83 @@ describe('Game', () => {
     expect(playerId).toBe(game.players[2].id);
   });
 
-  it('ignores long-presses over the shared center control', () => {
+  it('ignores long-presses over the shared undo control', () => {
     const game = new Game();
     game.resize(400, 800);
 
     expect(game.onLongPress(200, 400)).toBeNull();
+  });
+
+  describe('passTurnFromZoneLongPress (issue #64)', () => {
+    it('passes the turn when the active player\'s own zone is long-pressed', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.passTurnFromZoneLongPress(50, zoneHeight - 10); // seat 0's zone, the active seat
+
+      expect(game.activeIndex).toBe(1);
+    });
+
+    it('does not pass the turn when a non-active player\'s zone is long-pressed', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.passTurnFromZoneLongPress(50, zoneHeight * 2 + 10); // seat 2's zone, not active
+
+      expect(game.activeIndex).toBe(0);
+    });
+
+    it('does not pass the turn when the long-press lands outside any zone (e.g. the shared undo control)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.passTurnFromZoneLongPress(200, 400);
+
+      expect(game.activeIndex).toBe(0);
+    });
+
+    it('wraps and increments the turn counter once per lap, same as passTurn()', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+      const rects = computeZoneRects(game.playerCount, 400, 800);
+
+      for (let i = 0; i < game.playerCount; i += 1) {
+        const rect = rects[game.activeIndex];
+        game.passTurnFromZoneLongPress(rect.x + 10, rect.y + Math.min(rect.height - 10, zoneHeight - 10));
+      }
+
+      expect(game.activeIndex).toBe(0);
+      expect(game.turnCount).toBe(1);
+    });
+
+    it('starts a brief flash animation on the zone that committed the pass, clearing after it finishes', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      expect(game.passTurnFlashSeat).toBeNull();
+
+      game.passTurnFromZoneLongPress(50, zoneHeight - 10);
+
+      expect(game.passTurnFlashSeat).toBe(0);
+
+      game.update(1); // well past the flash duration
+
+      expect(game.passTurnFlashSeat).toBeNull();
+    });
+
+    it('does not start a flash animation when the long-press does not commit a turn pass', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.passTurnFromZoneLongPress(50, zoneHeight * 2 + 10); // non-active zone
+
+      expect(game.passTurnFlashSeat).toBeNull();
+    });
   });
 
   it('does not change life when the upper or lower half of a bottom-row (non-rotated) zone is tapped (issue #54)', () => {
@@ -470,7 +528,7 @@ describe('Game', () => {
   });
 
   it.each([3, 4, 5, 6])(
-    'keeps the shared control off every zone center in a %i-player game',
+    'keeps the shared undo control off every zone center in a %i-player game',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
       const width = 400;
@@ -482,7 +540,7 @@ describe('Game', () => {
         const centerX = rect.x + rect.width / 2;
         const centerY = rect.y + rect.height / 2;
 
-        expect(game.isOverControl(centerX, centerY)).toBe(false);
+        expect(game.isOverUndoControl(centerX, centerY)).toBe(false);
       });
     },
   );
@@ -529,7 +587,7 @@ describe('sound triggers', () => {
     expect(sound.events).toEqual(['commanderDamageUp']);
   });
 
-  it('plays turnPass when passTurn() is called (e.g. long-pressing the shared center control)', () => {
+  it('plays turnPass when passTurn() is called (e.g. long-pressing the active player\'s zone)', () => {
     const sound = new MockSoundPlayer();
     const game = new Game(undefined, sound);
     game.resize(400, 800);
@@ -601,15 +659,15 @@ describe('end of game', () => {
     expect(game.stats).toBeNull();
   });
 
-  it('reports whether a point is over the shared center control', () => {
+  it('reports whether a point is over the shared undo control', () => {
     const game = makeThreePlayerGame(40);
     game.resize(400, 900);
 
     // The grid is always two rows filling half the canvas height each, so
     // the control sits at the boundary between them (450) for every player
     // count. See Game.resize().
-    expect(game.isOverControl(200, 450)).toBe(true);
-    expect(game.isOverControl(0, 0)).toBe(false);
+    expect(game.isOverUndoControl(200, 450)).toBe(true);
+    expect(game.isOverUndoControl(0, 0)).toBe(false);
   });
 
   it('ends automatically when only one player remains above 0 life, recording elimination order', () => {
