@@ -128,6 +128,26 @@ export function computeOverlaySafeArea(width: number, height: number): OverlaySa
   return { maxHeight: isLandscape ? height * OVERLAY_LANDSCAPE_MAX_HEIGHT_RATIO : height };
 }
 
+/**
+ * Picks which viewport size `computeOverlaySafeArea` should size DOM
+ * overlays against (issue #114): `window.innerWidth`/`innerHeight` (the
+ * layout viewport) doesn't shrink when the on-screen keyboard opens on
+ * mobile, so a bottom-pinned button like the setup screen's "Start Game"
+ * CTA could be sized/positioned below the actually visible/tappable area.
+ * `window.visualViewport`, when available, does shrink for the keyboard, so
+ * it's preferred whenever present.
+ */
+export function resolveOverlayViewportSize(
+  layoutWidth: number,
+  layoutHeight: number,
+  visualViewport: { width: number; height: number } | null | undefined,
+): { width: number; height: number } {
+  if (visualViewport) {
+    return { width: visualViewport.width, height: visualViewport.height };
+  }
+  return { width: layoutWidth, height: layoutHeight };
+}
+
 export interface ZoneRect {
   x: number;
   y: number;

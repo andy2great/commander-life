@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
+import { Game, clamp, computeOverlaySafeArea, computeZoneRects, resolveOverlayViewportSize } from './game';
 import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS } from './ui/damagePanel';
 import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
@@ -1216,6 +1216,29 @@ describe('computeOverlaySafeArea', () => {
 
   it('treats a square canvas as portrait (unconstrained)', () => {
     expect(computeOverlaySafeArea(500, 500).maxHeight).toBe(500);
+  });
+});
+
+// Issue #114: the setup screen's "Start Game" CTA is pinned to the bottom of
+// an overlay sized off computeOverlaySafeArea. Sizing that off the layout
+// viewport alone (window.innerWidth/innerHeight) ignores the on-screen
+// keyboard shrinking the *visible* viewport, so the CTA could end up
+// rendered below the visible/tappable area while a player name field is
+// focused. resolveOverlayViewportSize is what main.ts calls before
+// computeOverlaySafeArea to prefer the (keyboard-aware) visual viewport.
+describe('resolveOverlayViewportSize (issue #114)', () => {
+  it('falls back to the layout viewport when there is no visual viewport', () => {
+    expect(resolveOverlayViewportSize(400, 800, null)).toEqual({ width: 400, height: 800 });
+    expect(resolveOverlayViewportSize(400, 800, undefined)).toEqual({ width: 400, height: 800 });
+  });
+
+  it('prefers the visual viewport size when present, e.g. shrunk by an open soft keyboard', () => {
+    // Layout viewport stays 400x800 while the keyboard covers ~40% of it.
+    const shrunkByKeyboard = resolveOverlayViewportSize(400, 800, { width: 400, height: 480 });
+    expect(shrunkByKeyboard).toEqual({ width: 400, height: 480 });
+
+    const { maxHeight } = computeOverlaySafeArea(shrunkByKeyboard.width, shrunkByKeyboard.height);
+    expect(maxHeight).toBe(480); // overlay (and its bottom-pinned CTA) now fits above the keyboard
   });
 });
 

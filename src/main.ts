@@ -1,4 +1,4 @@
-import { computeOverlaySafeArea, Game, type GameConfig } from './game';
+import { computeOverlaySafeArea, Game, resolveOverlayViewportSize, type GameConfig } from './game';
 import { attachTapAndLongPress } from './ui/damagePanel';
 import { AttackMenu } from './ui/attackMenu';
 import { BoardShortcutMenu } from './ui/boardShortcutMenu';
@@ -20,11 +20,19 @@ function resize(): void {
   // Drives the --overlay-max-h CSS var read by setupScreen/attackMenu/
   // statsScreen so they can't grow taller than the (possibly short,
   // landscape) viewport and bury the game behind them. See issue #45.
-  const { maxHeight } = computeOverlaySafeArea(window.innerWidth, window.innerHeight);
+  // Prefers the visual viewport (issue #114) so overlays shrink above the
+  // on-screen keyboard instead of sizing off the full layout viewport,
+  // which would push a bottom-pinned button (e.g. the setup screen's
+  // "Start Game" CTA) below the visible/tappable area.
+  const { width, height } = resolveOverlayViewportSize(window.innerWidth, window.innerHeight, window.visualViewport);
+  const { maxHeight } = computeOverlaySafeArea(width, height);
   document.documentElement.style.setProperty('--overlay-max-h', `${maxHeight}px`);
 }
 
 window.addEventListener('resize', resize);
+// iOS Safari doesn't fire `resize` on `window` when the on-screen keyboard
+// opens/closes — only on `visualViewport` (issue #114).
+window.visualViewport?.addEventListener('resize', resize);
 resize();
 
 // Detaches the previous game's listeners and animation loop, e.g. when
