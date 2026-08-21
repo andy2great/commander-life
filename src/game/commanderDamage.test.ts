@@ -7,6 +7,7 @@ import {
 } from './commanderDamage';
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
+import { DAMAGE_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
 
 /** Records every sound-trigger call so tests can assert without a real AudioContext. */
 class MockSoundPlayer implements SoundPlayer {
@@ -20,6 +21,13 @@ class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
   trigger(intensity: number): void {
     this.intensities.push(intensity);
+  }
+}
+
+class MockZoneEffects implements ZoneEffectTrigger {
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string): void {
+    this.calls.push({ playerId, type, color });
   }
 }
 
@@ -195,5 +203,40 @@ describe('applyCommanderDamageDelta', () => {
     applyCommanderDamageDelta(state, players, 'p1', 'p2', -1, undoStack, undefined, shake);
 
     expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('triggers a zone effect on the target, colored with the attacking commander\'s own accent color (issue #89)', () => {
+    const players = makePlayers();
+    players[1].color = '#8b5cf6';
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack, undefined, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'commanderDamage', color: '#8b5cf6' }]);
+  });
+
+  it('falls back to the plain damage color when the attacker has no accent color set', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack, undefined, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'commanderDamage', color: DAMAGE_EFFECT_COLOR }]);
+  });
+
+  it('does not trigger a zone effect for a decrease', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 5, undoStack);
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', -2, undoStack, undefined, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toHaveLength(0);
   });
 });

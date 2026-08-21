@@ -4,6 +4,7 @@
 
 import type { SoundPlayer } from '../audio/soundPlayer';
 import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
+import { DAMAGE_EFFECT_COLOR, type ZoneEffectTrigger } from './zoneEffect';
 
 export interface Player {
   id: string;
@@ -43,7 +44,10 @@ export function createCommanderDamageState(playerIds: string[]): CommanderDamage
  * reverts both changes onto `undoStack`. Plays a distinct increment/decrement
  * cue on `sound`, if given, only when the clamped change actually applies.
  * Triggers `shake` (issue #88) only when the clamped change is an increase —
- * an actual damage tick.
+ * an actual damage tick. Triggers `zoneEffects` (issue #89) on `targetId`'s
+ * zone under the same condition, colored with the attacking `fromId`
+ * player's own accent color where set (falling back to the plain damage
+ * color otherwise), so the flash reads as "damage from that commander".
  */
 export function applyCommanderDamageDelta(
   state: CommanderDamageState,
@@ -54,6 +58,7 @@ export function applyCommanderDamageDelta(
   undoStack: UndoStack,
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
+  zoneEffects?: ZoneEffectTrigger,
 ): void {
   if (targetId === fromId || delta === 0) {
     return;
@@ -76,6 +81,8 @@ export function applyCommanderDamageDelta(
   sound?.play(applied > 0 ? 'commanderDamageUp' : 'commanderDamageDown');
   if (applied > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+    const attacker = players.find((player) => player.id === fromId);
+    zoneEffects?.trigger(targetId, 'commanderDamage', attacker?.color ?? DAMAGE_EFFECT_COLOR);
   }
 
   undoStack.push({

@@ -2,11 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { applyPoisonDelta, createPoisonState, type PoisonState } from './poison';
 import type { UndoAction } from './commanderDamage';
 import type { ScreenShakeTrigger } from './screenShake';
+import { POISON_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
 
 class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
   trigger(intensity: number): void {
     this.intensities.push(intensity);
+  }
+}
+
+class MockZoneEffects implements ZoneEffectTrigger {
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string): void {
+    this.calls.push({ playerId, type, color });
   }
 }
 
@@ -112,5 +120,26 @@ describe('applyPoisonDelta', () => {
     applyPoisonDelta(state, 'p1', -1, undoStack, shake);
 
     expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('triggers a zone effect on the player for a poison increase (issue #89)', () => {
+    const state: PoisonState = createPoisonState(['p1']);
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyPoisonDelta(state, 'p1', 2, undoStack, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'poison', color: POISON_EFFECT_COLOR }]);
+  });
+
+  it('does not trigger a zone effect for a decrease', () => {
+    const state: PoisonState = createPoisonState(['p1']);
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyPoisonDelta(state, 'p1', 5, undoStack);
+    applyPoisonDelta(state, 'p1', -2, undoStack, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toHaveLength(0);
   });
 });

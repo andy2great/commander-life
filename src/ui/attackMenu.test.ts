@@ -3,11 +3,19 @@ import { buildDamageTypeDefs } from './attackMenu';
 import { createCommanderDamageState, type Player, type UndoAction } from '../game/commanderDamage';
 import { createPoisonState } from '../game/poison';
 import type { ScreenShakeTrigger } from '../game/screenShake';
+import type { ZoneEffectTrigger, ZoneEffectType } from '../game/zoneEffect';
 
 class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
   trigger(intensity: number): void {
     this.intensities.push(intensity);
+  }
+}
+
+class MockZoneEffects implements ZoneEffectTrigger {
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string): void {
+    this.calls.push({ playerId, type, color });
   }
 }
 
@@ -208,5 +216,36 @@ describe('buildDamageTypeDefs', () => {
 
     types.find((type) => type.key === 'heal')!.apply(1);
     expect(shake.intensities).toHaveLength(4);
+  });
+
+  it('triggers a distinct-per-type zone effect for every damage type, including heal, from both AttackMenu paths (issue #89)', () => {
+    const [attacker, target] = makePlayers();
+    const zoneEffects = new MockZoneEffects();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState(['a', 'b']),
+      createPoisonState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+      undefined,
+      undefined,
+      zoneEffects,
+    );
+
+    for (const key of ['damage', 'commander', 'lifelink', 'heal', 'poison'] as const) {
+      types.find((type) => type.key === key)!.apply(1);
+    }
+
+    expect(zoneEffects.calls.map((call) => call.type)).toEqual([
+      'damage',
+      'commanderDamage',
+      'damage', // lifelink's target-side flash
+      'heal', // lifelink's attacker-side flash
+      'heal',
+      'poison',
+    ]);
   });
 });
