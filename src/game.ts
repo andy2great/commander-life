@@ -22,6 +22,15 @@ import {
   type ScreenShakeState,
   type ScreenShakeTrigger,
 } from './game/screenShake';
+import {
+  createZoneEffectState,
+  getZoneEffect,
+  triggerZoneEffect,
+  updateZoneEffects,
+  type ZoneEffectRender,
+  type ZoneEffectState,
+  type ZoneEffectTrigger,
+} from './game/zoneEffect';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -264,6 +273,10 @@ export class Game {
   private readonly shakeTriggerObj: ScreenShakeTrigger = {
     trigger: (intensity) => triggerScreenShake(this.shakeState, intensity),
   };
+  private readonly zoneEffectState: ZoneEffectState = createZoneEffectState();
+  private readonly zoneEffectTriggerObj: ZoneEffectTrigger = {
+    trigger: (playerId, type, color) => triggerZoneEffect(this.zoneEffectState, playerId, type, color),
+  };
   private readonly activeTimeList: number[];
   private readonly eliminationOrderList: EliminationEntry[] = [];
   private endedFlag = false;
@@ -369,6 +382,16 @@ export class Game {
     return this.shakeState.trauma;
   }
 
+  /** Triggers a per-zone visual effect (issue #89); passed to UI menus so damage/heal/poison/commander actions flash the affected zone(s). */
+  get zoneEffectTrigger(): ZoneEffectTrigger {
+    return this.zoneEffectTriggerObj;
+  }
+
+  /** `playerId`'s current zone flash, or null when idle; exposed for tests independent of canvas rendering. */
+  zoneEffectFor(playerId: string): ZoneEffectRender | null {
+    return getZoneEffect(this.zoneEffectState, playerId);
+  }
+
   /** Reverts the most recent life or commander-damage change. No-op if nothing to undo. */
   undo(): void {
     this.stack.undo();
@@ -386,6 +409,7 @@ export class Game {
     this.animTime += dt;
     this.activeTimeList[this.turnState.activeIndex] += dt;
     updateScreenShake(this.shakeState, dt);
+    updateZoneEffects(this.zoneEffectState, dt);
 
     if (this.passTurnFlashSeatIndex !== null) {
       this.passTurnFlashTime += dt;
@@ -683,6 +707,11 @@ export class Game {
       if (seat === this.passTurnFlashSeatIndex) {
         this.drawPassTurnFlash(ctx, rect);
       }
+
+      const zoneEffect = getZoneEffect(this.zoneEffectState, player.id);
+      if (zoneEffect) {
+        this.drawZoneEffect(ctx, rect, zoneEffect);
+      }
     }
   }
 
@@ -693,6 +722,22 @@ export class Game {
 
     ctx.save();
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.restore();
+  }
+
+  /**
+   * Brief colored flash on a zone confirming a life/counter change landed
+   * (issue #89), fading out over ZONE_EFFECT_DURATION_S. `effect.color`
+   * varies per action type (see src/game/zoneEffect.ts) so damage, heal,
+   * poison, and commander damage read as visually distinct.
+   */
+  private drawZoneEffect(ctx: CanvasRenderingContext2D, rect: ZoneRect, effect: ZoneEffectRender): void {
+    const alpha = (1 - effect.progress) * 0.55;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = effect.color;
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     ctx.restore();
   }

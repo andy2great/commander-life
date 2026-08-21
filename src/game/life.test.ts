@@ -3,6 +3,7 @@ import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './life';
 import type { Player, UndoAction } from './commanderDamage';
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
+import { DAMAGE_EFFECT_COLOR, HEAL_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
 
 class MockSoundPlayer implements SoundPlayer {
   readonly events: SoundEvent[] = [];
@@ -15,6 +16,13 @@ class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
   trigger(intensity: number): void {
     this.intensities.push(intensity);
+  }
+}
+
+class MockZoneEffects implements ZoneEffectTrigger {
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string): void {
+    this.calls.push({ playerId, type, color });
   }
 }
 
@@ -104,6 +112,26 @@ describe('applyDamageDelta', () => {
 
     expect(() => applyDamageDelta(target, 3, undoStack)).not.toThrow();
   });
+
+  it('triggers a zone effect on the target for a positive (damage) delta (issue #89)', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyDamageDelta(target, 3, undoStack, undefined, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toEqual([{ playerId: target.id, type: 'damage', color: DAMAGE_EFFECT_COLOR }]);
+  });
+
+  it('does not trigger a zone effect for a negative delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyDamageDelta(target, -1, undoStack, undefined, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toHaveLength(0);
+  });
 });
 
 describe('applyHealDelta', () => {
@@ -147,6 +175,26 @@ describe('applyHealDelta', () => {
 
     expect(target.life).toBe(40);
     expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('triggers a zone effect on the target for a positive (heal) delta (issue #89)', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyHealDelta(target, 4, undoStack, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toEqual([{ playerId: target.id, type: 'heal', color: HEAL_EFFECT_COLOR }]);
+  });
+
+  it('does not trigger a zone effect for a negative delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyHealDelta(target, -2, undoStack, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toHaveLength(0);
   });
 });
 
@@ -223,5 +271,28 @@ describe('applyLifelinkDelta', () => {
     applyLifelinkDelta(attacker, target, -2, undoStack, undefined, shake);
 
     expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('triggers a damage zone effect on the target and a heal zone effect on the attacker for a positive delta (issue #89)', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyLifelinkDelta(attacker, target, 4, undoStack, undefined, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toEqual([
+      { playerId: target.id, type: 'damage', color: DAMAGE_EFFECT_COLOR },
+      { playerId: attacker.id, type: 'heal', color: HEAL_EFFECT_COLOR },
+    ]);
+  });
+
+  it('does not trigger a zone effect for a negative delta', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const zoneEffects = new MockZoneEffects();
+
+    applyLifelinkDelta(attacker, target, -2, undoStack, undefined, undefined, zoneEffects);
+
+    expect(zoneEffects.calls).toHaveLength(0);
   });
 });

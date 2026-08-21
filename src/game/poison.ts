@@ -4,6 +4,7 @@
 
 import type { UndoStack } from './commanderDamage';
 import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
+import { POISON_EFFECT_COLOR, type ZoneEffectTrigger } from './zoneEffect';
 
 /** state[playerId] = poison counters that player has accumulated. */
 export type PoisonState = Record<string, number>;
@@ -22,7 +23,7 @@ export function createPoisonState(playerIds: string[]): PoisonState {
 /**
  * Adjusts `playerId`'s poison counter by `delta`, clamped at zero. Pushes an
  * undo action that reverts it onto `undoStack`. Triggers `shake` (issue #88)
- * only when the clamped change is an increase.
+ * and `zoneEffects` (issue #89) only when the clamped change is an increase.
  */
 export function applyPoisonDelta(
   state: PoisonState,
@@ -30,6 +31,7 @@ export function applyPoisonDelta(
   delta: number,
   undoStack: UndoStack,
   shake?: ScreenShakeTrigger,
+  zoneEffects?: ZoneEffectTrigger,
 ): void {
   if (delta === 0) {
     return;
@@ -44,6 +46,7 @@ export function applyPoisonDelta(
   state[playerId] = after;
   if (applied > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+    zoneEffects?.trigger(playerId, 'poison', POISON_EFFECT_COLOR);
   }
   undoStack.push({
     undo(): void {

@@ -979,6 +979,74 @@ describe('screen shake (issue #88)', () => {
   });
 });
 
+// Issue #89: per-zone visual effect confirming every life/counter change. The
+// trigger/expiry math itself lives in src/game/zoneEffect.ts and is unit
+// tested there independent of Game/rendering; these tests only cover how
+// Game wires it in (zoneEffectTrigger exposed to UI menus, per-player
+// zoneEffectFor state, multiple zones flashing independently at once).
+describe('zone effect (issue #89)', () => {
+  function makeThreePlayerGame(startingLife: number): Game {
+    return new Game({ playerCount: 3, startingLife, players: [] });
+  }
+
+  it('starts with no active zone effect for any player', () => {
+    const game = makeThreePlayerGame(40);
+
+    game.players.forEach((player) => expect(game.zoneEffectFor(player.id)).toBeNull());
+  });
+
+  it('exposes a zoneEffectTrigger that starts a flash for the given player, e.g. for a damage-menu action', () => {
+    const game = makeThreePlayerGame(40);
+    const [, target] = game.players;
+
+    game.zoneEffectTrigger.trigger(target.id, 'damage', '#ef4444');
+
+    expect(game.zoneEffectFor(target.id)).toEqual({ type: 'damage', color: '#ef4444', progress: 0 });
+  });
+
+  it('fades and eventually clears the flash over successive update() calls', () => {
+    const game = makeThreePlayerGame(40);
+    const [, target] = game.players;
+    game.zoneEffectTrigger.trigger(target.id, 'heal', '#22c55e');
+
+    game.update(0.2);
+    const midProgress = game.zoneEffectFor(target.id)?.progress ?? 0;
+    game.update(1);
+
+    expect(midProgress).toBeGreaterThan(0);
+    expect(midProgress).toBeLessThan(1);
+    expect(game.zoneEffectFor(target.id)).toBeNull();
+  });
+
+  it('flashes multiple zones independently at once, e.g. a board-wide "damage all players" shortcut', () => {
+    const game = makeThreePlayerGame(40);
+
+    applyBoardShortcutDelta(
+      game.players,
+      game.activeIndex,
+      'all',
+      3,
+      game.undoStack,
+      undefined,
+      undefined,
+      game.zoneEffectTrigger,
+    );
+
+    game.players.forEach((player) => {
+      expect(game.zoneEffectFor(player.id)).toEqual({ type: 'damage', color: '#ef4444', progress: 0 });
+    });
+  });
+
+  it('leaves hit-testing (e.g. the undo control) unaffected while a zone effect is active', () => {
+    const game = makeThreePlayerGame(40);
+    game.resize(400, 900);
+    game.zoneEffectTrigger.trigger(game.players[0].id, 'poison', '#a855f7');
+
+    expect(game.isOverUndoControl(200, 450)).toBe(true);
+    expect(game.isOverUndoControl(0, 0)).toBe(false);
+  });
+});
+
 // Issue #45: landscape overlays (setup screen, commander-damage panel, stats
 // screen) were unbounded and could grow taller than a short landscape
 // viewport, burying player zones/life totals behind them.
