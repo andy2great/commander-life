@@ -7,7 +7,8 @@
 // by the zone-to-zone drag menu (src/ui/attackMenu.ts) in issue #48.
 
 export const LONG_PRESS_MS = 500;
-const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+/** Also reused by Game.resolveZoneDrag (issue #70) to tell a same-zone tap from a same-zone self-target drag. */
+export const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 
 export interface TapGestureHandlers {
   /**
