@@ -469,16 +469,7 @@ export class Game {
     const pointedPlayerId = this.onLongPress(pointerX, pointerY);
     const targetPlayerId = pointedPlayerId && pointedPlayerId !== fromPlayerId ? pointedPlayerId : null;
 
-    let headX = pointerX;
-    let headY = pointerY;
-    if (targetPlayerId) {
-      const targetSeat = this.playersList.findIndex((player) => player.id === targetPlayerId);
-      const targetRect = this.zoneRects[targetSeat];
-      headX = targetRect.x + targetRect.width / 2;
-      headY = targetRect.y + targetRect.height / 2;
-    }
-
-    return { fromPlayerId, originX, originY, headX, headY, targetPlayerId, color };
+    return { fromPlayerId, originX, originY, headX: pointerX, headY: pointerY, targetPlayerId, color };
   }
 
   private seatAt(x: number, y: number): number {

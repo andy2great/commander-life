@@ -416,11 +416,10 @@ describe('Game', () => {
       expect(game.dragArrow).toBeNull();
     });
 
-    it('snaps the arrow head to a different zone\'s center once the pointer is over it, and reports its player as the target', () => {
+    it('keeps the arrow head tracking the live pointer once it is over a different zone, while reporting its player as the target', () => {
       const game = new Game();
       game.resize(400, 800);
       const zoneHeight = 800 / game.playerCount;
-      const targetRect = computeZoneRects(game.playerCount, 400, 800)[2];
 
       game.beginDrag(50, zoneHeight + 10);
       game.updateDragPointer(55, zoneHeight * 2 + 15);
@@ -428,8 +427,24 @@ describe('Game', () => {
       expect(game.dragArrow).toMatchObject({
         fromPlayerId: game.players[0].id,
         targetPlayerId: game.players[2].id,
-        headX: targetRect.x + targetRect.width / 2,
-        headY: targetRect.y + targetRect.height / 2,
+        headX: 55,
+        headY: zoneHeight * 2 + 15,
+      });
+    });
+
+    it('keeps updating the arrow head as the pointer moves around within the target zone', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneHeight = 800 / game.playerCount;
+
+      game.beginDrag(50, zoneHeight + 10);
+      game.updateDragPointer(55, zoneHeight * 2 + 15);
+      game.updateDragPointer(90, zoneHeight * 2 + 40);
+
+      expect(game.dragArrow).toMatchObject({
+        targetPlayerId: game.players[2].id,
+        headX: 90,
+        headY: zoneHeight * 2 + 40,
       });
     });
 
