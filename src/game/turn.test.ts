@@ -1,38 +1,61 @@
 import { describe, expect, it } from 'vitest';
-import { advanceTurn, createTurnState, nextPlayerIndex } from './turn';
+import { advanceTurn, clockwiseSeatOrder, createTurnState, nextPlayerIndex } from './turn';
 
 const SUPPORTED_PLAYER_COUNTS = [3, 4, 5, 6];
 
+// Raw seat indices (row-major, as computeZoneRects lays them out) walked in
+// clockwise order around the table for each supported player count —
+// top row left-to-right, then bottom row right-to-left (issue #68).
+const EXPECTED_CLOCKWISE_ORDER: Record<number, number[]> = {
+  3: [0, 2, 1],
+  4: [0, 1, 3, 2],
+  5: [0, 1, 4, 3, 2],
+  6: [0, 1, 2, 5, 4, 3],
+};
+
+describe('clockwiseSeatOrder', () => {
+  for (const playerCount of SUPPORTED_PLAYER_COUNTS) {
+    it(`walks seats clockwise around the table for ${playerCount} players`, () => {
+      expect(clockwiseSeatOrder(playerCount)).toEqual(EXPECTED_CLOCKWISE_ORDER[playerCount]);
+    });
+  }
+});
+
 describe('nextPlayerIndex', () => {
   for (const playerCount of SUPPORTED_PLAYER_COUNTS) {
-    it(`advances seat by seat for ${playerCount} players`, () => {
-      for (let seat = 0; seat < playerCount - 1; seat += 1) {
-        expect(nextPlayerIndex(seat, playerCount)).toBe(seat + 1);
+    it(`advances to the next clockwise seat for ${playerCount} players`, () => {
+      const order = EXPECTED_CLOCKWISE_ORDER[playerCount];
+      for (let i = 0; i < order.length - 1; i += 1) {
+        expect(nextPlayerIndex(order[i], playerCount)).toBe(order[i + 1]);
       }
     });
 
-    it(`wraps from the last seat back to the first for ${playerCount} players`, () => {
-      expect(nextPlayerIndex(playerCount - 1, playerCount)).toBe(0);
+    it(`wraps from the last clockwise seat back to the first for ${playerCount} players`, () => {
+      const order = EXPECTED_CLOCKWISE_ORDER[playerCount];
+      expect(nextPlayerIndex(order[order.length - 1], playerCount)).toBe(order[0]);
     });
   }
 });
 
 describe('advanceTurn', () => {
   for (const playerCount of SUPPORTED_PLAYER_COUNTS) {
-    it(`increments the turn counter exactly once per lap for ${playerCount} players`, () => {
+    it(`advances seats in clockwise order and increments the turn counter exactly once per lap for ${playerCount} players`, () => {
+      const order = EXPECTED_CLOCKWISE_ORDER[playerCount];
       let state = createTurnState();
-      for (let seat = 1; seat < playerCount; seat += 1) {
+      expect(state.activeIndex).toBe(order[0]);
+
+      for (let i = 1; i < order.length; i += 1) {
         state = advanceTurn(state, playerCount);
-        expect(state.activeIndex).toBe(seat);
+        expect(state.activeIndex).toBe(order[i]);
         expect(state.turnCount).toBe(0);
       }
 
       state = advanceTurn(state, playerCount);
-      expect(state.activeIndex).toBe(0);
+      expect(state.activeIndex).toBe(order[0]);
       expect(state.turnCount).toBe(1);
 
       state = advanceTurn(state, playerCount);
-      expect(state.activeIndex).toBe(1);
+      expect(state.activeIndex).toBe(order[1]);
       expect(state.turnCount).toBe(1);
     });
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
+import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyPoisonDelta } from './game/poison';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
@@ -231,7 +232,9 @@ describe('Game', () => {
 
     game.undo();
 
-    expect(game.activeIndex).toBe(game.playerCount - 1);
+    // Reverts to the clockwise-previous seat (issue #68), not raw index playerCount - 1.
+    const order = clockwiseSeatOrder(game.playerCount);
+    expect(game.activeIndex).toBe(order[order.length - 1]);
     expect(game.turnCount).toBe(0);
     expect(game.players.map((player) => player.life)).toEqual(livesBefore);
   });
@@ -751,21 +754,21 @@ describe('end of game', () => {
 
   it('accumulates time-as-active-player and freezes match duration once ended', () => {
     const game = makeThreePlayerGame(1);
-    const yorion = game.players[2];
+    const kess = game.players[1];
 
     game.update(2); // Alara active for 2s
-    game.passTurn(); // pass turn to Kess
-    game.update(3); // Kess active for 3s
+    game.passTurn(); // pass turn to Yorion (clockwise: seat 0 -> seat 2 for a 3-player table)
+    game.update(3); // Yorion active for 3s
 
-    dealDamage(game, yorion.id, game.players[0].id, 1); // eliminate Alara
-    dealDamage(game, yorion.id, game.players[1].id, 1); // eliminate Kess, Yorion wins
+    dealDamage(game, kess.id, game.players[0].id, 1); // eliminate Alara
+    dealDamage(game, kess.id, game.players[2].id, 1); // eliminate Yorion, Kess wins
     game.update(0); // checkEndConditions runs every frame; commander damage changes bypass Game directly. dt=0 keeps duration exact.
 
     const stats = game.stats;
     expect(stats).not.toBeNull();
     expect(stats?.durationS).toBeCloseTo(5, 5);
     expect(stats?.activeTimeS[game.players[0].id]).toBeCloseTo(2, 5);
-    expect(stats?.activeTimeS[game.players[1].id]).toBeCloseTo(3, 5);
+    expect(stats?.activeTimeS[game.players[2].id]).toBeCloseTo(3, 5);
 
     game.update(10);
     expect(game.stats?.durationS).toBeCloseTo(5, 5);
