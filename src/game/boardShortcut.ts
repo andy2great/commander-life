@@ -3,7 +3,7 @@
 // player as the source of the effect. Free of DOM globals so it stays
 // unit-testable; src/ui/boardShortcutMenu.ts is the DOM layer on top.
 
-import { applyDamageDelta } from './life';
+import { applyDamageDelta, applyHealDelta } from './life';
 import type { Player, UndoAction, UndoStack } from './commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
@@ -34,13 +34,16 @@ export function boardShortcutTargets(players: Player[], activeIndex: number, sco
 
 /**
  * Applies `delta` to every player `boardShortcutTargets` returns for
- * `scope`, via `applyDamageDelta` (one call per affected player). Groups the
- * resulting per-player undo actions into a single action pushed onto
- * `undoStack`, so one undo tap reverts every affected player at once rather
- * than one undo entry per player. No-op for a zero delta. `shake` (issue #88)
- * and `zoneEffects` (issue #89) are forwarded to each `applyDamageDelta`
- * call, which triggers them only for a positive delta — independently per
- * affected zone, so e.g. "damage all players" flashes every zone at once.
+ * `scope`: a positive `delta` (damage) via `applyDamageDelta`, a negative
+ * `delta` (a board-wide heal, issue #95) via `applyHealDelta` — one call per
+ * affected player. Groups the resulting per-player undo actions into a
+ * single action pushed onto `undoStack`, so one undo tap reverts every
+ * affected player at once rather than one undo entry per player. No-op for a
+ * zero delta. `shake` (issue #88) and `zoneEffects` (issue #89) are
+ * forwarded to each call, independently per affected zone, so e.g. "damage
+ * all players" flashes every zone at once: `applyDamageDelta` triggers a red
+ * flash plus shake for the damage case, `applyHealDelta` triggers a green
+ * flash with no shake for the heal case.
  */
 export function applyBoardShortcutDelta(
   players: Player[],
@@ -61,7 +64,11 @@ export function applyBoardShortcutDelta(
     push: (action) => actions.push(action),
   };
   for (const target of targets) {
-    applyDamageDelta(target, delta, collector, undefined, shake, zoneEffects);
+    if (delta > 0) {
+      applyDamageDelta(target, delta, collector, undefined, shake, zoneEffects);
+    } else {
+      applyHealDelta(target, -delta, collector, undefined, zoneEffects);
+    }
   }
   if (actions.length === 0) {
     return;

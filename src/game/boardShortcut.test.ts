@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBoardShortcutDelta, BOARD_SHORTCUT_OPTIONS, boardShortcutTargets } from './boardShortcut';
 import type { Player, UndoAction } from './commanderDamage';
 import type { ScreenShakeTrigger } from './screenShake';
-import { DAMAGE_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
+import { DAMAGE_EFFECT_COLOR, HEAL_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
 
 class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
@@ -154,13 +154,16 @@ describe('applyBoardShortcutDelta', () => {
     ]);
   });
 
-  it('does not trigger a zone effect for a negative (healing) delta', () => {
+  it('triggers a heal zone effect independently on every affected zone for a negative (healing) delta (issue #95)', () => {
     const players = makePlayers(3);
     const undoStack = new FakeUndoStack();
     const zoneEffects = new MockZoneEffects();
 
     applyBoardShortcutDelta(players, 0, 'opponents', -2, undoStack, undefined, undefined, zoneEffects);
 
-    expect(zoneEffects.calls).toHaveLength(0);
+    expect(zoneEffects.calls).toEqual([
+      { playerId: players[1].id, type: 'heal', color: HEAL_EFFECT_COLOR },
+      { playerId: players[2].id, type: 'heal', color: HEAL_EFFECT_COLOR },
+    ]);
   });
 });
