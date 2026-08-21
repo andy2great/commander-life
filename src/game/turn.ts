@@ -22,7 +22,10 @@ export function createTurnState(): TurnState {
 export const ROW_COUNTS_BY_PLAYER_COUNT: Record<number, [number, number]> = {
   3: [1, 2],
   4: [2, 2],
-  5: [2, 3],
+  // Issue #77: the fifth seat sits alone in its own full-width row (like the
+  // 3-player lone top row) so its life total renders upright from its own
+  // seated position, instead of sharing a row with another rotated seat.
+  5: [1, 4],
   6: [3, 3],
 };
 

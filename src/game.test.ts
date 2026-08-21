@@ -592,6 +592,49 @@ describe('Game', () => {
       });
     },
   );
+
+  describe('5-player lone seat layout (issue #77)', () => {
+    it('gives the fifth seat its own full-width rotated zone at the top, with the other four upright below it', () => {
+      const width = 400;
+      const height = 900;
+      const rects = computeZoneRects(5, width, height);
+
+      expect(rects).toEqual([
+        { x: 0, y: 0, width, height: height / 2, rotated: true },
+        { x: 0, width: width / 4, y: height / 2, height: height / 2, rotated: false },
+        { x: width / 4, width: width / 4, y: height / 2, height: height / 2, rotated: false },
+        { x: (width / 4) * 2, width: width / 4, y: height / 2, height: height / 2, rotated: false },
+        { x: (width / 4) * 3, width: width / 4, y: height / 2, height: height / 2, rotated: false },
+      ]);
+    });
+
+    it('resolves taps and drags to the lone seat (seat 0) from anywhere in its full-width zone', () => {
+      const game = new Game({ playerCount: 5, startingLife: 40, players: [] });
+      const width = 400;
+      const height = 900;
+      game.resize(width, height);
+      const loneSeat = game.players[0];
+
+      const dragToLoneSeat = game.resolveZoneDrag(width - 20, height - 20, 20, 20);
+
+      expect(dragToLoneSeat).toEqual({ fromPlayerId: game.players[4].id, toPlayerId: loneSeat.id });
+    });
+
+    it('resolves taps and drags to each of the four upright seats sharing the bottom row', () => {
+      const game = new Game({ playerCount: 5, startingLife: 40, players: [] });
+      const width = 400;
+      const height = 900;
+      game.resize(width, height);
+      const rects = computeZoneRects(5, width, height);
+
+      for (let seat = 1; seat <= 4; seat += 1) {
+        const rect = rects[seat];
+        const drag = game.resolveZoneDrag(20, 20, rect.x + rect.width / 2, rect.y + rect.height / 2);
+
+        expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[seat].id });
+      }
+    });
+  });
 });
 
 describe('sound triggers', () => {
