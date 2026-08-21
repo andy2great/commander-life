@@ -1070,6 +1070,95 @@ describe('end of game', () => {
   });
 });
 
+// Issue #117: the board-wide shortcut menu's "End game" option lets the host
+// instantly pick a winner rather than waiting for the automatic elimination
+// path. alivePlayers is what the menu lists as candidates; endGameWithWinner
+// is what confirming a pick calls.
+describe('endGameWithWinner (issue #117)', () => {
+  function makeThreePlayerGame(startingLife: number): Game {
+    return new Game({
+      playerCount: 3,
+      startingLife,
+      players: [
+        { name: 'Alara', color: '#111111' },
+        { name: 'Kess', color: '#222222' },
+        { name: 'Yorion', color: '#333333' },
+      ],
+    });
+  }
+
+  it('lists every player as alive before any elimination', () => {
+    const game = makeThreePlayerGame(40);
+
+    expect(game.alivePlayers.map((player) => player.id)).toEqual(game.players.map((player) => player.id));
+  });
+
+  it('excludes eliminated players from alivePlayers', () => {
+    const game = makeThreePlayerGame(1);
+    const alara = game.players[0];
+    const kess = game.players[1];
+    const yorion = game.players[2];
+
+    dealDamage(game, yorion.id, alara.id, 1); // Alara: 1 -> 0
+    game.update(0.016);
+
+    expect(game.alivePlayers.map((player) => player.id)).toEqual([kess.id, yorion.id]);
+  });
+
+  it('immediately ends the game with the given player recorded as winner', () => {
+    const game = makeThreePlayerGame(40);
+    const kess = game.players[1];
+
+    game.endGameWithWinner(kess.id);
+
+    expect(game.ended).toBe(true);
+    expect(game.stats?.winnerId).toBe(kess.id);
+  });
+
+  it('leaves life/turn/damage state unchanged when ending manually', () => {
+    const game = makeThreePlayerGame(40);
+    const kess = game.players[1];
+
+    game.endGameWithWinner(kess.id);
+
+    expect(game.players.map((player) => player.life)).toEqual([40, 40, 40]);
+    expect(game.turnCount).toBe(0);
+  });
+
+  it('is a no-op once the game has already ended', () => {
+    const game = makeThreePlayerGame(40);
+    const kess = game.players[1];
+    const yorion = game.players[2];
+
+    game.endGameWithWinner(kess.id);
+    game.endGameWithWinner(yorion.id);
+
+    expect(game.stats?.winnerId).toBe(kess.id);
+  });
+
+  it('is a no-op for an eliminated player id', () => {
+    const game = makeThreePlayerGame(1);
+    const alara = game.players[0];
+    const yorion = game.players[2];
+
+    dealDamage(game, yorion.id, alara.id, 1); // Alara: 1 -> 0
+    game.update(0.016);
+
+    game.endGameWithWinner(alara.id);
+
+    expect(game.ended).toBe(false);
+    expect(game.stats).toBeNull();
+  });
+
+  it('is a no-op for an unknown player id', () => {
+    const game = makeThreePlayerGame(40);
+
+    game.endGameWithWinner('not-a-real-id');
+
+    expect(game.ended).toBe(false);
+  });
+});
+
 // Issue #88: canvas-wide screen-shake on impactful damage actions. The
 // trigger/decay math itself lives in src/game/screenShake.ts and is unit
 // tested there independent of Game/rendering; these tests only cover how
