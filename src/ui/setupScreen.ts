@@ -15,6 +15,7 @@ import {
 } from '../game';
 import { clampStartingIndex, movePlayer, removePlayerAt } from '../game/playerRoster';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
+import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
 const STARTING_LIFE_STEP = 5;
 const MIN_STARTING_LIFE = 5;
@@ -34,10 +35,11 @@ function injectStylesOnce(): void {
     return;
   }
   stylesInjected = true;
+  injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
     .setup-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(ellipse 140% 60% at 50% -10%, #211a2c 0%, #121016 55%); z-index: 20; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 18px; overflow-y: auto; font-family: system-ui, sans-serif; }
-    .setup-title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: #f5f3f7; text-align: center; }
+    .setup-title { margin: 0; font-size: 34px; font-weight: 400; letter-spacing: 1.4px; text-transform: uppercase; color: #f5f3f7; text-align: center; font-family: ${DISPLAY_FONT_STACK}; }
     .setup-title-rule { width: 40px; height: 3px; margin: 8px auto 0; border-radius: 2px; background: linear-gradient(135deg, #d7a54c, #e2673f); }
     .setup-sub { margin: 2px 0 0; text-align: center; color: #948fa3; font-size: 13px; }
     .setup-card { background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 16px 18px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.4); }

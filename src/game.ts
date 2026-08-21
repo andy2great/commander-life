@@ -41,6 +41,7 @@ import {
   type ZoneEffectState,
   type ZoneEffectTrigger,
 } from './game/zoneEffect';
+import { DISPLAY_FONT_STACK } from './ui/displayFont';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -920,7 +921,7 @@ export class Game {
     ctx.fillStyle = '#f5f3f7';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '800 32px system-ui, sans-serif';
+    ctx.font = `400 32px ${DISPLAY_FONT_STACK}`;
     ctx.fillText('PAUSED', width / 2, height / 2);
     ctx.restore();
   }
@@ -953,7 +954,7 @@ export class Game {
       ctx.textAlign = 'center';
 
       const lifeFontSize = Math.round(shortSide * 0.5);
-      ctx.font = `800 ${lifeFontSize}px "Arial Black", system-ui, sans-serif`;
+      ctx.font = `400 ${lifeFontSize}px ${DISPLAY_FONT_STACK}`;
       ctx.textBaseline = 'middle';
       ctx.fillText(String(player.life), 0, 0);
 
@@ -964,7 +965,7 @@ export class Game {
 
       if (isActive) {
         const timerFontSize = Math.round(shortSide * 0.1);
-        ctx.font = `700 ${timerFontSize}px system-ui, sans-serif`;
+        ctx.font = `400 ${timerFontSize}px ${DISPLAY_FONT_STACK}`;
         ctx.fillText(formatMmSs(this.turnTimerElapsedS), 0, lifeFontSize / 2 + 4 + nameFontSize + 4);
       }
 

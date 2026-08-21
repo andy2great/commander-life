@@ -23,6 +23,7 @@ import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger } from '../game/zoneEffect';
 import type { StatsTrigger } from '../game/stats';
 import { attachHoldToRepeat } from './holdToRepeat';
+import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
 /**
  * One representative icon per `BOARD_SHORTCUT_OPTIONS` scope: crossed swords
@@ -63,12 +64,13 @@ function injectStylesOnce(): void {
     return;
   }
   stylesInjected = true;
+  injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
     .cmdr-bsc-overlay { position: fixed; inset: 0; background: rgba(8, 7, 12, 0.55); z-index: 30; display: flex; align-items: flex-end; }
     .cmdr-bsc-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
     .cmdr-bsc-head { display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #2d2938; }
-    .cmdr-bsc-title { color: #f5f3f7; font-size: 15px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; flex: 1; font-family: system-ui, sans-serif; }
+    .cmdr-bsc-title { color: #f5f3f7; font-size: 18px; font-weight: 400; letter-spacing: 0.6px; text-transform: uppercase; flex: 1; font-family: ${DISPLAY_FONT_STACK}; }
     .cmdr-bsc-close { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; transition: transform 100ms ease, filter 100ms ease; }
     .cmdr-bsc-close:active { transform: scale(0.9); filter: brightness(1.2); }
     .cmdr-bsc-close svg { width: 14px; height: 14px; }
@@ -82,7 +84,7 @@ function injectStylesOnce(): void {
     .cmdr-bsc-stepper button:active { transform: scale(0.96); filter: brightness(1.15); }
     .cmdr-bsc-stepper button.cmdr-bsc-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
     .cmdr-bsc-stepper button.cmdr-bsc-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
-    .cmdr-bsc-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 32px; text-align: center; color: #f0c98a; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: system-ui, sans-serif; background: #1b1822; padding: 6px 12px; border-radius: 12px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(215, 165, 76, 0.25); }
+    .cmdr-bsc-val { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; min-width: 32px; text-align: center; color: #f0c98a; font-size: 26px; font-weight: 400; font-variant-numeric: tabular-nums; font-family: ${DISPLAY_FONT_STACK}; background: #1b1822; padding: 6px 12px; border-radius: 12px; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(215, 165, 76, 0.25); }
     .cmdr-bsc-apply { box-sizing: border-box; border-radius: 14px; border: none; padding: 14px 16px; width: 100%; background: linear-gradient(135deg, #d7a54c, #e2673f); color: #fff; font-size: 14px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; font-family: system-ui, sans-serif; transition: transform 100ms ease, filter 100ms ease; }
     .cmdr-bsc-apply:active { transform: scale(0.97); filter: brightness(1.08); }
     .cmdr-bsc-apply:disabled { opacity: 0.4; }
