@@ -8,17 +8,15 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 
 ## Core loop
 1. Host configures the game (player count 3-6, starting life, names/colors) on the setup screen.
-2. The canvas splits into N player zones, each rotated to face that player's seat. Tapping the upper half of a zone increments life, tapping the lower half decrements it, with a floating "+1"/"-1" popping and fading above the tap point.
+2. The canvas splits into N player zones, each rotated to face that player's seat.
 3. A shared center "pass turn" control shows whose turn it is; long-pressing it advances the active-player highlight clockwise around the table, and the turn counter increments each full lap.
-4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log commander damage or poison dealt in that direction. A drag that starts and ends in the same zone, or that's released outside any player zone, is ignored.
+4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log commander damage or poison dealt in that direction. A drag that starts and ends in the same zone, or that's released outside any player zone, is ignored. This drag gesture is the only way life totals change — tapping a zone does nothing.
 5. Every life, commander-damage, or poison change pushes onto an undo stack; a center undo icon reverts the most recent action ("retour en arrière").
 6. The host ends the game (tap the dedicated end-game icon beside the center control, or automatically when only one player remains above 0 life). A stats screen shows total duration, time-per-turn breakdown, most damage dealt/received, biggest single hit, and elimination order.
 7. "New Game" returns to the setup screen, pre-filled with the previous configuration.
 
 ## Controls (touch-only, one-thumb per player)
-- Tap upper half of own zone: +1 life (tap-and-hold ramps continuously, accelerating after ~600ms)
-- Tap lower half of own zone: -1 life (same ramp behavior)
-- Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for commander damage and for poison
+- Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for commander damage and for poison — the only way life totals change; a plain tap on your own zone does nothing
 - Center shared control: long-press (~500ms) = pass turn; a plain tap does nothing
 - Small icon beside the center control: tap = undo last action (dimmed/disabled when nothing to undo)
 - Small icon on the opposite side of the center control: long-press (~500ms) = end the game; a plain tap does nothing, so an accidental tap can't end the game
@@ -47,7 +45,6 @@ Not applicable in the traditional score-chasing sense — this is a utility, not
 - Dark neutral background (near-black, #121016) so colored player zones pop like felt on a card table
 - Each player zone is assigned one of 6 preset saturated accent colors (crimson, teal, amber, violet, lime, sky), rendered as a soft radial gradient fill
 - Life numbers: huge, bold, centered, drawn with canvas text using a heavy sans stack, white with a subtle drop shadow, rotated 180° for top-row zones so every player reads their own number upright from their seat
-- Delta popups ("+1", "-3") float upward and fade out over ~500ms using eased canvas alpha
 - The active player's zone renders an animated pulsing border (canvas stroke with a sine-driven width/opacity)
 - Center control disc: circular, translucent dark fill, with a hand-drawn arrow icon (pass turn), a curved-arrow icon (undo) on one side, and a flag icon (end game) on the other, all vector-drawn with canvas path calls — no icon fonts or bitmap images
 - Stats screen reuses the same dark background and per-player accent colors for its horizontal bar charts, so results are instantly recognizable against the in-game colors

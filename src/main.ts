@@ -57,28 +57,14 @@ function startGame(config: GameConfig): void {
 
   const detachGesture = attachTapAndLongPress(canvas, {
     onPressStart: (event) => {
-      // Zone taps apply on pointerdown so a held press can ramp across
-      // animation frames; a drag or long-press reverts this via
-      // cancelTap(). Control taps stay deferred to onTap (pointerup) since
-      // they never ramp, which also keeps a long-press from passing the
-      // turn early.
       if (isOverAnyControl(event)) {
         pressStart = null;
         return;
       }
       pressStart = { x: event.clientX, y: event.clientY };
-      game.onTap(event.clientX, event.clientY);
     },
     onTap: (event) => {
       if (isOverAnyControl(event)) {
-        // Revert the optimistic zone tap from onPressStart (if any) before
-        // running the control's action: a press that started in a player's
-        // zone but released over a shared control is a drag onto that
-        // control, not a zone tap followed by a control tap. Without this,
-        // releasing an attack-drag over undo/end-game/pass-turn silently
-        // left the pending zone life change in place, or (worse) let it
-        // coincide with ending the game. See PR #53 review.
-        game.cancelTap();
         game.onTap(event.clientX, event.clientY);
         return;
       }
@@ -87,7 +73,6 @@ function startGame(config: GameConfig): void {
       }
       const drag = game.resolveZoneDrag(pressStart.x, pressStart.y, event.clientX, event.clientY);
       if (drag) {
-        game.cancelTap();
         attackMenu.open(drag.fromPlayerId, drag.toPlayerId);
       }
     },
@@ -103,12 +88,11 @@ function startGame(config: GameConfig): void {
         game.endGame();
         return;
       }
-      // Zone long-presses now just continue the tap-and-hold ramp already
-      // armed by onPressStart — commander-damage/poison assignment moved to
-      // the zone-to-zone drag gesture handled by onTap above.
+      // Zone long-presses are a no-op: tapping/holding a player's own zone no
+      // longer changes life (issue #54) — the zone-to-zone drag gesture,
+      // resolved by onTap above on release, is the only way life changes.
     },
     onPressEnd: () => {
-      game.onTapEnd();
       pressStart = null;
     },
   });
