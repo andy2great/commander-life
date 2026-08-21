@@ -77,9 +77,11 @@ function startGame(config: GameConfig): void {
       }
       pressStart = { x: event.clientX, y: event.clientY };
       game.beginDrag(event.clientX, event.clientY);
+      game.beginTurnHold(event.clientX, event.clientY);
     },
     onMove: (event) => {
       game.updateDragPointer(event.clientX, event.clientY);
+      game.updateTurnHold(event.clientX, event.clientY);
     },
     onTap: (event) => {
       if (isOverUndoControl(event) || isOverPauseControl(event)) {
@@ -108,6 +110,7 @@ function startGame(config: GameConfig): void {
     },
     onPressEnd: () => {
       game.endDrag();
+      game.endTurnHold();
       pressStart = null;
     },
   });
