@@ -26,14 +26,6 @@ function undoControlCenter(width: number, height: number): { x: number; y: numbe
   return { x: width / 2 + mainRadius + shortSide * UNDO_GAP_RATIO + undoRadius, y: height / 2 };
 }
 
-/** Mirrors EndGameControl's reflow math (opposite side of the center control from UndoControl). */
-function endControlCenter(width: number, height: number): { x: number; y: number } {
-  const shortSide = Math.min(width, height);
-  const mainRadius = shortSide * RADIUS_RATIO;
-  const endRadius = shortSide * UNDO_RADIUS_RATIO;
-  return { x: width / 2 - mainRadius - shortSide * UNDO_GAP_RATIO - endRadius, y: height / 2 };
-}
-
 describe('clamp', () => {
   it('returns the value when inside the range', () => {
     expect(clamp(5, 0, 10)).toBe(5);
@@ -291,40 +283,6 @@ describe('Game', () => {
     const undoCenter = undoControlCenter(400, 800);
 
     expect(game.onLongPress(undoCenter.x, undoCenter.y)).toBeNull();
-  });
-
-  it('tapping the end-game icon no longer ends the game outright (issue #56)', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const endCenter = endControlCenter(400, 800);
-
-    expect(game.isOverEndControl(endCenter.x, endCenter.y)).toBe(true);
-    expect(game.ended).toBe(false);
-
-    game.onTap(endCenter.x, endCenter.y);
-
-    expect(game.ended).toBe(false);
-  });
-
-  it('long-pressing the end-game icon ends the game, mirroring the pass-turn control (issue #56)', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const endCenter = endControlCenter(400, 800);
-
-    expect(game.isOverEndControl(endCenter.x, endCenter.y)).toBe(true);
-    expect(game.ended).toBe(false);
-
-    game.endGame();
-
-    expect(game.ended).toBe(true);
-  });
-
-  it('does not resolve a zone-to-zone target over the end-game icon', () => {
-    const game = new Game();
-    game.resize(400, 800);
-    const endCenter = endControlCenter(400, 800);
-
-    expect(game.onLongPress(endCenter.x, endCenter.y)).toBeNull();
   });
 
   describe('resolveZoneDrag (issue #48)', () => {
@@ -608,10 +566,12 @@ describe('sound triggers', () => {
 
   it('plays gameEnd exactly once when the game ends', () => {
     const sound = new MockSoundPlayer();
-    const game = new Game({ playerCount: 3, startingLife: 40, players: [] }, sound);
+    const game = new Game({ playerCount: 3, startingLife: 1, players: [] }, sound);
 
-    game.endGame();
-    game.endGame(); // no-op once already ended
+    dealDamage(game, game.players[2].id, game.players[0].id, 1); // Alara: 1 -> 0
+    dealDamage(game, game.players[2].id, game.players[1].id, 1); // Kess: 1 -> 0, only Yorion remains
+    game.update(0.016);
+    game.update(0.016); // no-op once already ended
 
     expect(sound.events.filter((event) => event === 'gameEnd')).toHaveLength(1);
   });
@@ -688,75 +648,47 @@ describe('end of game', () => {
   });
 
   it('drops a player from eliminationOrder once undo restores their poison below the lethal threshold', () => {
-    const game = makeThreePlayerGame(40);
+    const game = makeThreePlayerGame(1);
     const alara = game.players[0];
+    const kess = game.players[1];
+    const yorion = game.players[2];
 
     applyPoisonDelta(game.poisonState, alara.id, 10, game.undoStack);
     game.update(0.016);
     expect(game.ended).toBe(false);
 
-    game.undo(); // Alara: 10 -> 0
+    game.undo(); // Alara: 10 -> 0 poison, no longer eliminated
     game.update(0.016);
+    expect(game.ended).toBe(false);
 
-    game.endGame();
+    dealDamage(game, alara.id, kess.id, 1); // Kess: 1 -> 0
+    dealDamage(game, alara.id, yorion.id, 1); // Yorion: 1 -> 0, only Alara remains
+    game.update(0.016);
 
     expect(game.ended).toBe(true);
-    expect(game.stats?.eliminationOrder).toEqual([]);
-  });
-
-  it('excludes a poison-eliminated player from the manual endGame winner even with the highest life', () => {
-    const game = makeThreePlayerGame(40);
-    const alara = game.players[0];
-    const kess = game.players[1];
-
-    applyPoisonDelta(game.poisonState, alara.id, 10, game.undoStack); // Alara eliminated by poison, still at 40 life
-    game.update(0.016);
-
-    game.endGame();
-
-    expect(game.stats?.winnerId).not.toBe(alara.id);
-    expect(game.stats?.winnerId).toBe(kess.id);
+    expect(game.stats?.eliminationOrder.map((entry) => entry.playerId)).toEqual([kess.id, yorion.id]);
   });
 
   it('drops a player from eliminationOrder once undo restores their life above 0', () => {
     const game = makeThreePlayerGame(1);
+    const alara = game.players[0];
+    const kess = game.players[1];
+    const yorion = game.players[2];
 
-    dealDamage(game, game.players[2].id, game.players[0].id, 1); // Alara: 1 -> 0
+    dealDamage(game, yorion.id, alara.id, 1); // Alara: 1 -> 0
     game.update(0.016); // checkEndConditions runs every frame; commander damage changes bypass Game directly
     expect(game.stats).toBeNull();
 
     game.undo(); // Alara: 0 -> 1
     game.update(0.016);
 
-    game.endGame();
-
-    expect(game.ended).toBe(true);
-    expect(game.stats?.winnerId).toBe(game.players[0].id);
-    expect(game.stats?.eliminationOrder).toEqual([]);
-  });
-
-  it('ends manually via endGame, picking the highest-life player as winner', () => {
-    const game = makeThreePlayerGame(40);
-    const alara = game.players[0];
-
-    // Alara deals commander damage to the other two, leaving her strictly highest.
-    dealDamage(game, alara.id, game.players[1].id, 1); // Kess: 40 -> 39
-    dealDamage(game, alara.id, game.players[2].id, 1); // Yorion: 40 -> 39
-
-    game.endGame();
+    dealDamage(game, alara.id, kess.id, 1); // Kess: 1 -> 0
+    dealDamage(game, alara.id, yorion.id, 1); // Yorion: 1 -> 0, only Alara remains
+    game.update(0.016);
 
     expect(game.ended).toBe(true);
     expect(game.stats?.winnerId).toBe(alara.id);
-  });
-
-  it('is a no-op to end an already-ended game', () => {
-    const game = makeThreePlayerGame(40);
-    game.endGame();
-    const stats = game.stats;
-
-    game.endGame();
-
-    expect(game.stats).toEqual(stats);
+    expect(game.stats?.eliminationOrder.map((entry) => entry.playerId)).toEqual([kess.id, yorion.id]);
   });
 
   it('accumulates time-as-active-player and freezes match duration once ended', () => {

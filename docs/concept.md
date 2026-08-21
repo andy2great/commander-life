@@ -12,14 +12,13 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 3. A shared center "pass turn" control shows whose turn it is; long-pressing it advances the active-player highlight clockwise around the table, and the turn counter increments each full lap.
 4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log commander damage or poison dealt in that direction. A drag that starts and ends in the same zone, or that's released outside any player zone, is ignored. This drag gesture is the only way life totals change — tapping a zone does nothing.
 5. Every life, commander-damage, or poison change pushes onto an undo stack; a center undo icon reverts the most recent action ("retour en arrière").
-6. The host ends the game (tap the dedicated end-game icon beside the center control, or automatically when only one player remains above 0 life). A stats screen shows total duration, time-per-turn breakdown, most damage dealt/received, biggest single hit, and elimination order.
+6. The game ends automatically when only one player remains above 0 life. A stats screen shows total duration, time-per-turn breakdown, most damage dealt/received, biggest single hit, and elimination order.
 7. "New Game" returns to the setup screen, pre-filled with the previous configuration.
 
 ## Controls (touch-only, one-thumb per player)
 - Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for commander damage and for poison — the only way life totals change; a plain tap on your own zone does nothing
 - Center shared control: long-press (~500ms) = pass turn; a plain tap does nothing
 - Small icon beside the center control: tap = undo last action (dimmed/disabled when nothing to undo)
-- Small icon on the opposite side of the center control: long-press (~500ms) = end the game; a plain tap does nothing, so an accidental tap can't end the game
 - Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a name field to rename via the soft keyboard
 
 ## Layout by player count (portrait canvas, all code-drawn, no external assets)
@@ -36,7 +35,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 - Total commander damage dealt and received, per player
 - Biggest single hit (player, amount, and target if it was commander damage)
 - Elimination order, for any player who reached 0 life
-- Winner: last player standing, or highest life if the host ends the game manually
+- Winner: last player standing
 
 ## Difficulty curve / progression
 Not applicable in the traditional score-chasing sense — this is a utility, not a score attack. "Progression" instead means configuration depth: the default game (4 players, 40 life) launches in two taps for casual use, while power users can dig into commander-damage sub-panels and the full stat history. Every screen must stay usable one-handed regardless of depth.
@@ -46,7 +45,7 @@ Not applicable in the traditional score-chasing sense — this is a utility, not
 - Each player zone is assigned one of 6 preset saturated accent colors (crimson, teal, amber, violet, lime, sky), rendered as a soft radial gradient fill
 - Life numbers: huge, bold, centered, drawn with canvas text using a heavy sans stack, white with a subtle drop shadow, rotated 180° for top-row zones so every player reads their own number upright from their seat
 - The active player's zone renders an animated pulsing border (canvas stroke with a sine-driven width/opacity)
-- Center control disc: circular, translucent dark fill, with a hand-drawn arrow icon (pass turn), a curved-arrow icon (undo) on one side, and a flag icon (end game) on the other, all vector-drawn with canvas path calls — no icon fonts or bitmap images
+- Center control disc: circular, translucent dark fill, with a hand-drawn arrow icon (pass turn) and a curved-arrow icon (undo) beside it, all vector-drawn with canvas path calls — no icon fonts or bitmap images
 - Stats screen reuses the same dark background and per-player accent colors for its horizontal bar charts, so results are instantly recognizable against the in-game colors
 
 ## Ad monetization potential
