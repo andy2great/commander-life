@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest';
+import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './life';
+import type { Player, UndoAction } from './commanderDamage';
+import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
+
+class MockSoundPlayer implements SoundPlayer {
+  readonly events: SoundEvent[] = [];
+  play(event: SoundEvent): void {
+    this.events.push(event);
+  }
+}
+
+class FakeUndoStack {
+  actions: UndoAction[] = [];
+  push(action: UndoAction): void {
+    this.actions.push(action);
+  }
+  undoLast(): void {
+    this.actions.pop()?.undo();
+  }
+}
+
+function makePlayers(): Player[] {
+  return [
+    { id: 'p1', name: 'Alara', life: 40 },
+    { id: 'p2', name: 'Kess', life: 40 },
+  ];
+}
+
+describe('applyDamageDelta', () => {
+  it('decreases the target life without any commander-damage state', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyDamageDelta(target, 5, undoStack);
+
+    expect(target.life).toBe(35);
+  });
+
+  it('pushes an undo action that restores the target life', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyDamageDelta(target, 7, undoStack);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.undoLast();
+
+    expect(target.life).toBe(40);
+  });
+
+  it('plays lifeDown for positive delta and lifeUp for negative delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const sound = new MockSoundPlayer();
+
+    applyDamageDelta(target, 3, undoStack, sound);
+    applyDamageDelta(target, -1, undoStack, sound);
+
+    expect(sound.events).toEqual(['lifeDown', 'lifeUp']);
+  });
+
+  it('is a no-op for a zero delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyDamageDelta(target, 0, undoStack);
+
+    expect(target.life).toBe(40);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+});
+
+describe('applyHealDelta', () => {
+  it('increases the target life', () => {
+    const [, target] = makePlayers();
+    target.life = 20;
+    const undoStack = new FakeUndoStack();
+
+    applyHealDelta(target, 6, undoStack);
+
+    expect(target.life).toBe(26);
+  });
+
+  it('pushes an undo action that restores the target life', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyHealDelta(target, 4, undoStack);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.undoLast();
+
+    expect(target.life).toBe(40);
+  });
+
+  it('plays lifeUp for positive delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const sound = new MockSoundPlayer();
+
+    applyHealDelta(target, 2, undoStack, sound);
+
+    expect(sound.events).toEqual(['lifeUp']);
+  });
+
+  it('is a no-op for a zero delta', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyHealDelta(target, 0, undoStack);
+
+    expect(target.life).toBe(40);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+});
+
+describe('applyLifelinkDelta', () => {
+  it('decreases target life and increases attacker life by the same amount', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyLifelinkDelta(attacker, target, 5, undoStack);
+
+    expect(target.life).toBe(35);
+    expect(attacker.life).toBe(45);
+  });
+
+  it('reverts both life totals with a single undo', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyLifelinkDelta(attacker, target, 5, undoStack);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.undoLast();
+
+    expect(target.life).toBe(40);
+    expect(attacker.life).toBe(40);
+  });
+
+  it('plays lifeDown for a positive delta', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const sound = new MockSoundPlayer();
+
+    applyLifelinkDelta(attacker, target, 3, undoStack, sound);
+
+    expect(sound.events).toEqual(['lifeDown']);
+  });
+
+  it('ignores self-targeted lifelink and pushes no undo action', () => {
+    const [attacker] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyLifelinkDelta(attacker, attacker, 5, undoStack);
+
+    expect(attacker.life).toBe(40);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('is a no-op for a zero delta', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    applyLifelinkDelta(attacker, target, 0, undoStack);
+
+    expect(target.life).toBe(40);
+    expect(attacker.life).toBe(40);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+});
