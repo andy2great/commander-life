@@ -3,6 +3,7 @@ import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './life';
 import type { Player, UndoAction } from './commanderDamage';
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
+import type { ZoneEffectState } from './zoneEffect';
 
 class MockSoundPlayer implements SoundPlayer {
   readonly events: SoundEvent[] = [];
@@ -104,6 +105,23 @@ describe('applyDamageDelta', () => {
 
     expect(() => applyDamageDelta(target, 3, undoStack)).not.toThrow();
   });
+
+  it('triggers a damage zone effect on the target when effects state is given', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const effects: ZoneEffectState = {};
+
+    applyDamageDelta(target, 3, undoStack, undefined, undefined, effects);
+
+    expect(effects[target.id]).toEqual({ type: 'damage', elapsed: 0 });
+  });
+
+  it('does not require an effects state: omitting it never throws', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+
+    expect(() => applyDamageDelta(target, 3, undoStack)).not.toThrow();
+  });
 });
 
 describe('applyHealDelta', () => {
@@ -147,6 +165,16 @@ describe('applyHealDelta', () => {
 
     expect(target.life).toBe(40);
     expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('triggers a heal zone effect on the target when effects state is given', () => {
+    const [, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const effects: ZoneEffectState = {};
+
+    applyHealDelta(target, 3, undoStack, undefined, effects);
+
+    expect(effects[target.id]).toEqual({ type: 'heal', elapsed: 0 });
   });
 });
 
@@ -223,5 +251,16 @@ describe('applyLifelinkDelta', () => {
     applyLifelinkDelta(attacker, target, -2, undoStack, undefined, shake);
 
     expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('triggers a lifelink zone effect on both the attacker and target zones', () => {
+    const [attacker, target] = makePlayers();
+    const undoStack = new FakeUndoStack();
+    const effects: ZoneEffectState = {};
+
+    applyLifelinkDelta(attacker, target, 3, undoStack, undefined, undefined, effects);
+
+    expect(effects[target.id]).toEqual({ type: 'lifelink', elapsed: 0 });
+    expect(effects[attacker.id]).toEqual({ type: 'lifelink', elapsed: 0 });
   });
 });

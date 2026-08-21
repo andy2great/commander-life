@@ -43,6 +43,7 @@ function startGame(config: GameConfig): void {
     undoStack: game.undoStack,
     sound,
     shake: game.shakeTrigger,
+    effects: game.zoneEffects,
   });
   const boardShortcutMenu = new BoardShortcutMenu({
     root: document.body,
@@ -51,6 +52,7 @@ function startGame(config: GameConfig): void {
     undoStack: game.undoStack,
     sound,
     shake: game.shakeTrigger,
+    effects: game.zoneEffects,
   });
 
   canvas.style.display = 'block';

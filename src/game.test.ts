@@ -4,6 +4,7 @@ import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyPoisonDelta } from './game/poison';
 import { applyBoardShortcutDelta } from './game/boardShortcut';
+import { ZONE_EFFECT_DURATION_S } from './game/zoneEffect';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
 
 /** Records every sound-trigger call so tests can assert on game events without a real AudioContext. */
@@ -180,6 +181,47 @@ describe('Game', () => {
       game.passTurnFromZoneLongPress(50, zoneHeight * 2 + 10); // non-active zone
 
       expect(game.passTurnFlashSeat).toBeNull();
+    });
+  });
+
+  describe('zoneEffects (issue #89)', () => {
+    it('exposes an empty effect state until a life/counter change lands', () => {
+      const game = new Game();
+
+      expect(game.zoneEffects).toEqual({});
+    });
+
+    it('records an effect for a player affected by a commander-damage change, and expires it after update()', () => {
+      const game = new Game();
+      const [attacker, target] = game.players;
+
+      applyCommanderDamageDelta(
+        game.damageState,
+        game.players,
+        target.id,
+        attacker.id,
+        3,
+        game.undoStack,
+        undefined,
+        undefined,
+        game.zoneEffects,
+      );
+
+      expect(game.zoneEffects[target.id]).toEqual({ type: 'commander', elapsed: 0 });
+
+      game.update(ZONE_EFFECT_DURATION_S); // well past the effect duration
+
+      expect(game.zoneEffects[target.id]).toBeUndefined();
+    });
+
+    it('tracks effects on multiple zones independently for a board-wide shortcut', () => {
+      const game = new Game();
+
+      applyBoardShortcutDelta(game.players, 0, 'all', 3, game.undoStack, undefined, undefined, game.zoneEffects);
+
+      for (const player of game.players) {
+        expect(game.zoneEffects[player.id]).toEqual({ type: 'damage', elapsed: 0 });
+      }
     });
   });
 

@@ -6,6 +6,7 @@
 import type { Player, UndoStack } from './commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
+import { triggerZoneEffect, type ZoneEffectState } from './zoneEffect';
 
 /**
  * Decreases `target`'s life by `delta`, without touching any commander-damage
@@ -20,6 +21,7 @@ export function applyDamageDelta(
   undoStack: UndoStack,
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
+  effects?: ZoneEffectState,
 ): void {
   if (delta === 0) {
     return;
@@ -28,6 +30,9 @@ export function applyDamageDelta(
   sound?.play(delta > 0 ? 'lifeDown' : 'lifeUp');
   if (delta > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+  }
+  if (effects) {
+    triggerZoneEffect(effects, target.id, 'damage');
   }
   undoStack.push({
     undo(): void {
@@ -45,12 +50,16 @@ export function applyHealDelta(
   delta: number,
   undoStack: UndoStack,
   sound?: SoundPlayer,
+  effects?: ZoneEffectState,
 ): void {
   if (delta === 0) {
     return;
   }
   target.life += delta;
   sound?.play(delta > 0 ? 'lifeUp' : 'lifeDown');
+  if (effects) {
+    triggerZoneEffect(effects, target.id, 'heal');
+  }
   undoStack.push({
     undo(): void {
       target.life -= delta;
@@ -63,7 +72,9 @@ export function applyHealDelta(
  * same amount, as one action (lifelink damage). Pushes a single undo action
  * that reverts both changes onto `undoStack`. No-op if `delta` is zero or
  * `attacker` and `target` are the same player. Triggers `shake` (issue #88)
- * only for a positive delta — the target is taking damage.
+ * only for a positive delta — the target is taking damage — and triggers the
+ * lifelink zone effect (issue #89) on both zones, since the action changes
+ * both players' life totals.
  */
 export function applyLifelinkDelta(
   attacker: Player,
@@ -72,6 +83,7 @@ export function applyLifelinkDelta(
   undoStack: UndoStack,
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
+  effects?: ZoneEffectState,
 ): void {
   if (delta === 0 || attacker.id === target.id) {
     return;
@@ -81,6 +93,10 @@ export function applyLifelinkDelta(
   sound?.play(delta > 0 ? 'lifeDown' : 'lifeUp');
   if (delta > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+  }
+  if (effects) {
+    triggerZoneEffect(effects, target.id, 'lifelink');
+    triggerZoneEffect(effects, attacker.id, 'lifelink');
   }
   undoStack.push({
     undo(): void {

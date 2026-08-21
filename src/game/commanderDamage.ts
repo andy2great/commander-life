@@ -4,6 +4,7 @@
 
 import type { SoundPlayer } from '../audio/soundPlayer';
 import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
+import { triggerZoneEffect, type ZoneEffectState } from './zoneEffect';
 
 export interface Player {
   id: string;
@@ -54,6 +55,7 @@ export function applyCommanderDamageDelta(
   undoStack: UndoStack,
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
+  effects?: ZoneEffectState,
 ): void {
   if (targetId === fromId || delta === 0) {
     return;
@@ -76,6 +78,9 @@ export function applyCommanderDamageDelta(
   sound?.play(applied > 0 ? 'commanderDamageUp' : 'commanderDamageDown');
   if (applied > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
+  }
+  if (effects) {
+    triggerZoneEffect(effects, target.id, 'commander');
   }
 
   undoStack.push({

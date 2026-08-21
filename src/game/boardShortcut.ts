@@ -7,6 +7,7 @@ import { applyDamageDelta } from './life';
 import type { Player, UndoAction, UndoStack } from './commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
+import type { ZoneEffectState } from './zoneEffect';
 
 export type BoardShortcutScope = 'opponents' | 'all';
 
@@ -38,7 +39,9 @@ export function boardShortcutTargets(players: Player[], activeIndex: number, sco
  * `undoStack`, so one undo tap reverts every affected player at once rather
  * than one undo entry per player. No-op for a zero delta. `shake` (issue #88)
  * is forwarded to each `applyDamageDelta` call, which triggers it only for a
- * positive delta.
+ * positive delta. Likewise, each affected player's zone gets its own
+ * independent damage effect via `effects` (issue #89), keyed by player id so
+ * simultaneous zones never clobber one another.
  */
 export function applyBoardShortcutDelta(
   players: Player[],
@@ -48,6 +51,7 @@ export function applyBoardShortcutDelta(
   undoStack: UndoStack,
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
+  effects?: ZoneEffectState,
 ): void {
   if (delta === 0) {
     return;
@@ -58,7 +62,7 @@ export function applyBoardShortcutDelta(
     push: (action) => actions.push(action),
   };
   for (const target of targets) {
-    applyDamageDelta(target, delta, collector, undefined, shake);
+    applyDamageDelta(target, delta, collector, undefined, shake, effects);
   }
   if (actions.length === 0) {
     return;

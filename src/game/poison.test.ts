@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyPoisonDelta, createPoisonState, type PoisonState } from './poison';
 import type { UndoAction } from './commanderDamage';
 import type { ScreenShakeTrigger } from './screenShake';
+import type { ZoneEffectState } from './zoneEffect';
 
 class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
@@ -112,5 +113,25 @@ describe('applyPoisonDelta', () => {
     applyPoisonDelta(state, 'p1', -1, undoStack, shake);
 
     expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('triggers a poison zone effect on the player when effects state is given', () => {
+    const state: PoisonState = createPoisonState(['p1']);
+    const undoStack = new FakeUndoStack();
+    const effects: ZoneEffectState = {};
+
+    applyPoisonDelta(state, 'p1', 2, undoStack, undefined, effects);
+
+    expect(effects.p1).toEqual({ type: 'poison', elapsed: 0 });
+  });
+
+  it('does not trigger a zone effect when a clamped delta applies no actual change', () => {
+    const state: PoisonState = createPoisonState(['p1']);
+    const undoStack = new FakeUndoStack();
+    const effects: ZoneEffectState = {};
+
+    applyPoisonDelta(state, 'p1', -1, undoStack, undefined, effects);
+
+    expect(effects.p1).toBeUndefined();
   });
 });

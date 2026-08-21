@@ -7,6 +7,7 @@ import {
 } from './commanderDamage';
 import type { SoundEvent, SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
+import type { ZoneEffectState } from './zoneEffect';
 
 /** Records every sound-trigger call so tests can assert without a real AudioContext. */
 class MockSoundPlayer implements SoundPlayer {
@@ -195,5 +196,17 @@ describe('applyCommanderDamageDelta', () => {
     applyCommanderDamageDelta(state, players, 'p1', 'p2', -1, undoStack, undefined, shake);
 
     expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('triggers a commander zone effect on the target when effects state is given', () => {
+    const players = makePlayers();
+    const state = createCommanderDamageState(players.map((p) => p.id));
+    const undoStack = new FakeUndoStack();
+    const effects: ZoneEffectState = {};
+
+    applyCommanderDamageDelta(state, players, 'p1', 'p2', 3, undoStack, undefined, undefined, effects);
+
+    expect(effects.p1).toEqual({ type: 'commander', elapsed: 0 });
+    expect(effects.p2).toBeUndefined();
   });
 });

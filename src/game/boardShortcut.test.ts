@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBoardShortcutDelta, BOARD_SHORTCUT_OPTIONS, boardShortcutTargets } from './boardShortcut';
 import type { Player, UndoAction } from './commanderDamage';
 import type { ScreenShakeTrigger } from './screenShake';
+import type { ZoneEffectState } from './zoneEffect';
 
 class MockShake implements ScreenShakeTrigger {
   readonly intensities: number[] = [];
@@ -130,5 +131,18 @@ describe('applyBoardShortcutDelta', () => {
     applyBoardShortcutDelta(players, 0, 'opponents', -2, undoStack, undefined, shake);
 
     expect(shake.intensities).toHaveLength(0);
+  });
+
+  it('triggers an independent damage zone effect on every affected player', () => {
+    const players = makePlayers(4);
+    const undoStack = new FakeUndoStack();
+    const effects: ZoneEffectState = {};
+
+    applyBoardShortcutDelta(players, 0, 'opponents', 3, undoStack, undefined, undefined, effects);
+
+    expect(effects.p1).toBeUndefined();
+    expect(effects.p2).toEqual({ type: 'damage', elapsed: 0 });
+    expect(effects.p3).toEqual({ type: 'damage', elapsed: 0 });
+    expect(effects.p4).toEqual({ type: 'damage', elapsed: 0 });
   });
 });

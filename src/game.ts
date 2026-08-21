@@ -10,6 +10,13 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
+import {
+  updateZoneEffects,
+  ZONE_EFFECT_COLORS,
+  ZONE_EFFECT_DURATION_S,
+  type ZoneEffectState,
+  type ZoneEffectType,
+} from './game/zoneEffect';
 import { CONTROL_GAP_RATIO, SHORTCUT_RADIUS_RATIO, ShortcutControl, UNDO_RADIUS_RATIO, UndoControl } from './ui/controls';
 import { LONG_PRESS_MOVE_TOLERANCE_PX } from './ui/damagePanel';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
@@ -251,6 +258,7 @@ export class Game {
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
+  private readonly zoneEffectsState: ZoneEffectState = {};
   private readonly sound: SoundPlayer;
   private readonly stack = new ArrayUndoStack();
   private zoneRects: ZoneRect[] = [];
@@ -306,6 +314,11 @@ export class Game {
 
   get poisonState(): PoisonState {
     return this.poison;
+  }
+
+  /** Per-zone visual effect state (issue #89): mutated in place by apply*Delta helpers, drawn by drawZones. */
+  get zoneEffects(): ZoneEffectState {
+    return this.zoneEffectsState;
   }
 
   get undoStack(): UndoStack {
@@ -386,6 +399,7 @@ export class Game {
     this.animTime += dt;
     this.activeTimeList[this.turnState.activeIndex] += dt;
     updateScreenShake(this.shakeState, dt);
+    updateZoneEffects(this.zoneEffectsState, dt);
 
     if (this.passTurnFlashSeatIndex !== null) {
       this.passTurnFlashTime += dt;
@@ -683,7 +697,24 @@ export class Game {
       if (seat === this.passTurnFlashSeatIndex) {
         this.drawPassTurnFlash(ctx, rect);
       }
+
+      const zoneEffect = this.zoneEffectsState[player.id];
+      if (zoneEffect) {
+        this.drawZoneEffect(ctx, rect, zoneEffect.type, zoneEffect.elapsed);
+      }
     }
+  }
+
+  /** Brief action-type-colored flash on a zone confirming a life/counter change landed (issue #89), fading out over ZONE_EFFECT_DURATION_S. */
+  private drawZoneEffect(ctx: CanvasRenderingContext2D, rect: ZoneRect, type: ZoneEffectType, elapsed: number): void {
+    const progress = clamp(elapsed / ZONE_EFFECT_DURATION_S, 0, 1);
+    const alpha = (1 - progress) * 0.55;
+    const [r, g, b] = hexToRgb(ZONE_EFFECT_COLORS[type]);
+
+    ctx.save();
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.restore();
   }
 
   /** Brief white flash on a zone the moment its long-press commits the turn pass (issue #64), fading out over PASS_TURN_FLASH_DURATION_S. */

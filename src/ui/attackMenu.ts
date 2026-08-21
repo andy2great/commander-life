@@ -23,6 +23,7 @@ import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from '../game/li
 import { applyPoisonDelta, type PoisonState } from '../game/poison';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from '../game/screenShake';
+import type { ZoneEffectState } from '../game/zoneEffect';
 import { attachHoldToRepeat } from './holdToRepeat';
 
 export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison';
@@ -61,6 +62,7 @@ export function buildDamageTypeDefs(
   undoStack: UndoStack,
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
+  effects?: ZoneEffectState,
 ): DamageTypeDef[] {
   const localCounts: Partial<Record<DamageTypeKey, number>> = {};
   const localType = (
@@ -88,7 +90,7 @@ export function buildDamageTypeDefs(
 
   const types: DamageTypeDef[] = [
     localType('damage', 'Damage', target.color ?? '#948fa3', (delta) =>
-      applyDamageDelta(target, delta, undoStack, sound, shake),
+      applyDamageDelta(target, delta, undoStack, sound, shake, effects),
     ),
   ];
 
@@ -99,18 +101,28 @@ export function buildDamageTypeDefs(
       color: attacker.color ?? '#948fa3',
       getValue: () => damageState[target.id]?.[attacker.id] ?? 0,
       apply: (delta) =>
-        applyCommanderDamageDelta(damageState, players, target.id, attacker.id, delta, undoStack, sound, shake),
+        applyCommanderDamageDelta(
+          damageState,
+          players,
+          target.id,
+          attacker.id,
+          delta,
+          undoStack,
+          sound,
+          shake,
+          effects,
+        ),
     });
     types.push(
       localType('lifelink', 'Lifelink damage', attacker.color ?? '#948fa3', (delta) =>
-        applyLifelinkDelta(attacker, target, delta, undoStack, sound, shake),
+        applyLifelinkDelta(attacker, target, delta, undoStack, sound, shake, effects),
       ),
     );
   }
 
   types.push(
     localType('heal', 'Heal', target.color ?? '#948fa3', (delta) =>
-      applyHealDelta(target, delta, undoStack, sound),
+      applyHealDelta(target, delta, undoStack, sound, effects),
     ),
   );
 
@@ -119,7 +131,7 @@ export function buildDamageTypeDefs(
     label: 'Poison',
     color: target.color ?? '#948fa3',
     getValue: () => poisonState[target.id] ?? 0,
-    apply: (delta) => applyPoisonDelta(poisonState, target.id, delta, undoStack, shake),
+    apply: (delta) => applyPoisonDelta(poisonState, target.id, delta, undoStack, shake, effects),
   });
 
   return types;
@@ -134,6 +146,7 @@ export interface AttackMenuOptions {
   undoStack: UndoStack;
   sound?: SoundPlayer;
   shake?: ScreenShakeTrigger;
+  effects?: ZoneEffectState;
 }
 
 let stylesInjected = false;
@@ -168,6 +181,7 @@ export class AttackMenu {
   private readonly undoStack: UndoStack;
   private readonly sound?: SoundPlayer;
   private readonly shake?: ScreenShakeTrigger;
+  private readonly effects?: ZoneEffectState;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
 
@@ -179,6 +193,7 @@ export class AttackMenu {
     this.undoStack = options.undoStack;
     this.sound = options.sound;
     this.shake = options.shake;
+    this.effects = options.effects;
   }
 
   get isOpen(): boolean {
@@ -245,6 +260,7 @@ export class AttackMenu {
       this.undoStack,
       this.sound,
       this.shake,
+      this.effects,
     );
     panel.appendChild(this.buildTogglesAndCounter(types));
 
