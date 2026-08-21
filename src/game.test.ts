@@ -1226,4 +1226,25 @@ describe('pause/resume (issue #97)', () => {
 
     expect(game.dragArrow).toBeNull();
   });
+
+  it('disables tapping the undo control while paused, even though it sits under the PAUSED label', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const player = game.players[0];
+    const attackerId = game.players[1].id;
+    dealDamage(game, attackerId, player.id, 1); // life: 40 -> 39
+    expect(game.canUndo).toBe(true);
+
+    game.togglePause();
+    game.onTap(200, 400); // UndoControl.reflow centers it at width/2, height/2
+
+    expect(game.canUndo).toBe(true);
+    expect(player.life).toBe(39);
+
+    game.togglePause();
+    game.onTap(200, 400);
+
+    expect(game.canUndo).toBe(false);
+    expect(player.life).toBe(40);
+  });
 });
