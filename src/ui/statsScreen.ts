@@ -41,6 +41,10 @@ function injectStylesOnce(): void {
     .stats-elim-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
     .stats-elim-name { flex: 1; color: #f5f3f7; font-size: 13px; font-weight: 600; }
     .stats-elim-turn { color: #948fa3; font-size: 11px; }
+    .stats-hit-card { background: linear-gradient(135deg, rgba(239,68,68,.18), rgba(142,78,198,.14)); border: 1px solid rgba(239,68,68,.4); border-radius: 20px; padding: 16px; text-align: center; }
+    .stats-hit-tag { color: #ef4444; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
+    .stats-hit-name { color: #fff; font-size: 26px; font-weight: 800; margin-top: 4px; }
+    .stats-hit-sub { color: #948fa3; font-size: 12px; margin-top: 4px; }
     .stats-cta { margin-top: auto; background: linear-gradient(135deg, #0091ff, #8e4ec6); color: #fff; border: none; border-radius: 18px; padding: 18px; font-size: 17px; font-weight: 800; letter-spacing: 0.4px; text-align: center; }
   `;
   document.head.appendChild(style);
@@ -76,6 +80,14 @@ export class StatsScreen {
 
     overlay.appendChild(this.buildWinnerCard());
     overlay.appendChild(this.buildActiveTimeCard());
+    overlay.appendChild(this.buildStatBarCard('Life lost', this.stats.lifeLost));
+    overlay.appendChild(this.buildStatBarCard('Life gained', this.stats.lifeGained));
+    overlay.appendChild(this.buildStatBarCard('Commander damage dealt', this.stats.commanderDamageDealt));
+    overlay.appendChild(this.buildStatBarCard('Commander damage received', this.stats.commanderDamageReceived));
+
+    if (this.stats.biggestHit) {
+      overlay.appendChild(this.buildBiggestHitCard());
+    }
 
     const eliminated = this.stats.eliminationOrder;
     if (eliminated.length > 0) {
@@ -175,6 +187,92 @@ export class StatsScreen {
       row.appendChild(track);
       row.appendChild(pctLabel);
       card.appendChild(row);
+    }
+
+    return card;
+  }
+
+  /**
+   * A per-player horizontal bar chart card (issue #98) for one of the
+   * match-total stats (life lost/gained, commander damage dealt/received),
+   * styled the same as buildActiveTimeCard's bars but scaled to the largest
+   * value among the players — there's no natural whole to show a percentage
+   * of, unlike time-as-active-player.
+   */
+  private buildStatBarCard(title: string, values: Record<string, number>): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'stats-card';
+
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    card.appendChild(heading);
+
+    const maxValue = Math.max(1, ...this.players.map((player) => values[player.id] ?? 0));
+
+    for (const player of this.players) {
+      const value = values[player.id] ?? 0;
+      const pct = Math.round((value / maxValue) * 100);
+
+      const row = document.createElement('div');
+      row.className = 'stats-bar-row';
+
+      const label = document.createElement('div');
+      label.className = 'stats-bar-label';
+      label.textContent = player.name;
+
+      const track = document.createElement('div');
+      track.className = 'stats-bar-track';
+      const barColor = player.color ?? '#f5f3f7';
+      const fill = document.createElement('div');
+      fill.className = 'stats-bar-fill';
+      fill.style.width = `${pct}%`;
+      fill.style.background = barColor;
+      fill.style.boxShadow = `0 0 6px ${barColor}88`;
+      track.appendChild(fill);
+
+      const valueLabel = document.createElement('div');
+      valueLabel.className = 'stats-bar-pct';
+      valueLabel.textContent = String(value);
+
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(valueLabel);
+      card.appendChild(row);
+    }
+
+    return card;
+  }
+
+  /** Highlighted card (issue #98) for the match's single biggest hit, styled like buildWinnerCard. Only appended when a hit landed. */
+  private buildBiggestHitCard(): HTMLElement {
+    const hit = this.stats.biggestHit as NonNullable<GameStats['biggestHit']>;
+    const attacker = this.findPlayer(hit.attackerId);
+    const target = hit.targetId ? this.findPlayer(hit.targetId) : undefined;
+    const color = attacker?.color;
+
+    const card = document.createElement('div');
+    card.className = 'stats-hit-card';
+    if (color) {
+      card.style.background = `linear-gradient(135deg, ${color}2e, ${color}14)`;
+      card.style.borderColor = `${color}66`;
+    }
+
+    const tag = document.createElement('div');
+    tag.className = 'stats-hit-tag';
+    tag.textContent = 'Biggest hit';
+    card.appendChild(tag);
+
+    const name = document.createElement('div');
+    name.className = 'stats-hit-name';
+    name.style.color = color ?? '#fff';
+    name.textContent = `${attacker?.name ?? 'Unknown'} — ${hit.amount}`;
+    card.appendChild(name);
+
+    if (target) {
+      const sub = document.createElement('div');
+      sub.className = 'stats-hit-sub';
+      sub.textContent = `Commander damage to ${target.name}`;
+      card.appendChild(sub);
     }
 
     return card;

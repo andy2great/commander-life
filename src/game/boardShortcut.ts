@@ -8,6 +8,7 @@ import type { Player, UndoAction, UndoStack } from './commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from './screenShake';
 import type { ZoneEffectTrigger } from './zoneEffect';
+import type { StatsTrigger } from './stats';
 
 export type BoardShortcutScope = 'opponents' | 'all';
 
@@ -43,7 +44,9 @@ export function boardShortcutTargets(players: Player[], activeIndex: number, sco
  * forwarded to each call, independently per affected zone, so e.g. "damage
  * all players" flashes every zone at once: `applyDamageDelta` triggers a red
  * flash plus shake for the damage case, `applyHealDelta` triggers a green
- * flash with no shake for the heal case.
+ * flash with no shake for the heal case. `stats` (issue #98) is likewise
+ * forwarded, with the active player (the effect's source) attributed as the
+ * attacker for the damage case's life-lost/biggest-hit stats.
  */
 export function applyBoardShortcutDelta(
   players: Player[],
@@ -54,10 +57,12 @@ export function applyBoardShortcutDelta(
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
   zoneEffects?: ZoneEffectTrigger,
+  stats?: StatsTrigger,
 ): void {
   if (delta === 0) {
     return;
   }
+  const active = players[activeIndex];
   const targets = boardShortcutTargets(players, activeIndex, scope);
   const actions: UndoAction[] = [];
   const collector: UndoStack = {
@@ -65,9 +70,9 @@ export function applyBoardShortcutDelta(
   };
   for (const target of targets) {
     if (delta > 0) {
-      applyDamageDelta(target, delta, collector, undefined, shake, zoneEffects);
+      applyDamageDelta(target, delta, collector, undefined, shake, zoneEffects, active.id, stats);
     } else {
-      applyHealDelta(target, -delta, collector, undefined, zoneEffects);
+      applyHealDelta(target, -delta, collector, undefined, zoneEffects, stats);
     }
   }
   if (actions.length === 0) {

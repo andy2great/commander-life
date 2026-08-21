@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects } from './game';
 import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
+import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './game/life';
 import { applyPoisonDelta } from './game/poison';
 import { applyBoardShortcutDelta } from './game/boardShortcut';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
@@ -901,6 +902,39 @@ describe('end of game', () => {
 
     game.update(10);
     expect(game.stats?.durationS).toBeCloseTo(5, 5);
+  });
+
+  it('populates lifeLost/lifeGained/commanderDamage totals and the biggest hit from a sequence of damage, heal, lifelink, and commander-damage actions (issue #98)', () => {
+    const game = makeThreePlayerGame(1);
+    const alara = game.players[0];
+    const kess = game.players[1];
+    const yorion = game.players[2];
+
+    applyDamageDelta(kess, 5, game.undoStack, undefined, undefined, undefined, alara.id, game.statsTrigger);
+    applyHealDelta(kess, 3, game.undoStack, undefined, undefined, game.statsTrigger);
+    applyLifelinkDelta(yorion, alara, 4, game.undoStack, undefined, undefined, undefined, game.statsTrigger);
+    applyCommanderDamageDelta(
+      game.damageState,
+      game.players,
+      kess.id,
+      alara.id,
+      9,
+      game.undoStack,
+      undefined,
+      undefined,
+      undefined,
+      game.statsTrigger,
+    );
+    game.update(0.016); // checkEndConditions runs every frame; life/damage changes above bypass Game directly
+
+    expect(game.ended).toBe(true);
+    expect(game.stats?.winnerId).toBe(yorion.id);
+
+    expect(game.stats?.lifeLost).toEqual({ [alara.id]: 4, [kess.id]: 5, [yorion.id]: 0 });
+    expect(game.stats?.lifeGained).toEqual({ [alara.id]: 0, [kess.id]: 3, [yorion.id]: 4 });
+    expect(game.stats?.commanderDamageDealt).toEqual({ [alara.id]: 9, [kess.id]: 0, [yorion.id]: 0 });
+    expect(game.stats?.commanderDamageReceived).toEqual({ [alara.id]: 0, [kess.id]: 9, [yorion.id]: 0 });
+    expect(game.stats?.biggestHit).toEqual({ attackerId: alara.id, amount: 9, targetId: kess.id });
   });
 
   it('ends with no winner rather than softlocking when a board-wide shortcut eliminates every remaining player at once (issue #84)', () => {

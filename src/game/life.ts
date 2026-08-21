@@ -7,13 +7,16 @@ import type { Player, UndoStack } from './commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
 import { DAMAGE_EFFECT_COLOR, HEAL_EFFECT_COLOR, type ZoneEffectTrigger } from './zoneEffect';
+import type { StatsTrigger } from './stats';
 
 /**
  * Decreases `target`'s life by `delta`, without touching any commander-damage
  * counter. Pushes an undo action that reverts it onto `undoStack`. No-op if
- * `delta` is zero. Triggers `shake` (issue #88) and `zoneEffects` (issue #89)
- * only for a positive delta — an actual damage tick, as opposed to correcting
- * a prior tap within the same menu session.
+ * `delta` is zero. Triggers `shake` (issue #88), `zoneEffects` (issue #89),
+ * and `stats` (issue #98) only for a positive delta — an actual damage tick,
+ * as opposed to correcting a prior tap within the same menu session.
+ * `attackerId`, when given, attributes the hit to that player for the
+ * biggest-hit stat.
  */
 export function applyDamageDelta(
   target: Player,
@@ -22,6 +25,8 @@ export function applyDamageDelta(
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
   zoneEffects?: ZoneEffectTrigger,
+  attackerId?: string,
+  stats?: StatsTrigger,
 ): void {
   if (delta === 0) {
     return;
@@ -31,6 +36,10 @@ export function applyDamageDelta(
   if (delta > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
     zoneEffects?.trigger(target.id, 'damage', DAMAGE_EFFECT_COLOR);
+    stats?.recordLifeChange(target.id, -delta);
+    if (attackerId) {
+      stats?.recordHit(attackerId, delta);
+    }
   }
   undoStack.push({
     undo(): void {
@@ -42,8 +51,9 @@ export function applyDamageDelta(
 /**
  * Increases `target`'s life by `delta` (healing). Pushes an undo action that
  * reverts it onto `undoStack`. No-op if `delta` is zero. Triggers
- * `zoneEffects` (issue #89) only for a positive delta — an actual heal, as
- * opposed to correcting a prior tap within the same menu session.
+ * `zoneEffects` (issue #89) and `stats` (issue #98) only for a positive
+ * delta — an actual heal, as opposed to correcting a prior tap within the
+ * same menu session.
  */
 export function applyHealDelta(
   target: Player,
@@ -51,6 +61,7 @@ export function applyHealDelta(
   undoStack: UndoStack,
   sound?: SoundPlayer,
   zoneEffects?: ZoneEffectTrigger,
+  stats?: StatsTrigger,
 ): void {
   if (delta === 0) {
     return;
@@ -59,6 +70,7 @@ export function applyHealDelta(
   sound?.play(delta > 0 ? 'lifeUp' : 'lifeDown');
   if (delta > 0) {
     zoneEffects?.trigger(target.id, 'heal', HEAL_EFFECT_COLOR);
+    stats?.recordLifeChange(target.id, delta);
   }
   undoStack.push({
     undo(): void {
@@ -74,7 +86,9 @@ export function applyHealDelta(
  * `attacker` and `target` are the same player. Triggers `shake` (issue #88)
  * only for a positive delta — the target is taking damage. Triggers
  * `zoneEffects` (issue #89) on both zones for a positive delta: a damage
- * flash on `target`, a heal flash on `attacker`.
+ * flash on `target`, a heal flash on `attacker`. Triggers `stats` (issue #98)
+ * for a positive delta: life lost on `target`, life gained on `attacker`, and
+ * a biggest-hit candidate attributed to `attacker`.
  */
 export function applyLifelinkDelta(
   attacker: Player,
@@ -84,6 +98,7 @@ export function applyLifelinkDelta(
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
   zoneEffects?: ZoneEffectTrigger,
+  stats?: StatsTrigger,
 ): void {
   if (delta === 0 || attacker.id === target.id) {
     return;
@@ -95,6 +110,9 @@ export function applyLifelinkDelta(
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
     zoneEffects?.trigger(target.id, 'damage', DAMAGE_EFFECT_COLOR);
     zoneEffects?.trigger(attacker.id, 'heal', HEAL_EFFECT_COLOR);
+    stats?.recordLifeChange(target.id, -delta);
+    stats?.recordLifeChange(attacker.id, delta);
+    stats?.recordHit(attacker.id, delta);
   }
   undoStack.push({
     undo(): void {

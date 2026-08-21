@@ -5,6 +5,7 @@
 import type { SoundPlayer } from '../audio/soundPlayer';
 import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
 import { DAMAGE_EFFECT_COLOR, type ZoneEffectTrigger } from './zoneEffect';
+import type { StatsTrigger } from './stats';
 
 export interface Player {
   id: string;
@@ -48,6 +49,9 @@ export function createCommanderDamageState(playerIds: string[]): CommanderDamage
  * zone under the same condition, colored with the attacking `fromId`
  * player's own accent color where set (falling back to the plain damage
  * color otherwise), so the flash reads as "damage from that commander".
+ * Records the applied amount on `stats` (issue #98) as commander damage
+ * dealt by `fromId`/received by `targetId`, and as a biggest-hit candidate
+ * attributed to `fromId` with `targetId` set, under the same condition.
  */
 export function applyCommanderDamageDelta(
   state: CommanderDamageState,
@@ -59,6 +63,7 @@ export function applyCommanderDamageDelta(
   sound?: SoundPlayer,
   shake?: ScreenShakeTrigger,
   zoneEffects?: ZoneEffectTrigger,
+  stats?: StatsTrigger,
 ): void {
   if (targetId === fromId || delta === 0) {
     return;
@@ -83,6 +88,8 @@ export function applyCommanderDamageDelta(
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
     const attacker = players.find((player) => player.id === fromId);
     zoneEffects?.trigger(targetId, 'commanderDamage', attacker?.color ?? DAMAGE_EFFECT_COLOR);
+    stats?.recordCommanderDamage(fromId, targetId, applied);
+    stats?.recordHit(fromId, applied, targetId);
   }
 
   undoStack.push({

@@ -13,6 +13,7 @@ import type { Player, UndoStack } from '../game/commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger } from '../game/zoneEffect';
+import type { StatsTrigger } from '../game/stats';
 import { attachHoldToRepeat } from './holdToRepeat';
 
 /**
@@ -37,6 +38,7 @@ export interface BoardShortcutMenuOptions {
   sound?: SoundPlayer;
   shake?: ScreenShakeTrigger;
   zoneEffects?: ZoneEffectTrigger;
+  stats?: StatsTrigger;
 }
 
 let stylesInjected = false;
@@ -75,6 +77,7 @@ export class BoardShortcutMenu {
   private readonly sound?: SoundPlayer;
   private readonly shake?: ScreenShakeTrigger;
   private readonly zoneEffects?: ZoneEffectTrigger;
+  private readonly stats?: StatsTrigger;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
 
@@ -86,6 +89,7 @@ export class BoardShortcutMenu {
     this.sound = options.sound;
     this.shake = options.shake;
     this.zoneEffects = options.zoneEffects;
+    this.stats = options.stats;
   }
 
   get isOpen(): boolean {
@@ -256,6 +260,7 @@ export class BoardShortcutMenu {
         this.sound,
         this.shake,
         this.zoneEffects,
+        this.stats,
       );
       this.close();
     });
