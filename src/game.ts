@@ -36,6 +36,12 @@ const ARROW_SHAFT_WIDTH_RATIO = 0.035;
 const ARROW_HEAD_LENGTH_RATIO = 0.09;
 const ARROW_HEAD_WIDTH_RATIO = 0.09;
 const ARROW_TARGET_HIGHLIGHT_WIDTH_RATIO = 0.012;
+// Elevation shadow (issue #69): a dedicated dark silhouette cast straight down
+// (screen space) beneath the arrow, separate from the perpendicular light/dark
+// shading gradient, so the arrow reads as floating above the table at any
+// drag angle.
+const ARROW_ELEVATION_OFFSET_RATIO = 0.035;
+const ARROW_ELEVATION_BLUR_RATIO = 0.05;
 
 function hexToRgb(hex: string): [number, number, number] {
   const normalized = hex.replace('#', '');
@@ -654,27 +660,38 @@ export class Game {
     gradient.addColorStop(0.5, color);
     gradient.addColorStop(1, darkenColor(color, 0.4));
 
+    const traceArrowPath = (offsetX: number, offsetY: number): void => {
+      ctx.beginPath();
+      ctx.moveTo(x1 + px * shaftHalfWidth + offsetX, y1 + py * shaftHalfWidth + offsetY);
+      ctx.lineTo(shaftEndX + px * shaftHalfWidth + offsetX, shaftEndY + py * shaftHalfWidth + offsetY);
+      ctx.lineTo(shaftEndX - px * shaftHalfWidth + offsetX, shaftEndY - py * shaftHalfWidth + offsetY);
+      ctx.lineTo(x1 - px * shaftHalfWidth + offsetX, y1 - py * shaftHalfWidth + offsetY);
+      ctx.closePath();
+      ctx.moveTo(x2 + offsetX, y2 + offsetY);
+      ctx.lineTo(shaftEndX + px * headHalfWidth + offsetX, shaftEndY + py * headHalfWidth + offsetY);
+      ctx.lineTo(shaftEndX - px * headHalfWidth + offsetX, shaftEndY - py * headHalfWidth + offsetY);
+      ctx.closePath();
+    };
+
+    // Elevation shadow: a soft dark silhouette of the arrow, offset straight
+    // down in screen space (never rotated with the drag angle) and blurred
+    // more heavily than the shaft's own shading, cast "onto the table" to
+    // sell the floating/3D-elevated look.
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-    ctx.shadowBlur = shortSide * 0.02;
-    ctx.shadowOffsetY = shortSide * 0.006;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = shortSide * ARROW_ELEVATION_BLUR_RATIO;
+    traceArrowPath(0, shortSide * ARROW_ELEVATION_OFFSET_RATIO);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    ctx.shadowBlur = shortSide * 0.015;
+    ctx.shadowOffsetY = shortSide * 0.004;
     ctx.fillStyle = gradient;
-
-    ctx.beginPath();
-    ctx.moveTo(x1 + px * shaftHalfWidth, y1 + py * shaftHalfWidth);
-    ctx.lineTo(shaftEndX + px * shaftHalfWidth, shaftEndY + py * shaftHalfWidth);
-    ctx.lineTo(shaftEndX - px * shaftHalfWidth, shaftEndY - py * shaftHalfWidth);
-    ctx.lineTo(x1 - px * shaftHalfWidth, y1 - py * shaftHalfWidth);
-    ctx.closePath();
+    traceArrowPath(0, 0);
     ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(shaftEndX + px * headHalfWidth, shaftEndY + py * headHalfWidth);
-    ctx.lineTo(shaftEndX - px * headHalfWidth, shaftEndY - py * headHalfWidth);
-    ctx.closePath();
-    ctx.fill();
-
     ctx.restore();
   }
 }
