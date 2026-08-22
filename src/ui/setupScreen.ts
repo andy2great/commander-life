@@ -312,6 +312,13 @@ export class SetupScreen {
       }),
     );
 
+    // The "Start Game" action lives here on the shared center hub, alongside
+    // the table-wide steppers, rather than as a separate full-width CTA
+    // pinned below a scrolling list (issue #150). `start()` persists the
+    // roster via rosterStorage and hands the config to onStartCallback,
+    // which flips the canvas on in place while this DOM overlay closes —
+    // no full-screen overlay swap, since the zone layout underneath already
+    // matches the live board.
     const cta = document.createElement('button');
     cta.type = 'button';
     cta.className = 'setup-hub-cta';
