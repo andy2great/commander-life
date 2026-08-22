@@ -46,7 +46,7 @@ describe('createTurnState', () => {
   });
 
   it('starts at the given seat when a startIndex is passed (issue #126)', () => {
-    expect(createTurnState(2)).toEqual({ activeIndex: 2, turnCount: 0 });
+    expect(createTurnState(2)).toEqual({ activeIndex: 2, turnCount: 0, startIndex: 2 });
   });
 });
 
@@ -72,4 +72,32 @@ describe('advanceTurn', () => {
       expect(state.turnCount).toBe(1);
     });
   }
+
+  it('increments turnCount only after every seat has had a turn when starting from a non-zero seat (issue #146)', () => {
+    // 4p clockwise order is [0, 1, 3, 2]; starting at seat 3 the first lap
+    // must visit seats 2, 0, and 1 before turnCount increments — not as soon
+    // as play cycles past raw seat 0.
+    let state = createTurnState(3);
+    expect(state).toEqual({ activeIndex: 3, turnCount: 0, startIndex: 3 });
+
+    state = advanceTurn(state, 4); // seat 3 -> 2
+    expect(state.activeIndex).toBe(2);
+    expect(state.turnCount).toBe(0);
+
+    state = advanceTurn(state, 4); // seat 2 -> 0 (must NOT count as a lap)
+    expect(state.activeIndex).toBe(0);
+    expect(state.turnCount).toBe(0);
+
+    state = advanceTurn(state, 4); // seat 0 -> 1
+    expect(state.activeIndex).toBe(1);
+    expect(state.turnCount).toBe(0);
+
+    state = advanceTurn(state, 4); // seat 1 -> 3 (back to the starting seat: lap complete)
+    expect(state.activeIndex).toBe(3);
+    expect(state.turnCount).toBe(1);
+
+    state = advanceTurn(state, 4); // second lap begins the same way
+    expect(state.activeIndex).toBe(2);
+    expect(state.turnCount).toBe(1);
+  });
 });
