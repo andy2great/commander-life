@@ -458,6 +458,18 @@ describe('Game', () => {
     expect(game.onLongPress(shortcutProbeX, undoCenter.y)).toBeNull();
   });
 
+  it('does not highlight a player zone as a drag target over the pause control (issue #141)', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const undoCenter = undoControlCenter(400, 800);
+
+    // Somewhere to the left of the undo icon, mirroring the shortcut control's position.
+    const pauseProbeX = undoCenter.x - 40;
+    expect(game.isOverPauseControl(pauseProbeX, undoCenter.y)).toBe(true);
+    expect(game.isOverUndoControl(pauseProbeX, undoCenter.y)).toBe(false);
+    expect(game.onLongPress(pauseProbeX, undoCenter.y)).toBeNull();
+  });
+
   describe('resolveZoneDrag (issue #48)', () => {
     it('resolves a drag from one zone to a different zone, without itself changing any total', () => {
       const game = new Game();

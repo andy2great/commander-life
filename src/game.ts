@@ -686,7 +686,11 @@ export class Game {
    * resolveZoneDrag() below, to resolve either end of a zone-to-zone drag.
    */
   onLongPress(x: number, y: number): string | null {
-    if (this.undoControl.containsPoint(x, y) || this.shortcutControl.containsPoint(x, y)) {
+    if (
+      this.undoControl.containsPoint(x, y) ||
+      this.shortcutControl.containsPoint(x, y) ||
+      this.pauseControl.containsPoint(x, y)
+    ) {
       return null;
     }
     return this.playerIdAt(x, y);
