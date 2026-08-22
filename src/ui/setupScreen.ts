@@ -92,11 +92,11 @@ function injectStylesOnce(): void {
     .setup-swatch { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); }
     .setup-name-field { flex: 1; min-width: 0; color: #f5f3f7; font-size: 14px; font-weight: 600; background: transparent; border: none; outline: none; font-family: system-ui, sans-serif; }
     .setup-name-field::placeholder { color: #948fa3; font-weight: 400; }
-    .setup-start-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; background: #2d2938; color: #6a6478; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-start-btn { box-sizing: border-box; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: #2d2938; color: #6a6478; transition: transform 100ms ease, filter 100ms ease; }
     .setup-start-btn svg { width: 14px; height: 14px; }
     .setup-start-btn:active { transform: scale(0.9); }
     .setup-start-btn-active { background: rgba(215, 165, 76, 0.22); color: #d7a54c; box-shadow: 0 0 0 2px rgba(215, 165, 76, 0.4); }
-    .setup-remove-btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, 0.14); color: #ff8a8f; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-remove-btn { box-sizing: border-box; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, 0.14); color: #ff8a8f; transition: transform 100ms ease, filter 100ms ease; }
     .setup-remove-btn svg { width: 14px; height: 14px; }
     .setup-remove-btn:active { transform: scale(0.9); }
     .setup-remove-btn:disabled { opacity: 0.3; }
