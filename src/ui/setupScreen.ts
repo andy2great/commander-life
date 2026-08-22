@@ -255,6 +255,14 @@ export class SetupScreen {
     return zone;
   }
 
+  /**
+   * The two table-wide settings — "Players" and "Starting life" — live here
+   * on the shared center hub rather than per-zone, since they apply to the
+   * whole table rather than one seat (issue #149). This is also where the
+   * board's shared center control hosts undo/shortcut/pause during play, so
+   * setup mode keeps everything on the one page the on-board layout (#148)
+   * introduced instead of a separate screen.
+   */
   private buildHub(): HTMLElement {
     const hub = document.createElement('div');
     hub.className = 'setup-hub';
