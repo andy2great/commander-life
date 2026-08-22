@@ -6,11 +6,13 @@
 export interface TurnState {
   activeIndex: number;
   turnCount: number;
+  /** Seat the current lap began from — where `activeIndex` wrapping back to increments `turnCount` (issue #146). */
+  startIndex: number;
 }
 
 /** `startIndex` (default 0) is which seat is active first — the host's "who starts first" pick on the setup screen (issue #126). */
 export function createTurnState(startIndex = 0): TurnState {
-  return { activeIndex: startIndex, turnCount: 0 };
+  return { activeIndex: startIndex, turnCount: 0, startIndex };
 }
 
 // Table-like grid layout per docs/concept.md: always two rows (top row
@@ -64,14 +66,17 @@ export function nextPlayerIndex(currentIndex: number, playerCount: number): numb
 
 /**
  * Advances the active player to the next seat in order. Increments
- * `turnCount` exactly when the active player wraps from the last seat back
- * to the first.
+ * `turnCount` exactly when the active player wraps back to the seat the
+ * current lap started from (`state.startIndex`) — not raw seat 0 — so a lap
+ * beginning at a non-default starting seat (issue #126) still counts a full
+ * circuit of every player before incrementing (issue #146).
  */
 export function advanceTurn(state: TurnState, playerCount: number): TurnState {
   const activeIndex = nextPlayerIndex(state.activeIndex, playerCount);
-  const wrapped = activeIndex === 0;
+  const wrapped = activeIndex === state.startIndex;
   return {
     activeIndex,
     turnCount: state.turnCount + (wrapped ? 1 : 0),
+    startIndex: state.startIndex,
   };
 }
