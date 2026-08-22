@@ -13,7 +13,14 @@ import {
   type GameConfig,
   type PlayerConfig,
 } from '../game';
-import { clampStartingIndex, movePlayer, removePlayerAt } from '../game/playerRoster';
+import {
+  clampStartingIndex,
+  defaultNameForSeat,
+  movePlayer,
+  removePlayerAt,
+  resolveDisplayValue,
+  resolveSubmittedName,
+} from '../game/playerRoster';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
@@ -115,6 +122,14 @@ export class SetupScreen {
   private players: PlayerConfig[];
   /** The player picked to start first, or null to default to seat 0 — a fresh per-game choice, never carried over from a previous game (issue #126). */
   private startingPlayer: PlayerConfig | null = null;
+  /**
+   * Players whose name field the host hasn't typed into, tracked by object
+   * identity so the flag survives `movePlayer`/`removePlayerAt` reordering
+   * the array — unlike comparing `player.name` against a freshly recomputed
+   * positional default, which goes stale as soon as the index changes
+   * (issue #140). See `resolveDisplayValue`/`resolveSubmittedName`.
+   */
+  private untouchedPlayers = new Set<PlayerConfig>();
 
   constructor(options: SetupScreenOptions) {
     this.root = options.root;
@@ -129,14 +144,25 @@ export class SetupScreen {
       this.playerCount = clampPlayerCount(source.playerCount);
       this.startingLife = clampStartingLife(source.startingLife);
       this.players = source.players.slice(0, this.playerCount).map((player) => ({ ...player }));
+      this.players.forEach((player, index) => {
+        if (player.name === defaultNameForSeat(index)) {
+          this.untouchedPlayers.add(player);
+        }
+      });
       while (this.players.length < this.playerCount) {
-        this.players.push(defaultPlayer(this.players.length));
+        this.players.push(this.createDefaultPlayer(this.players.length));
       }
     } else {
       this.playerCount = DEFAULT_PLAYER_COUNT;
       this.startingLife = DEFAULT_STARTING_LIFE;
-      this.players = Array.from({ length: this.playerCount }, (_, seat) => defaultPlayer(seat));
+      this.players = Array.from({ length: this.playerCount }, (_, seat) => this.createDefaultPlayer(seat));
     }
+  }
+
+  private createDefaultPlayer(seat: number): PlayerConfig {
+    const player = defaultPlayer(seat);
+    this.untouchedPlayers.add(player);
+    return player;
   }
 
   show(): void {
@@ -233,7 +259,7 @@ export class SetupScreen {
           return;
         }
         if (nextCount > this.playerCount) {
-          this.players.push(defaultPlayer(this.players.length));
+          this.players.push(this.createDefaultPlayer(this.players.length));
         } else {
           const [removed] = this.players.splice(this.players.length - 1, 1);
           if (removed === this.startingPlayer) {
@@ -338,14 +364,15 @@ export class SetupScreen {
     swatch.className = 'setup-swatch';
     swatch.style.background = gemBackground(player.color);
 
-    const defaultName = `Player ${index + 1}`;
+    const defaultName = defaultNameForSeat(index);
     const nameField = document.createElement('input');
     nameField.type = 'text';
     nameField.className = 'setup-name-field';
     nameField.placeholder = defaultName;
-    nameField.value = player.name === defaultName ? '' : player.name;
+    nameField.value = resolveDisplayValue(player, this.untouchedPlayers.has(player));
     nameField.style.caretColor = player.color;
     nameField.addEventListener('input', () => {
+      this.untouchedPlayers.delete(player);
       player.name = nameField.value.trim() || defaultName;
     });
 
@@ -475,7 +502,10 @@ export class SetupScreen {
     const config: GameConfig = {
       playerCount: this.playerCount,
       startingLife: this.startingLife,
-      players: this.players.map((player) => ({ ...player })),
+      players: this.players.map((player, index) => ({
+        ...player,
+        name: resolveSubmittedName(player, index, this.untouchedPlayers.has(player)),
+      })),
       startingIndex,
     };
     saveLastRoster(window.localStorage, config);

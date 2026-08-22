@@ -40,3 +40,34 @@ export function clampStartingIndex(index: number, playerCount: number): number {
   }
   return index;
 }
+
+/** The placeholder/default name for the seat at `index` — "Player 1", "Player 2", etc. */
+export function defaultNameForSeat(index: number): string {
+  return `Player ${index + 1}`;
+}
+
+/**
+ * What a player row's name field should display while the host hasn't
+ * typed into it: blank, so the field falls back to its placeholder. Once
+ * `untouched` is false, the player's own name is shown as-is.
+ *
+ * `untouched` must be tracked by the player's object identity (e.g. a
+ * `Set`/`WeakSet` populated on creation and cleared on the row's `input`
+ * event) rather than recomputed by comparing `player.name` to a freshly
+ * derived positional default — that comparison is what let issue #140
+ * happen: `movePlayer`/`removePlayerAt` change a player's *index* without
+ * touching its identity, so an identity-keyed flag survives reordering
+ * while an index-derived string does not.
+ */
+export function resolveDisplayValue(player: { name: string }, untouched: boolean): string {
+  return untouched ? '' : player.name;
+}
+
+/**
+ * What a player's name should be submitted as when the game starts. An
+ * untouched player always submits the *current* positional default rather
+ * than a stale literal stamped in at an earlier seat position (issue #140).
+ */
+export function resolveSubmittedName(player: { name: string }, index: number, untouched: boolean): string {
+  return untouched ? defaultNameForSeat(index) : player.name;
+}

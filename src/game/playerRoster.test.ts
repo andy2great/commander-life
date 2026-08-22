@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { clampStartingIndex, movePlayer, removePlayerAt } from './playerRoster';
+import {
+  clampStartingIndex,
+  defaultNameForSeat,
+  movePlayer,
+  removePlayerAt,
+  resolveDisplayValue,
+  resolveSubmittedName,
+} from './playerRoster';
 
 describe('movePlayer', () => {
   it('moves an item forward, shifting the items in between back', () => {
@@ -67,5 +74,90 @@ describe('clampStartingIndex', () => {
 
   it('defaults to 0 for a non-integer index', () => {
     expect(clampStartingIndex(1.5, 4)).toBe(0);
+  });
+});
+
+describe('defaultNameForSeat', () => {
+  it('is 1-indexed', () => {
+    expect(defaultNameForSeat(0)).toBe('Player 1');
+    expect(defaultNameForSeat(3)).toBe('Player 4');
+  });
+});
+
+describe('resolveDisplayValue', () => {
+  it('is blank for an untouched player, regardless of its stored name', () => {
+    expect(resolveDisplayValue({ name: 'Player 4' }, true)).toBe('');
+  });
+
+  it('is the player name for a touched player', () => {
+    expect(resolveDisplayValue({ name: 'Atraxa' }, false)).toBe('Atraxa');
+  });
+});
+
+describe('resolveSubmittedName', () => {
+  it('submits the current positional default for an untouched player', () => {
+    expect(resolveSubmittedName({ name: 'Player 4' }, 0, true)).toBe('Player 1');
+  });
+
+  it('submits the stored name for a touched player, ignoring its position', () => {
+    expect(resolveSubmittedName({ name: 'Atraxa' }, 0, false)).toBe('Atraxa');
+  });
+});
+
+/**
+ * Regression coverage for issue #140: reordering/removing players must not
+ * stamp a stale literal name (derived from an old index) onto an untouched
+ * field. `untouched` is simulated the way SetupScreen tracks it — a `Set`
+ * keyed by player object identity — since `movePlayer`/`removePlayerAt`
+ * preserve object identity while changing index, which is exactly the
+ * property the fix relies on.
+ */
+describe('reorder/remove keeps untouched vs. custom-named state correct (issue #140)', () => {
+  it('reorder: an untouched player never displays stale text, and its submitted name tracks its new seat', () => {
+    const players = [{ name: 'Player 1' }, { name: 'Player 2' }, { name: 'Player 3' }, { name: 'Player 4' }];
+    const untouched = new Set(players);
+
+    const reordered = movePlayer(players, 3, 0);
+
+    reordered.forEach((player, index) => {
+      expect(resolveDisplayValue(player, untouched.has(player))).toBe('');
+      expect(resolveSubmittedName(player, index, untouched.has(player))).toBe(defaultNameForSeat(index));
+    });
+  });
+
+  it('reorder: a custom-named player keeps its name across the move', () => {
+    const custom = { name: 'Atraxa' };
+    const players = [{ name: 'Player 1' }, { name: 'Player 2' }, { name: 'Player 3' }, custom];
+    const untouched = new Set(players.filter((player) => player !== custom));
+
+    const reordered = movePlayer(players, 3, 0);
+    const newIndex = reordered.indexOf(custom);
+
+    expect(resolveDisplayValue(custom, untouched.has(custom))).toBe('Atraxa');
+    expect(resolveSubmittedName(custom, newIndex, untouched.has(custom))).toBe('Atraxa');
+  });
+
+  it('remove: a remaining untouched player never displays stale text after the shift', () => {
+    const players = [{ name: 'Player 1' }, { name: 'Player 2' }, { name: 'Player 3' }, { name: 'Player 4' }];
+    const untouched = new Set(players);
+
+    const next = removePlayerAt(players, 0);
+
+    next.forEach((player, index) => {
+      expect(resolveDisplayValue(player, untouched.has(player))).toBe('');
+      expect(resolveSubmittedName(player, index, untouched.has(player))).toBe(defaultNameForSeat(index));
+    });
+  });
+
+  it('remove: a custom-named player keeps its name after the shift', () => {
+    const custom = { name: 'Atraxa' };
+    const players = [{ name: 'Player 1' }, custom, { name: 'Player 3' }, { name: 'Player 4' }];
+    const untouched = new Set(players.filter((player) => player !== custom));
+
+    const next = removePlayerAt(players, 0);
+    const newIndex = next.indexOf(custom);
+
+    expect(resolveDisplayValue(custom, untouched.has(custom))).toBe('Atraxa');
+    expect(resolveSubmittedName(custom, newIndex, untouched.has(custom))).toBe('Atraxa');
   });
 });
