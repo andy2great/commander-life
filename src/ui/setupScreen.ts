@@ -142,7 +142,21 @@ export class SetupScreen {
 
     this.render();
 
-    this.resizeHandler = () => this.render();
+    // Skips the resize-triggered re-render while a zone's field has focus:
+    // `render()` rebuilds the whole overlay via `replaceChildren()`, which
+    // would destroy and recreate the focused `<input>` mid-keystroke. On
+    // iOS Safari the on-screen keyboard opening/closing fires `resize` only
+    // on `visualViewport` (issue #114); on Android it commonly fires on
+    // `window` too. Either way, a destructive re-render here would drop
+    // focus, closing the keyboard right after it opened. A real
+    // orientation/size change while a field is focused is picked up on the
+    // next resize after the field blurs.
+    this.resizeHandler = () => {
+      if (this.overlay && document.activeElement && this.overlay.contains(document.activeElement)) {
+        return;
+      }
+      this.render();
+    };
     window.addEventListener('resize', this.resizeHandler);
     window.visualViewport?.addEventListener('resize', this.resizeHandler);
   }
