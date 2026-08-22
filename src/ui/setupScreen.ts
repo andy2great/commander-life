@@ -22,7 +22,13 @@ import {
   type PlayerConfig,
   type ZoneRect,
 } from '../game';
-import { clampStartingIndex, defaultNameForSeat, resolveDisplayValue, resolveSubmittedName } from '../game/playerRoster';
+import {
+  clampStartingIndex,
+  defaultNameForSeat,
+  removePlayerAt,
+  resolveDisplayValue,
+  resolveSubmittedName,
+} from '../game/playerRoster';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
@@ -32,6 +38,8 @@ const MAX_STARTING_LIFE = 999;
 const BOARD_BACKGROUND_COLOR = '#121016';
 
 const START_PLAYER_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const REMOVE_PLAYER_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="19" x2="19" y2="5"/><line x1="5" y1="5" x2="19" y2="19"/></svg>';
 
 export interface SetupScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
@@ -62,6 +70,9 @@ function injectStylesOnce(): void {
     .setup-zone-start-btn { box-sizing: border-box; flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.25); color: rgba(245, 243, 247, 0.55); }
     .setup-zone-start-btn svg { width: 13px; height: 13px; }
     .setup-zone-start-btn-active { background: rgba(215, 165, 76, 0.35); color: #d7a54c; box-shadow: 0 0 0 2px rgba(215, 165, 76, 0.5); }
+    .setup-zone-remove-btn { box-sizing: border-box; flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, 0.18); color: #ff8a8f; }
+    .setup-zone-remove-btn svg { width: 12px; height: 12px; }
+    .setup-zone-remove-btn:disabled { opacity: 0.3; }
     .setup-hub { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: min(240px, 78vw); box-sizing: border-box; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
     .setup-hub-title { margin: 0; text-align: center; font-size: 15px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; font-family: ${DISPLAY_FONT_STACK}; background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .setup-hub-stepper-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -235,8 +246,29 @@ export class SetupScreen {
       this.render();
     });
 
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'setup-zone-remove-btn';
+    removeBtn.innerHTML = REMOVE_PLAYER_ICON;
+    removeBtn.title = 'Remove player';
+    removeBtn.disabled = this.players.length <= MIN_PLAYER_COUNT;
+    removeBtn.addEventListener('pointerdown', () => {
+      const removeIndex = this.players.indexOf(player);
+      const next = removePlayerAt(this.players, removeIndex);
+      if (next === this.players) {
+        return;
+      }
+      if (player === this.startingPlayer) {
+        this.startingPlayer = null;
+      }
+      this.players = next;
+      this.playerCount = this.players.length;
+      this.render();
+    });
+
     nameRow.appendChild(nameField);
     nameRow.appendChild(startBtn);
+    nameRow.appendChild(removeBtn);
 
     const swatchRow = document.createElement('div');
     swatchRow.className = 'setup-zone-swatches';
