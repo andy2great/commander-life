@@ -67,18 +67,18 @@ function injectStylesOnce(): void {
     .setup-zone-name-row { display: flex; align-items: center; gap: 6px; max-width: 100%; }
     .setup-zone-name { min-width: 0; width: min(160px, 100%); color: #f5f3f7; font-size: 15px; font-weight: 700; text-align: center; background: rgba(0, 0, 0, 0.25); border: none; border-radius: 8px; padding: 6px 8px; outline: none; font-family: system-ui, sans-serif; }
     .setup-zone-name::placeholder { color: rgba(245, 243, 247, 0.55); font-weight: 400; }
-    .setup-zone-start-btn { box-sizing: border-box; flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.25); color: rgba(245, 243, 247, 0.55); }
-    .setup-zone-start-btn svg { width: 13px; height: 13px; }
+    .setup-zone-start-btn { box-sizing: border-box; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.25); color: rgba(245, 243, 247, 0.55); }
+    .setup-zone-start-btn svg { width: 20px; height: 20px; }
     .setup-zone-start-btn-active { background: rgba(215, 165, 76, 0.35); color: #d7a54c; box-shadow: 0 0 0 2px rgba(215, 165, 76, 0.5); }
-    .setup-zone-remove-btn { box-sizing: border-box; flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, 0.18); color: #ff8a8f; }
-    .setup-zone-remove-btn svg { width: 12px; height: 12px; }
+    .setup-zone-remove-btn { box-sizing: border-box; flex: 0 0 auto; width: 44px; height: 44px; margin-left: 6px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, 0.18); color: #ff8a8f; }
+    .setup-zone-remove-btn svg { width: 18px; height: 18px; }
     .setup-zone-remove-btn:disabled { opacity: 0.3; }
     .setup-hub { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: min(240px, 78vw); box-sizing: border-box; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
     .setup-hub-title { margin: 0; text-align: center; font-size: 15px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; font-family: ${DISPLAY_FONT_STACK}; background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .setup-hub-stepper-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .setup-hub-stepper-label { color: #948fa3; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
     .setup-hub-stepper { display: flex; align-items: center; gap: 6px; }
-    .setup-hub-stepper button { box-sizing: border-box; width: 30px; height: 30px; border: none; border-radius: 8px; background: #2d2938; color: #f5f3f7; font-size: 17px; font-weight: 800; }
+    .setup-hub-stepper button { box-sizing: border-box; width: 44px; height: 44px; border: none; border-radius: 10px; background: #2d2938; color: #f5f3f7; font-size: 17px; font-weight: 800; }
     .setup-hub-stepper button:active { transform: scale(0.94); }
     .setup-hub-stepper button.setup-hub-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
     .setup-hub-stepper button.setup-hub-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
