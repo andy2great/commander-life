@@ -111,6 +111,11 @@ function startGame(config: GameConfig): void {
         }
         return;
       }
+      const monarchPlayerId = game.isOverMonarchBadge(event.clientX, event.clientY);
+      if (monarchPlayerId) {
+        game.assignMonarchTo(monarchPlayerId);
+        return;
+      }
       if (!pressStart) {
         return;
       }
