@@ -67,6 +67,8 @@ function startGame(config: GameConfig): void {
     stats: game.statsTrigger,
     getAlivePlayers: () => game.alivePlayers,
     onEndGame: (winnerId) => game.endGameWithWinner(winnerId),
+    getRingBearerId: () => game.ringBearerId,
+    onAssignRingBearer: (playerId) => game.assignRingBearer(playerId),
   });
 
   canvas.style.display = 'block';
