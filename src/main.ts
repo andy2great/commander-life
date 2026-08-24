@@ -75,6 +75,8 @@ function startGame(config: GameConfig): void {
   const isOverShortcutControl = (event: PointerEvent): boolean =>
     game.isOverShortcutControl(event.clientX, event.clientY);
   const isOverPauseControl = (event: PointerEvent): boolean => game.isOverPauseControl(event.clientX, event.clientY);
+  const isOverMonarchBadge = (event: PointerEvent): boolean =>
+    game.isOverMonarchBadge(event.clientX, event.clientY) !== null;
 
   // Tracks where the current press started so onTap (pointerup) can tell a
   // plain tap from a zone-to-zone drag: released in the same zone (or a
@@ -83,7 +85,7 @@ function startGame(config: GameConfig): void {
 
   const detachGesture = attachTapAndLongPress(canvas, {
     onPressStart: (event) => {
-      if (isOverUndoControl(event) || isOverShortcutControl(event) || isOverPauseControl(event)) {
+      if (isOverUndoControl(event) || isOverShortcutControl(event) || isOverPauseControl(event) || isOverMonarchBadge(event)) {
         pressStart = null;
         // These controls are tap-only (no long-press behavior of their own),
         // so skip arming the long-press timer entirely — otherwise a tap

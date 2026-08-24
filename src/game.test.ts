@@ -565,6 +565,23 @@ describe('Game', () => {
 
       expect(game.monarchHolderId).toBeNull();
     });
+
+    it('excludes the Monarch badge from long-press resolution so a held tap never falls through to pass-turn (issue #123 regression)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneRects = computeZoneRects(game.playerCount, 400, 800);
+      const badge = monarchBadgeCenter(zoneRects[0]);
+
+      // The badge sits inside player 0's own zone, which is also the active
+      // seat — so without the exclusion this would resolve to that player
+      // and passTurnFromZoneLongPress would advance the turn instead of
+      // being a no-op, exactly the regression documented for issue #123.
+      expect(game.onLongPress(badge.x, badge.y)).toBeNull();
+
+      const turnStateBefore = game.activeIndex;
+      game.passTurnFromZoneLongPress(badge.x, badge.y);
+      expect(game.activeIndex).toBe(turnStateBefore);
+    });
   });
 
   describe('resolveZoneDrag (issue #48)', () => {

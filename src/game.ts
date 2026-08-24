@@ -778,7 +778,8 @@ export class Game {
     if (
       this.undoControl.containsPoint(x, y) ||
       this.shortcutControl.containsPoint(x, y) ||
-      this.pauseControl.containsPoint(x, y)
+      this.pauseControl.containsPoint(x, y) ||
+      this.isOverMonarchBadge(x, y) !== null
     ) {
       return null;
     }
