@@ -15,6 +15,11 @@
 // (the same select-then-confirm two-step shape as the toggle+Apply flow
 // above), consistent with the #56 precedent that manually ending the game
 // must never happen on a single tap.
+//
+// Issue #163: selecting "Ring-bearer" reveals a list of every player (each
+// player's own selectable Ring-bearer control); tapping one immediately
+// reassigns the badge to them and highlights them as the current holder —
+// unlike "End game", low-stakes reassignment doesn't need a confirm step.
 
 import { BOARD_SHORTCUT_OPTIONS, applyBoardShortcutDelta, type BoardShortcutOption } from '../game/boardShortcut';
 import type { Player, UndoStack } from '../game/commanderDamage';
@@ -41,6 +46,10 @@ const OPTION_ICONS: Record<BoardShortcutOption['scope'], string> = {
 const END_GAME_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h14l-3 4 3 4H5"/></svg>';
 
+/** Ring icon for the "Ring-bearer" toggle (issue #163), vector-drawn like OPTION_ICONS/END_GAME_ICON. */
+const RING_BEARER_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>';
+
 export interface BoardShortcutMenuOptions {
   /** Element the overlay is appended to (e.g. document.body). */
   root: HTMLElement;
@@ -56,6 +65,10 @@ export interface BoardShortcutMenuOptions {
   getAlivePlayers: () => Player[];
   /** Ends the game with the confirmed winner, once "End game" is selected and confirmed (issue #117). */
   onEndGame: (winnerId: string) => void;
+  /** Read live, like getActiveIndex: the current Ring-bearer, or null when no one holds it (issue #163). */
+  getRingBearerId: () => string | null;
+  /** Reassigns the Ring-bearer badge to `playerId` (issue #163). */
+  onAssignRingBearer: (playerId: string) => void;
 }
 
 let stylesInjected = false;
@@ -106,6 +119,8 @@ export class BoardShortcutMenu {
   private readonly stats?: StatsTrigger;
   private readonly getAlivePlayers: () => Player[];
   private readonly onEndGame: (winnerId: string) => void;
+  private readonly getRingBearerId: () => string | null;
+  private readonly onAssignRingBearer: (playerId: string) => void;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
 
@@ -120,6 +135,8 @@ export class BoardShortcutMenu {
     this.stats = options.stats;
     this.getAlivePlayers = options.getAlivePlayers;
     this.onEndGame = options.onEndGame;
+    this.getRingBearerId = options.getRingBearerId;
+    this.onAssignRingBearer = options.onAssignRingBearer;
   }
 
   get isOpen(): boolean {
@@ -179,11 +196,12 @@ export class BoardShortcutMenu {
 
   /**
    * Builds the toggle row (one icon button per `BOARD_SHORTCUT_OPTIONS`
-   * entry, plus a third "End game" toggle, issue #117) and the two mutually-
-   * exclusive panels beneath it: the shared +/- counter + Apply row for a
-   * damage option, or the winner-picker + confirm panel for "End game" —
-   * both hidden until their toggle is selected. Selecting a toggle resets
-   * the counter (or the picked winner) and switches which panel is shown.
+   * entry, plus "End game" (issue #117) and "Ring-bearer" (issue #163)
+   * toggles) and the mutually-exclusive panels beneath it: the shared +/-
+   * counter + Apply row for a damage option, the winner-picker + confirm
+   * panel for "End game", or the player-picker for "Ring-bearer" — all
+   * hidden until their toggle is selected. Selecting a toggle resets
+   * whichever panel it reveals and switches which one is shown.
    */
   private buildOptionsPanel(): HTMLElement {
     const wrap = document.createElement('div');
@@ -202,11 +220,14 @@ export class BoardShortcutMenu {
     const { panel: endGamePanel, reset: resetEndGamePanel } = this.buildEndGamePanel();
     endGamePanel.style.display = 'none';
 
-    const toggleButtons = new Map<BoardShortcutOption['scope'] | 'endGame', HTMLButtonElement>();
+    const { panel: ringBearerPanel, reset: resetRingBearerPanel } = this.buildRingBearerPanel();
+    ringBearerPanel.style.display = 'none';
+
+    const toggleButtons = new Map<BoardShortcutOption['scope'] | 'endGame' | 'ringBearer', HTMLButtonElement>();
     let selected: BoardShortcutOption | null = null;
     let amount = 0;
 
-    const activateToggle = (key: BoardShortcutOption['scope'] | 'endGame'): void => {
+    const activateToggle = (key: BoardShortcutOption['scope'] | 'endGame' | 'ringBearer'): void => {
       for (const [scope, button] of toggleButtons) {
         button.classList.toggle('active', scope === key);
       }
@@ -218,6 +239,7 @@ export class BoardShortcutMenu {
       valueEl.textContent = '0';
       counterRow.style.display = 'flex';
       endGamePanel.style.display = 'none';
+      ringBearerPanel.style.display = 'none';
       activateToggle(option.scope);
     };
 
@@ -225,8 +247,18 @@ export class BoardShortcutMenu {
       selected = null;
       counterRow.style.display = 'none';
       endGamePanel.style.display = 'flex';
+      ringBearerPanel.style.display = 'none';
       resetEndGamePanel();
       activateToggle('endGame');
+    };
+
+    const selectRingBearer = (): void => {
+      selected = null;
+      counterRow.style.display = 'none';
+      endGamePanel.style.display = 'none';
+      ringBearerPanel.style.display = 'flex';
+      resetRingBearerPanel();
+      activateToggle('ringBearer');
     };
 
     for (const option of BOARD_SHORTCUT_OPTIONS) {
@@ -252,6 +284,17 @@ export class BoardShortcutMenu {
     });
     toggleButtons.set('endGame', endGameButton);
     toggleRow.appendChild(endGameButton);
+
+    const ringBearerButton = document.createElement('button');
+    ringBearerButton.type = 'button';
+    ringBearerButton.className = 'cmdr-bsc-toggle';
+    ringBearerButton.innerHTML = `${RING_BEARER_ICON}<span>Ring-bearer</span>`;
+    ringBearerButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      selectRingBearer();
+    });
+    toggleButtons.set('ringBearer', ringBearerButton);
+    toggleRow.appendChild(ringBearerButton);
 
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
@@ -310,6 +353,7 @@ export class BoardShortcutMenu {
     wrap.appendChild(toggleRow);
     wrap.appendChild(counterRow);
     wrap.appendChild(endGamePanel);
+    wrap.appendChild(ringBearerPanel);
     return wrap;
   }
 
@@ -374,6 +418,45 @@ export class BoardShortcutMenu {
 
     panel.appendChild(list);
     panel.appendChild(confirmButton);
+    return { panel, reset };
+  }
+
+  /**
+   * Builds the "Ring-bearer" panel (issue #163): a button per player — each
+   * one that player's own selectable Ring-bearer control — highlighting
+   * whoever currently holds the badge. Unlike buildEndGamePanel, tapping a
+   * player reassigns the badge immediately and closes the menu; low-stakes
+   * reassignment doesn't need a second confirm step. Returns `reset`
+   * alongside the panel so `selectRingBearer` can re-read the current
+   * holder (via getRingBearerId) each time the toggle is selected.
+   */
+  private buildRingBearerPanel(): { panel: HTMLElement; reset: () => void } {
+    const panel = document.createElement('div');
+    panel.className = 'cmdr-bsc-row';
+
+    const list = document.createElement('div');
+    list.className = 'cmdr-bsc-endgame-list';
+
+    const reset = (): void => {
+      list.innerHTML = '';
+      const holderId = this.getRingBearerId();
+      for (const player of this.players) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'cmdr-bsc-endgame-player';
+        button.style.setProperty('--player-color', player.color ?? '#948fa3');
+        button.classList.toggle('active', player.id === holderId);
+        button.textContent = player.name;
+        button.addEventListener('pointerdown', (event) => {
+          event.stopPropagation();
+          this.onAssignRingBearer(player.id);
+          this.close();
+        });
+        list.appendChild(button);
+      }
+    };
+
+    panel.appendChild(list);
     return { panel, reset };
   }
 }
