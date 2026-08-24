@@ -23,6 +23,7 @@ import {
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from '../game/life';
 import { applyPoisonDelta, type PoisonState } from '../game/poison';
 import { applyEnergyDelta, type EnergyState } from '../game/energy';
+import { applyExperienceDelta, type ExperienceState } from '../game/experience';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger } from '../game/zoneEffect';
@@ -30,7 +31,7 @@ import type { StatsTrigger } from '../game/stats';
 import { attachHoldToRepeat } from './holdToRepeat';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
-export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison' | 'energy';
+export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison' | 'energy' | 'experience';
 
 export interface DamageTypeDef {
   key: DamageTypeKey;
@@ -54,9 +55,10 @@ export interface DamageTypeDef {
  * open menu) rather than persistent game state — matching the pre-#76
  * per-row behavior, since there is no persistent "total plain damage dealt"
  * counter in `damageState`/`poisonState` to show instead. `commander`,
- * `poison`, and `energy` read/write the shared, persistent
- * `damageState`/`poisonState`/`energyState`. `energy` (issue #160) is only
- * offered for a self-target pair — it's a personal resource, not something
+ * `poison`, `energy`, and `experience` read/write the shared, persistent
+ * `damageState`/`poisonState`/`energyState`/`experienceState`. `energy`
+ * (issue #160) and `experience` (issue #161) are only offered for a
+ * self-target pair — they're personal resources, not something
  * logged against an opponent.
  */
 export function buildDamageTypeDefs(
@@ -66,6 +68,7 @@ export function buildDamageTypeDefs(
   damageState: CommanderDamageState,
   poisonState: PoisonState,
   energyState: EnergyState,
+  experienceState: ExperienceState,
   players: Player[],
   undoStack: UndoStack,
   sound?: SoundPlayer,
@@ -152,6 +155,13 @@ export function buildDamageTypeDefs(
       getValue: () => energyState[target.id] ?? 0,
       apply: (delta) => applyEnergyDelta(energyState, target.id, delta, undoStack),
     });
+    types.push({
+      key: 'experience',
+      label: 'Experience',
+      color: target.color ?? '#948fa3',
+      getValue: () => experienceState[target.id] ?? 0,
+      apply: (delta) => applyExperienceDelta(experienceState, target.id, delta, undoStack),
+    });
   }
 
   return types;
@@ -203,6 +213,7 @@ export interface AttackMenuOptions {
   damageState: CommanderDamageState;
   poisonState: PoisonState;
   energyState: EnergyState;
+  experienceState: ExperienceState;
   undoStack: UndoStack;
   sound?: SoundPlayer;
   shake?: ScreenShakeTrigger;
@@ -246,6 +257,7 @@ export class AttackMenu {
   private readonly damageState: CommanderDamageState;
   private readonly poisonState: PoisonState;
   private readonly energyState: EnergyState;
+  private readonly experienceState: ExperienceState;
   private readonly undoStack: UndoStack;
   private readonly sound?: SoundPlayer;
   private readonly shake?: ScreenShakeTrigger;
@@ -261,6 +273,7 @@ export class AttackMenu {
     this.damageState = options.damageState;
     this.poisonState = options.poisonState;
     this.energyState = options.energyState;
+    this.experienceState = options.experienceState;
     this.undoStack = options.undoStack;
     this.sound = options.sound;
     this.shake = options.shake;
@@ -331,6 +344,7 @@ export class AttackMenu {
       this.damageState,
       this.poisonState,
       this.energyState,
+      this.experienceState,
       this.players,
       this.session.undoStack,
       this.sound,
