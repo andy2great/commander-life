@@ -22,6 +22,7 @@ import {
 } from '../game/commanderDamage';
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from '../game/life';
 import { applyPoisonDelta, type PoisonState } from '../game/poison';
+import { applyEnergyDelta, type EnergyState } from '../game/energy';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger } from '../game/zoneEffect';
@@ -29,7 +30,7 @@ import type { StatsTrigger } from '../game/stats';
 import { attachHoldToRepeat } from './holdToRepeat';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
-export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison';
+export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison' | 'energy';
 
 export interface DamageTypeDef {
   key: DamageTypeKey;
@@ -52,8 +53,11 @@ export interface DamageTypeDef {
  * (starting at 0, clamped so `-` can only undo taps made within this same
  * open menu) rather than persistent game state — matching the pre-#76
  * per-row behavior, since there is no persistent "total plain damage dealt"
- * counter in `damageState`/`poisonState` to show instead. `commander` and
- * `poison` read/write the shared, persistent `damageState`/`poisonState`.
+ * counter in `damageState`/`poisonState` to show instead. `commander`,
+ * `poison`, and `energy` read/write the shared, persistent
+ * `damageState`/`poisonState`/`energyState`. `energy` (issue #160) is only
+ * offered for a self-target pair — it's a personal resource, not something
+ * logged against an opponent.
  */
 export function buildDamageTypeDefs(
   attacker: Player,
@@ -61,6 +65,7 @@ export function buildDamageTypeDefs(
   isSelfTarget: boolean,
   damageState: CommanderDamageState,
   poisonState: PoisonState,
+  energyState: EnergyState,
   players: Player[],
   undoStack: UndoStack,
   sound?: SoundPlayer,
@@ -139,6 +144,16 @@ export function buildDamageTypeDefs(
     apply: (delta) => applyPoisonDelta(poisonState, target.id, delta, undoStack, shake, zoneEffects),
   });
 
+  if (isSelfTarget) {
+    types.push({
+      key: 'energy',
+      label: 'Energy',
+      color: target.color ?? '#948fa3',
+      getValue: () => energyState[target.id] ?? 0,
+      apply: (delta) => applyEnergyDelta(energyState, target.id, delta, undoStack),
+    });
+  }
+
   return types;
 }
 
@@ -187,6 +202,7 @@ export interface AttackMenuOptions {
   players: Player[];
   damageState: CommanderDamageState;
   poisonState: PoisonState;
+  energyState: EnergyState;
   undoStack: UndoStack;
   sound?: SoundPlayer;
   shake?: ScreenShakeTrigger;
@@ -229,6 +245,7 @@ export class AttackMenu {
   private readonly players: Player[];
   private readonly damageState: CommanderDamageState;
   private readonly poisonState: PoisonState;
+  private readonly energyState: EnergyState;
   private readonly undoStack: UndoStack;
   private readonly sound?: SoundPlayer;
   private readonly shake?: ScreenShakeTrigger;
@@ -243,6 +260,7 @@ export class AttackMenu {
     this.players = options.players;
     this.damageState = options.damageState;
     this.poisonState = options.poisonState;
+    this.energyState = options.energyState;
     this.undoStack = options.undoStack;
     this.sound = options.sound;
     this.shake = options.shake;
@@ -312,6 +330,7 @@ export class AttackMenu {
       isSelfTarget,
       this.damageState,
       this.poisonState,
+      this.energyState,
       this.players,
       this.session.undoStack,
       this.sound,

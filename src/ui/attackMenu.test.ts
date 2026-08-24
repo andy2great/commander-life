@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildDamageTypeDefs, createAttackMenuSession } from './attackMenu';
 import { createCommanderDamageState, type Player, type UndoAction } from '../game/commanderDamage';
 import { createPoisonState } from '../game/poison';
+import { createEnergyState } from '../game/energy';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger, ZoneEffectType } from '../game/zoneEffect';
 import { createStatsState, createStatsTrigger } from '../game/stats';
@@ -46,11 +47,92 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
     );
 
     expect(types.map((type) => type.key)).toEqual(['damage', 'commander', 'lifelink', 'heal', 'poison']);
+  });
+
+  it('includes energy for a self-target pair, alongside poison (issue #160)', () => {
+    const [attacker] = makePlayers();
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState(['a']),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      [attacker],
+      makeUndoStack(),
+    );
+
+    expect(types.map((type) => type.key)).toEqual(['damage', 'heal', 'poison', 'energy']);
+  });
+
+  it('omits energy for an attacker->target pair', () => {
+    const [attacker, target] = makePlayers();
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState(['a', 'b']),
+      createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+    );
+
+    expect(types.map((type) => type.key)).not.toContain('energy');
+  });
+
+  it('reads energy from the shared energyState and updates it via apply, clamped at zero', () => {
+    const [attacker] = makePlayers();
+    const energyState = createEnergyState(['a']);
+    energyState[attacker.id] = 2;
+    const undoStack = makeUndoStack();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState(['a']),
+      createPoisonState(['a']),
+      energyState,
+      [attacker],
+      undoStack,
+    );
+    const energy = types.find((type) => type.key === 'energy')!;
+
+    expect(energy.getValue()).toBe(2);
+    energy.apply(1);
+    expect(energy.getValue()).toBe(3);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.actions[0].undo();
+    expect(energy.getValue()).toBe(2);
+  });
+
+  it('clamps energy at zero via apply', () => {
+    const [attacker] = makePlayers();
+    const undoStack = makeUndoStack();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState(['a']),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      [attacker],
+      undoStack,
+    );
+    const energy = types.find((type) => type.key === 'energy')!;
+
+    energy.apply(-1);
+    expect(energy.getValue()).toBe(0);
+    expect(undoStack.actions).toHaveLength(0);
   });
 
   it('omits commander damage and lifelink for a self-target pair', () => {
@@ -61,11 +143,12 @@ describe('buildDamageTypeDefs', () => {
       true,
       createCommanderDamageState(['a']),
       createPoisonState(['a']),
+      createEnergyState(['a']),
       [attacker],
       makeUndoStack(),
     );
 
-    expect(types.map((type) => type.key)).toEqual(['damage', 'heal', 'poison']);
+    expect(types.map((type) => type.key)).toEqual(['damage', 'heal', 'poison', 'energy']);
   });
 
   it('reads commander damage from the shared damageState and updates it via apply', () => {
@@ -80,6 +163,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       damageState,
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -109,6 +193,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       poisonState,
+      createEnergyState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -130,6 +215,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -158,6 +244,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -179,6 +266,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -204,6 +292,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
       undefined,
@@ -229,6 +318,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
       undefined,
@@ -261,6 +351,7 @@ describe('buildDamageTypeDefs', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
       undefined,
@@ -300,6 +391,7 @@ describe('buildDamageTypeDefs', () => {
       true,
       createCommanderDamageState(['a']),
       createPoisonState(['a']),
+      createEnergyState(['a']),
       [attacker],
       makeUndoStack(),
       undefined,
@@ -332,6 +424,7 @@ describe('createAttackMenuSession', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       session.undoStack,
     );
@@ -369,6 +462,7 @@ describe('createAttackMenuSession', () => {
       false,
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
       [attacker, target],
       session.undoStack,
     );
