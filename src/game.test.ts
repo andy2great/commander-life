@@ -28,6 +28,14 @@ function undoControlCenter(width: number, height: number): { x: number; y: numbe
   return { x: width / 2, y: height / 2 };
 }
 
+/** Mirrors computeMonarchBadgeLayouts's per-zone corner placement (issue #162) so tests can tap a badge by coordinate. */
+function monarchBadgeCenter(rect: { x: number; y: number; width: number; height: number }): { x: number; y: number } {
+  const shortSide = Math.min(rect.width, rect.height);
+  const radius = shortSide * 0.09;
+  const margin = shortSide * 0.06;
+  return { x: rect.x + rect.width - margin - radius, y: rect.y + margin + radius };
+}
+
 describe('clamp', () => {
   it('returns the value when inside the range', () => {
     expect(clamp(5, 0, 10)).toBe(5);
@@ -502,6 +510,78 @@ describe('Game', () => {
     expect(game.isOverPauseControl(pauseProbeX, undoCenter.y)).toBe(true);
     expect(game.isOverUndoControl(pauseProbeX, undoCenter.y)).toBe(false);
     expect(game.onLongPress(pauseProbeX, undoCenter.y)).toBeNull();
+  });
+
+  describe('Monarch designation (issue #162)', () => {
+    it('starts with no player holding the Monarch', () => {
+      const game = new Game();
+      expect(game.monarchHolderId).toBeNull();
+    });
+
+    it('assigns the Monarch to a player via their zone badge', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneRects = computeZoneRects(game.playerCount, 400, 800);
+      const badge = monarchBadgeCenter(zoneRects[0]);
+
+      const playerId = game.isOverMonarchBadge(badge.x, badge.y);
+      expect(playerId).toBe(game.players[0].id);
+
+      game.assignMonarchTo(playerId!);
+      expect(game.monarchHolderId).toBe(game.players[0].id);
+    });
+
+    it('reassigns the Monarch, removing it from the previous holder', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.assignMonarchTo(game.players[0].id);
+      game.assignMonarchTo(game.players[1].id);
+
+      expect(game.monarchHolderId).toBe(game.players[1].id);
+    });
+
+    it('pushes an undo action when reassigning the Monarch, reverting one step at a time', () => {
+      const game = new Game();
+      game.resize(400, 800);
+
+      game.assignMonarchTo(game.players[0].id);
+      expect(game.canUndo).toBe(true);
+
+      game.assignMonarchTo(game.players[1].id);
+      game.undo();
+      expect(game.monarchHolderId).toBe(game.players[0].id);
+
+      game.undo();
+      expect(game.monarchHolderId).toBeNull();
+    });
+
+    it('does not reassign the Monarch while paused', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      game.togglePause();
+
+      game.assignMonarchTo(game.players[0].id);
+
+      expect(game.monarchHolderId).toBeNull();
+    });
+
+    it('excludes the Monarch badge from long-press resolution so a held tap never falls through to pass-turn (issue #123 regression)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      const zoneRects = computeZoneRects(game.playerCount, 400, 800);
+      const badge = monarchBadgeCenter(zoneRects[0]);
+
+      // The badge sits inside player 0's own zone, which is also the active
+      // seat — so without the exclusion this would resolve to that player
+      // and passTurnFromZoneLongPress would advance the turn instead of
+      // being a no-op, exactly the regression documented for issue #123.
+      expect(game.onLongPress(badge.x, badge.y)).toBeNull();
+
+      const turnStateBefore = game.activeIndex;
+      game.passTurnFromZoneLongPress(badge.x, badge.y);
+      expect(game.activeIndex).toBe(turnStateBefore);
+    });
   });
 
   describe('resolveZoneDrag (issue #48)', () => {
