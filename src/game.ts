@@ -12,6 +12,7 @@ import {
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
 import { createEnergyState, type EnergyState } from './game/energy';
+import { createExperienceState, type ExperienceState } from './game/experience';
 import { createStatsState, createStatsTrigger, type BiggestHit, type StatsState, type StatsTrigger } from './game/stats';
 import {
   CONTROL_GAP_RATIO,
@@ -338,6 +339,7 @@ export class Game {
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
   private readonly energy: EnergyState;
+  private readonly experience: ExperienceState;
   private readonly sound: SoundPlayer;
   private readonly stack = new ArrayUndoStack();
   private zoneRects: ZoneRect[] = [];
@@ -384,6 +386,7 @@ export class Game {
     this.damage = createCommanderDamageState(this.playersList.map((player) => player.id));
     this.poison = createPoisonState(this.playersList.map((player) => player.id));
     this.energy = createEnergyState(this.playersList.map((player) => player.id));
+    this.experience = createExperienceState(this.playersList.map((player) => player.id));
     this.activeTimeList = new Array(this.playerCount).fill(0);
     this.statsState = createStatsState(this.playersList.map((player) => player.id));
     this.statsTriggerObj = createStatsTrigger(this.statsState);
@@ -411,6 +414,10 @@ export class Game {
 
   get energyState(): EnergyState {
     return this.energy;
+  }
+
+  get experienceState(): ExperienceState {
+    return this.experience;
   }
 
   get undoStack(): UndoStack {

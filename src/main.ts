@@ -49,6 +49,7 @@ function startGame(config: GameConfig): void {
     damageState: game.damageState,
     poisonState: game.poisonState,
     energyState: game.energyState,
+    experienceState: game.experienceState,
     undoStack: game.undoStack,
     sound,
     shake: game.shakeTrigger,

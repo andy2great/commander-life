@@ -6,6 +6,7 @@ import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './game/life';
 import { applyPoisonDelta } from './game/poison';
 import { applyEnergyDelta } from './game/energy';
+import { applyExperienceDelta } from './game/experience';
 import { applyBoardShortcutDelta } from './game/boardShortcut';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
 
@@ -124,6 +125,22 @@ describe('Game', () => {
 
     const newGame = new Game();
     expect(newGame.energyState).toEqual(
+      Object.fromEntries(newGame.players.map((player) => [player.id, 0])),
+    );
+  });
+
+  it('starts every player at 0 experience counters, including after a fresh "New Game" (issue #161)', () => {
+    const game = new Game();
+
+    expect(game.experienceState).toEqual(
+      Object.fromEntries(game.players.map((player) => [player.id, 0])),
+    );
+
+    applyExperienceDelta(game.experienceState, game.players[0].id, 3, game.undoStack);
+    expect(game.experienceState[game.players[0].id]).toBe(3);
+
+    const newGame = new Game();
+    expect(newGame.experienceState).toEqual(
       Object.fromEntries(newGame.players.map((player) => [player.id, 0])),
     );
   });

@@ -3,6 +3,7 @@ import { buildDamageTypeDefs, createAttackMenuSession } from './attackMenu';
 import { createCommanderDamageState, type Player, type UndoAction } from '../game/commanderDamage';
 import { createPoisonState } from '../game/poison';
 import { createEnergyState } from '../game/energy';
+import { createExperienceState } from '../game/experience';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger, ZoneEffectType } from '../game/zoneEffect';
 import { createStatsState, createStatsTrigger } from '../game/stats';
@@ -48,6 +49,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
     );
@@ -55,7 +57,7 @@ describe('buildDamageTypeDefs', () => {
     expect(types.map((type) => type.key)).toEqual(['damage', 'commander', 'lifelink', 'heal', 'poison']);
   });
 
-  it('includes energy for a self-target pair, alongside poison (issue #160)', () => {
+  it('includes energy and experience for a self-target pair, alongside poison (issues #160, #161)', () => {
     const [attacker] = makePlayers();
     const types = buildDamageTypeDefs(
       attacker,
@@ -64,14 +66,15 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a']),
       createPoisonState(['a']),
       createEnergyState(['a']),
+      createExperienceState(['a']),
       [attacker],
       makeUndoStack(),
     );
 
-    expect(types.map((type) => type.key)).toEqual(['damage', 'heal', 'poison', 'energy']);
+    expect(types.map((type) => type.key)).toEqual(['damage', 'heal', 'poison', 'energy', 'experience']);
   });
 
-  it('omits energy for an attacker->target pair', () => {
+  it('omits energy and experience for an attacker->target pair', () => {
     const [attacker, target] = makePlayers();
     const types = buildDamageTypeDefs(
       attacker,
@@ -80,11 +83,13 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
     );
 
     expect(types.map((type) => type.key)).not.toContain('energy');
+    expect(types.map((type) => type.key)).not.toContain('experience');
   });
 
   it('reads energy from the shared energyState and updates it via apply, clamped at zero', () => {
@@ -100,6 +105,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a']),
       createPoisonState(['a']),
       energyState,
+      createExperienceState(['a']),
       [attacker],
       undoStack,
     );
@@ -125,6 +131,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a']),
       createPoisonState(['a']),
       createEnergyState(['a']),
+      createExperienceState(['a']),
       [attacker],
       undoStack,
     );
@@ -132,6 +139,56 @@ describe('buildDamageTypeDefs', () => {
 
     energy.apply(-1);
     expect(energy.getValue()).toBe(0);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('reads experience from the shared experienceState and updates it via apply, clamped at zero', () => {
+    const [attacker] = makePlayers();
+    const experienceState = createExperienceState(['a']);
+    experienceState[attacker.id] = 2;
+    const undoStack = makeUndoStack();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState(['a']),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      experienceState,
+      [attacker],
+      undoStack,
+    );
+    const experience = types.find((type) => type.key === 'experience')!;
+
+    expect(experience.getValue()).toBe(2);
+    experience.apply(1);
+    expect(experience.getValue()).toBe(3);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.actions[0].undo();
+    expect(experience.getValue()).toBe(2);
+  });
+
+  it('clamps experience at zero via apply', () => {
+    const [attacker] = makePlayers();
+    const undoStack = makeUndoStack();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState(['a']),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      createExperienceState(['a']),
+      [attacker],
+      undoStack,
+    );
+    const experience = types.find((type) => type.key === 'experience')!;
+
+    experience.apply(-1);
+    expect(experience.getValue()).toBe(0);
     expect(undoStack.actions).toHaveLength(0);
   });
 
@@ -144,11 +201,12 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a']),
       createPoisonState(['a']),
       createEnergyState(['a']),
+      createExperienceState(['a']),
       [attacker],
       makeUndoStack(),
     );
 
-    expect(types.map((type) => type.key)).toEqual(['damage', 'heal', 'poison', 'energy']);
+    expect(types.map((type) => type.key)).toEqual(['damage', 'heal', 'poison', 'energy', 'experience']);
   });
 
   it('reads commander damage from the shared damageState and updates it via apply', () => {
@@ -164,6 +222,7 @@ describe('buildDamageTypeDefs', () => {
       damageState,
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -194,6 +253,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       poisonState,
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -216,6 +276,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -245,6 +306,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -267,6 +329,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       undoStack,
     );
@@ -293,6 +356,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
       undefined,
@@ -319,6 +383,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
       undefined,
@@ -352,6 +417,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       makeUndoStack(),
       undefined,
@@ -392,6 +458,7 @@ describe('buildDamageTypeDefs', () => {
       createCommanderDamageState(['a']),
       createPoisonState(['a']),
       createEnergyState(['a']),
+      createExperienceState(['a']),
       [attacker],
       makeUndoStack(),
       undefined,
@@ -425,6 +492,7 @@ describe('createAttackMenuSession', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       session.undoStack,
     );
@@ -463,6 +531,7 @@ describe('createAttackMenuSession', () => {
       createCommanderDamageState(['a', 'b']),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
       [attacker, target],
       session.undoStack,
     );
