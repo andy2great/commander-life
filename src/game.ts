@@ -11,7 +11,6 @@ import {
   type UndoStack,
 } from './game/commanderDamage';
 import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poison';
-import { assignMonarch, createMonarchState, type MonarchState } from './game/monarch';
 import { createEnergyState, type EnergyState } from './game/energy';
 import { createExperienceState, type ExperienceState } from './game/experience';
 import { createCustomCountersState, type CustomCountersState } from './game/customCounters';
@@ -325,41 +324,11 @@ interface TurnHoldState {
   elapsedS: number;
 }
 
-// Monarch badge (issue #162): a small crown control in the corner of each
-// zone, tappable to reassign the Monarch designation to that player. Sized
-// relative to the zone's own shorter side, like the life/name text, so it
-// scales consistently across player counts/layouts.
-const MONARCH_BADGE_RADIUS_RATIO = 0.09;
-const MONARCH_BADGE_MARGIN_RATIO = 0.06;
-
-interface MonarchBadgeLayout {
-  playerId: string;
-  x: number;
-  y: number;
-  radius: number;
-}
-
-/** Places one badge per zone in its top-right (screen-space) corner, sized/margined off that zone's own shorter side. */
-function computeMonarchBadgeLayouts(zoneRects: ZoneRect[], playerIds: string[]): MonarchBadgeLayout[] {
-  return zoneRects.map((rect, seat) => {
-    const shortSide = Math.min(rect.width, rect.height);
-    const radius = shortSide * MONARCH_BADGE_RADIUS_RATIO;
-    const margin = shortSide * MONARCH_BADGE_MARGIN_RATIO;
-    return {
-      playerId: playerIds[seat],
-      x: rect.x + rect.width - margin - radius,
-      y: rect.y + margin + radius,
-      radius,
-    };
-  });
-}
-
 // Player icon badge (issue #167): a small disc in each zone's top-left
-// (screen-space) corner — the mirror image of the Monarch badge's top-right
-// corner — showing that seat's chosen vector glyph so players are
-// recognizable beyond accent color alone (docs/concept.md). Purely
-// decorative, unlike the Monarch badge: the icon is only ever changed from
-// the setup screen, so there's no hit-testing for it here.
+// (screen-space) corner showing that seat's chosen vector glyph so players
+// are recognizable beyond accent color alone (docs/concept.md). Purely
+// decorative: the icon is only ever changed from the setup screen, so
+// there's no hit-testing for it here.
 const PLAYER_ICON_BADGE_RADIUS_RATIO = 0.09;
 const PLAYER_ICON_BADGE_MARGIN_RATIO = 0.06;
 
@@ -388,7 +357,7 @@ function computePlayerIconBadgeLayouts(zoneRects: ZoneRect[], players: Player[])
   });
 }
 
-/** Vector-drawn player icon glyphs (issue #167), matching the style of drawCrownGlyph — no icon fonts or bitmap images. */
+/** Vector-drawn player icon glyphs (issue #167) — no icon fonts or bitmap images. */
 function drawPlayerIconGlyph(ctx: CanvasRenderingContext2D, icon: PlayerIconId, cx: number, cy: number, radius: number): void {
   switch (icon) {
     case 'star':
@@ -496,26 +465,6 @@ function drawLeafGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, ra
   ctx.stroke();
 }
 
-/** Vector-drawn crown glyph (issue #162), matching the icon style of src/ui/controls.ts — no icon fonts or bitmap images. */
-function drawCrownGlyph(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number): void {
-  const w = radius * 0.9;
-  const h = radius * 0.7;
-  const baseY = centerY + h * 0.45;
-  const topY = centerY - h * 0.55;
-  const midY = centerY - h * 0.1;
-
-  ctx.beginPath();
-  ctx.moveTo(centerX - w, baseY);
-  ctx.lineTo(centerX - w, midY);
-  ctx.lineTo(centerX - w * 0.5, topY);
-  ctx.lineTo(centerX, midY);
-  ctx.lineTo(centerX + w * 0.5, topY);
-  ctx.lineTo(centerX + w, midY);
-  ctx.lineTo(centerX + w, baseY);
-  ctx.closePath();
-  ctx.fill();
-}
-
 /** Live preview of a zone-to-zone drag (issue #55), previewing what resolveZoneDrag would resolve if released now. */
 export interface DragArrowState {
   fromPlayerId: string;
@@ -545,9 +494,7 @@ export class Game {
   private readonly customCounters: CustomCountersState;
   private readonly sound: SoundPlayer;
   private readonly stack = new ArrayUndoStack();
-  private readonly monarch: MonarchState = createMonarchState();
   private zoneRects: ZoneRect[] = [];
-  private monarchBadges: MonarchBadgeLayout[] = [];
   private playerIconBadges: PlayerIconBadgeLayout[] = [];
   private canvasWidth = 0;
   private canvasHeight = 0;
@@ -637,11 +584,6 @@ export class Game {
 
   get undoStack(): UndoStack {
     return this.stack;
-  }
-
-  /** The id of the player currently holding the Monarch (issue #162), or null if no one does. */
-  get monarchHolderId(): string | null {
-    return this.monarch.holderId;
   }
 
   /** True when there is at least one action to undo. */
@@ -758,20 +700,6 @@ export class Game {
     this.stack.undo();
   }
 
-  /** The id of the player whose Monarch badge (issue #162) is at (x, y) — in the same coordinate space passed to resize — or null if none. Every player's badge is tappable at any time, whether or not they currently hold it. */
-  isOverMonarchBadge(x: number, y: number): string | null {
-    const hit = this.monarchBadges.find((badge) => Math.hypot(x - badge.x, y - badge.y) <= badge.radius);
-    return hit ? hit.playerId : null;
-  }
-
-  /** Reassigns the Monarch (issue #162) to `playerId`, pushing an undo action onto the shared undo stack. No-op while paused, or if `playerId` already holds it. */
-  assignMonarchTo(playerId: string): void {
-    if (this.pausedFlag) {
-      return;
-    }
-    assignMonarch(this.monarch, playerId, this.stack);
-  }
-
   update(dt: number): void {
     if (this.endedFlag) {
       return;
@@ -807,10 +735,6 @@ export class Game {
     this.canvasWidth = width;
     this.canvasHeight = height;
     this.zoneRects = computeZoneRects(this.playerCount, width, height);
-    this.monarchBadges = computeMonarchBadgeLayouts(
-      this.zoneRects,
-      this.playersList.map((player) => player.id),
-    );
     this.playerIconBadges = computePlayerIconBadgeLayouts(this.zoneRects, this.playersList);
     // The top/bottom rows always fill half the canvas height each, so
     // height / 2 is exactly the boundary between them for every player
@@ -942,8 +866,7 @@ export class Game {
     if (
       this.undoControl.containsPoint(x, y) ||
       this.shortcutControl.containsPoint(x, y) ||
-      this.pauseControl.containsPoint(x, y) ||
-      this.isOverMonarchBadge(x, y) !== null
+      this.pauseControl.containsPoint(x, y)
     ) {
       return null;
     }
@@ -1248,33 +1171,11 @@ export class Game {
         this.drawZoneEffect(ctx, rect, zoneEffect);
       }
 
-      this.drawMonarchBadge(ctx, this.monarchBadges[seat], player.id === this.monarch.holderId);
       this.drawPlayerIconBadge(ctx, this.playerIconBadges[seat]);
     }
   }
 
-  /** The Monarch badge (issue #162): gold and full-opacity for the current holder, dim otherwise — every badge stays tappable regardless. */
-  private drawMonarchBadge(ctx: CanvasRenderingContext2D, badge: MonarchBadgeLayout, isHolder: boolean): void {
-    const { x, y, radius } = badge;
-
-    ctx.save();
-    ctx.globalAlpha = isHolder ? 1 : 0.4;
-
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = isHolder ? 'rgba(215, 165, 76, 0.9)' : 'rgba(20, 18, 28, 0.75)';
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = isHolder ? '#f0c98a' : '#f5f3f7';
-    ctx.stroke();
-
-    ctx.fillStyle = isHolder ? '#1b1822' : '#f5f3f7';
-    drawCrownGlyph(ctx, x, y, radius * 0.55);
-
-    ctx.restore();
-  }
-
-  /** The player icon badge (issue #167): dark disc bordered in the seat's accent color, hosting that seat's chosen vector glyph. Always visible, unlike the Monarch badge — it's not tappable/reassignable in-game. */
+  /** The player icon badge (issue #167): dark disc bordered in the seat's accent color, hosting that seat's chosen vector glyph. It's not tappable/reassignable in-game. */
   private drawPlayerIconBadge(ctx: CanvasRenderingContext2D, badge: PlayerIconBadgeLayout): void {
     const { x, y, radius, icon, color } = badge;
 
