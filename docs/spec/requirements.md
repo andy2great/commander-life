@@ -33,3 +33,10 @@ R6. The pre-game setup hub shall show only the essential table-wide controls
     in-game attack/shortcut/history menus, so the default hub's footprint
     stays small enough to fit the shared center area without competing with
     player zone controls for space.
+
+R7. The active player's zone shall render its pulsing highlight border using the
+    app's foil accent color (the brass `#d7a54c` → ember `#e2673f` gradient
+    used elsewhere for primary accents), and no canvas-drawn accent, border,
+    or highlight anywhere in the app shall use the blue accent family
+    (`rgb(91, 140, 255)` or equivalent) that the Foil & Felt visual identity
+    replaced.

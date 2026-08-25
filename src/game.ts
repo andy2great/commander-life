@@ -57,7 +57,12 @@ export function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-const ACTIVE_ZONE_COLOR_RGB = '91, 140, 255';
+// Foil accent (issue #197 / "Foil & Felt" #116): brass -> ember, matching the
+// linear-gradient(135deg, #d7a54c, #e2673f) CTA/hero accent used by the DOM
+// overlays, so the board's active-zone pulse no longer strokes with the
+// pre-redesign "generic AI app" blue.
+const ACTIVE_ZONE_FOIL_BRASS_RGB = '215, 165, 76';
+const ACTIVE_ZONE_FOIL_EMBER_RGB = '226, 103, 63';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
 
 // Zone-to-zone drag arrow (issue #55): drawn live from the origin zone to
@@ -1008,7 +1013,11 @@ export class Game {
       if (isActive) {
         const pulse = 0.5 + 0.5 * Math.sin(this.animTime * PULSE_SPEED_RAD_S);
         ctx.lineWidth = PULSE_MIN_WIDTH + (PULSE_MAX_WIDTH - PULSE_MIN_WIDTH) * pulse;
-        ctx.strokeStyle = `rgba(${ACTIVE_ZONE_COLOR_RGB}, ${0.6 + 0.4 * pulse})`;
+        const alpha = 0.6 + 0.4 * pulse;
+        const foilPulse = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+        foilPulse.addColorStop(0, `rgba(${ACTIVE_ZONE_FOIL_BRASS_RGB}, ${alpha})`);
+        foilPulse.addColorStop(1, `rgba(${ACTIVE_ZONE_FOIL_EMBER_RGB}, ${alpha})`);
+        ctx.strokeStyle = foilPulse;
       } else {
         ctx.lineWidth = 1;
         ctx.strokeStyle = IDLE_ZONE_COLOR;
