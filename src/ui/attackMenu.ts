@@ -24,6 +24,7 @@ import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from '../game/li
 import { applyPoisonDelta, type PoisonState } from '../game/poison';
 import { applyEnergyDelta, type EnergyState } from '../game/energy';
 import { applyExperienceDelta, type ExperienceState } from '../game/experience';
+import { addCustomCounter, applyCustomCounterDelta, removeCustomCounter, type CustomCountersState } from '../game/customCounters';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger } from '../game/zoneEffect';
@@ -40,7 +41,11 @@ export type DamageTypeKey =
   | 'heal'
   | 'poison'
   | 'energy'
-  | 'experience';
+  | 'experience'
+  | `custom:${string}`;
+
+/** Accent color for every custom counter toggle (issue #171) — a neutral tone distinct from the player-accent-colored built-in types and from poison's purple, so custom counters read as visually distinct regardless of which player's zone they're in. */
+export const CUSTOM_COUNTER_COLOR = '#6b7280';
 
 export interface DamageTypeDef {
   key: DamageTypeKey;
@@ -51,6 +56,10 @@ export interface DamageTypeDef {
   getValue(): number;
   /** Applies one +/- tap (±1) for this type via its `apply*Delta` helper. */
   apply(delta: 1 | -1): void;
+  /** True for a custom counter (issue #171), which can be deleted from the menu unlike every built-in type. */
+  removable?: boolean;
+  /** Removes this custom counter entirely. Only set when `removable` is true. */
+  onRemove?(): void;
 }
 
 /**
@@ -75,6 +84,12 @@ export interface DamageTypeDef {
  * each reading/writing its own counter in `damageState[target.id][attacker.id]`
  * (index 0 or 1), so a two-commander attacker (Partner pair, or Commander +
  * Background) tracks lethal per individual commander rather than merged.
+ *
+ * When `isSelfTarget`, one additional toggle is appended per entry in
+ * `customCountersState[target.id]` (issue #171) — free-form, player-named
+ * counters for effects the built-in types don't cover. Unlike every other
+ * type here, these are `removable` (deletable from the menu) and their
+ * `apply` has no clamp, per applyCustomCounterDelta.
  */
 export function buildDamageTypeDefs(
   attacker: Player,
@@ -90,6 +105,7 @@ export function buildDamageTypeDefs(
   shake?: ScreenShakeTrigger,
   zoneEffects?: ZoneEffectTrigger,
   stats?: StatsTrigger,
+  customCountersState?: CustomCountersState,
 ): DamageTypeDef[] {
   const localCounts: Partial<Record<DamageTypeKey, number>> = {};
   const localType = (
@@ -184,6 +200,19 @@ export function buildDamageTypeDefs(
       getValue: () => experienceState[target.id] ?? 0,
       apply: (delta) => applyExperienceDelta(experienceState, target.id, delta, undoStack),
     });
+
+    const customCounters = customCountersState?.[target.id] ?? [];
+    for (const counter of customCounters) {
+      types.push({
+        key: `custom:${counter.id}`,
+        label: counter.name,
+        color: CUSTOM_COUNTER_COLOR,
+        getValue: () => counter.value,
+        apply: (delta) => applyCustomCounterDelta(customCountersState!, target.id, counter.id, delta, undoStack),
+        removable: true,
+        onRemove: () => removeCustomCounter(customCountersState!, target.id, counter.id, undoStack),
+      });
+    }
   }
 
   return types;
@@ -236,6 +265,7 @@ export interface AttackMenuOptions {
   poisonState: PoisonState;
   energyState: EnergyState;
   experienceState: ExperienceState;
+  customCountersState: CustomCountersState;
   undoStack: UndoStack;
   sound?: SoundPlayer;
   shake?: ScreenShakeTrigger;
@@ -260,8 +290,14 @@ function injectStylesOnce(): void {
     .cmdr-atk-close:active { transform: scale(0.9); filter: brightness(1.2); }
     .cmdr-atk-close svg { width: 14px; height: 14px; }
     .cmdr-atk-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .cmdr-atk-toggle { box-sizing: border-box; flex: 1 1 auto; min-width: 84px; padding: 10px 12px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; transition: border-color 150ms ease, background 150ms ease, color 150ms ease; }
+    .cmdr-atk-toggle { box-sizing: border-box; position: relative; flex: 1 1 auto; min-width: 84px; padding: 10px 12px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #948fa3; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; transition: border-color 150ms ease, background 150ms ease, color 150ms ease; }
     .cmdr-atk-toggle.active { border-color: var(--toggle-color, #948fa3); color: #f5f3f7; background: #2d2938; box-shadow: 0 0 0 1px var(--toggle-color, #948fa3) inset; }
+    .cmdr-atk-toggle-removable { padding-right: 26px; }
+    .cmdr-atk-toggle-remove { box-sizing: border-box; position: absolute; top: 4px; right: 4px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: rgba(229, 72, 77, 0.25); color: #ff8a8f; font-size: 12px; line-height: 1; }
+    .cmdr-atk-custom-add { display: flex; gap: 8px; margin-top: 4px; }
+    .cmdr-atk-custom-input { box-sizing: border-box; flex: 1; padding: 12px 14px; border-radius: 14px; border: 2px solid #2d2938; background: #241f2d; color: #f5f3f7; font-size: 14px; font-family: system-ui, sans-serif; }
+    .cmdr-atk-custom-add-btn { box-sizing: border-box; padding: 12px 16px; border-radius: 14px; border: none; background: #2d2938; color: #f5f3f7; font-size: 12px; font-weight: 700; font-family: system-ui, sans-serif; transition: transform 100ms ease, filter 100ms ease; }
+    .cmdr-atk-custom-add-btn:active { transform: scale(0.96); filter: brightness(1.15); }
     .cmdr-atk-row { display: flex; align-items: stretch; background: #241f2d; border-radius: 20px; padding: 10px; border-left: 3px solid transparent; transition: border-color 150ms ease; }
     .cmdr-atk-stepper { position: relative; display: flex; align-items: stretch; gap: 6px; width: 100%; height: 84px; }
     .cmdr-atk-stepper button { box-sizing: border-box; flex: 1; border: none; border-radius: 16px; background: #2d2938; color: #f5f3f7; font-size: 32px; font-weight: 800; transition: transform 100ms ease, filter 100ms ease; }
@@ -280,6 +316,7 @@ export class AttackMenu {
   private readonly poisonState: PoisonState;
   private readonly energyState: EnergyState;
   private readonly experienceState: ExperienceState;
+  private readonly customCountersState: CustomCountersState;
   private readonly undoStack: UndoStack;
   private readonly sound?: SoundPlayer;
   private readonly shake?: ScreenShakeTrigger;
@@ -296,6 +333,7 @@ export class AttackMenu {
     this.poisonState = options.poisonState;
     this.energyState = options.energyState;
     this.experienceState = options.experienceState;
+    this.customCountersState = options.customCountersState;
     this.undoStack = options.undoStack;
     this.sound = options.sound;
     this.shake = options.shake;
@@ -359,6 +397,31 @@ export class AttackMenu {
     panel.appendChild(head);
 
     this.session = createAttackMenuSession(this.undoStack);
+    const body = document.createElement('div');
+    panel.appendChild(body);
+    this.renderBody(body, attacker, target, isSelfTarget);
+
+    overlay.appendChild(panel);
+    this.root.appendChild(overlay);
+    this.overlay = overlay;
+  }
+
+  /**
+   * (Re)builds the toggle row + shared counter — and, for a self-target menu,
+   * the "add a custom counter" row (issue #171) — inside `body`. Called once
+   * from `open()`, and again whenever a custom counter is added or removed,
+   * since the set of toggles changes and `buildTogglesAndCounter` builds them
+   * fresh each time rather than patching the existing DOM in place.
+   */
+  private renderBody(body: HTMLElement, attacker: Player, target: Player, isSelfTarget: boolean): void {
+    body.innerHTML = '';
+    for (const detach of this.holdToRepeatDetachFns) {
+      detach();
+    }
+    this.holdToRepeatDetachFns = [];
+
+    const refresh = (): void => this.renderBody(body, attacker, target, isSelfTarget);
+
     const types = buildDamageTypeDefs(
       attacker,
       target,
@@ -368,17 +431,29 @@ export class AttackMenu {
       this.energyState,
       this.experienceState,
       this.players,
-      this.session.undoStack,
+      this.session!.undoStack,
       this.sound,
       this.shake,
       this.zoneEffects,
       this.stats,
+      this.customCountersState,
     );
-    panel.appendChild(this.buildTogglesAndCounter(types));
+    // A custom counter's removal changes the toggle set, so re-render the
+    // whole body once it's removed, on top of the removal itself.
+    for (const type of types) {
+      if (type.removable && type.onRemove) {
+        const removeCounter = type.onRemove;
+        type.onRemove = () => {
+          removeCounter();
+          refresh();
+        };
+      }
+    }
+    body.appendChild(this.buildTogglesAndCounter(types));
 
-    overlay.appendChild(panel);
-    this.root.appendChild(overlay);
-    this.overlay = overlay;
+    if (isSelfTarget) {
+      body.appendChild(this.buildAddCustomCounterRow(target, refresh));
+    }
   }
 
   close(): void {
@@ -433,12 +508,28 @@ export class AttackMenu {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'cmdr-atk-toggle';
-      button.textContent = type.label;
       button.style.setProperty('--toggle-color', type.color);
       button.addEventListener('pointerdown', (event) => {
         event.stopPropagation();
         selectType(type);
       });
+
+      const labelEl = document.createElement('span');
+      labelEl.textContent = type.label;
+      button.appendChild(labelEl);
+
+      if (type.removable) {
+        button.classList.add('cmdr-atk-toggle-removable');
+        const removeButton = document.createElement('span');
+        removeButton.className = 'cmdr-atk-toggle-remove';
+        removeButton.textContent = '×';
+        removeButton.addEventListener('pointerdown', (event) => {
+          event.stopPropagation();
+          type.onRemove?.();
+        });
+        button.appendChild(removeButton);
+      }
+
       toggleButtons.set(type.key, button);
       toggleRow.appendChild(button);
     }
@@ -477,5 +568,52 @@ export class AttackMenu {
     wrap.appendChild(toggleRow);
     wrap.appendChild(counterRow);
     return wrap;
+  }
+
+  /**
+   * Builds the "add a custom counter" row (issue #171) shown beneath the
+   * toggles/counter in a self-target menu: a name field plus an Add button
+   * that creates a new counter for `target` and calls `onAdded` to rebuild
+   * the panel with it included as a fresh toggle. A blank/whitespace-only
+   * name is ignored.
+   */
+  private buildAddCustomCounterRow(target: Player, onAdded: () => void): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'cmdr-atk-custom-add';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'cmdr-atk-custom-input';
+    input.placeholder = 'New counter name';
+    input.maxLength = 24;
+
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'cmdr-atk-custom-add-btn';
+    addButton.textContent = 'Add counter';
+
+    const submit = (): void => {
+      const name = input.value.trim();
+      if (!name) {
+        return;
+      }
+      addCustomCounter(this.customCountersState, target.id, name, this.session!.undoStack);
+      onAdded();
+    };
+
+    addButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      submit();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submit();
+      }
+    });
+
+    row.appendChild(input);
+    row.appendChild(addButton);
+    return row;
   }
 }

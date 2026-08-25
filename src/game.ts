@@ -14,6 +14,7 @@ import { createPoisonState, POISON_LETHAL, type PoisonState } from './game/poiso
 import { assignMonarch, createMonarchState, type MonarchState } from './game/monarch';
 import { createEnergyState, type EnergyState } from './game/energy';
 import { createExperienceState, type ExperienceState } from './game/experience';
+import { createCustomCountersState, type CustomCountersState } from './game/customCounters';
 import { assignRingBearer, createRingBearerState, type RingBearerState } from './game/ringBearer';
 import { createStatsState, createStatsTrigger, type BiggestHit, type StatsState, type StatsTrigger } from './game/stats';
 import {
@@ -548,6 +549,7 @@ export class Game {
   private readonly poison: PoisonState;
   private readonly energy: EnergyState;
   private readonly experience: ExperienceState;
+  private readonly customCounters: CustomCountersState;
   private readonly ringBearer: RingBearerState = createRingBearerState();
   private readonly sound: SoundPlayer;
   private readonly stack = new ArrayUndoStack();
@@ -603,6 +605,7 @@ export class Game {
     this.poison = createPoisonState(this.playersList.map((player) => player.id));
     this.energy = createEnergyState(this.playersList.map((player) => player.id));
     this.experience = createExperienceState(this.playersList.map((player) => player.id));
+    this.customCounters = createCustomCountersState(this.playersList.map((player) => player.id));
     this.activeTimeList = new Array(this.playerCount).fill(0);
     this.statsState = createStatsState(this.playersList.map((player) => player.id));
     this.statsTriggerObj = createStatsTrigger(this.statsState);
@@ -634,6 +637,10 @@ export class Game {
 
   get experienceState(): ExperienceState {
     return this.experience;
+  }
+
+  get customCountersState(): CustomCountersState {
+    return this.customCounters;
   }
 
   /** The current Ring-bearer's player id, or null when no one holds it (issue #163). */

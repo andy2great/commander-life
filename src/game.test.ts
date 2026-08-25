@@ -7,6 +7,7 @@ import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './game/lif
 import { applyPoisonDelta } from './game/poison';
 import { applyEnergyDelta } from './game/energy';
 import { applyExperienceDelta } from './game/experience';
+import { addCustomCounter } from './game/customCounters';
 import { applyBoardShortcutDelta } from './game/boardShortcut';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
 import { PLAYER_ICON_IDS } from './game/playerIcons';
@@ -212,6 +213,18 @@ describe('Game', () => {
     expect(newGame.experienceState).toEqual(
       Object.fromEntries(newGame.players.map((player) => [player.id, 0])),
     );
+  });
+
+  it('starts every player with no custom counters, including after a fresh "New Game" (issue #171)', () => {
+    const game = new Game();
+
+    expect(game.customCountersState).toEqual(Object.fromEntries(game.players.map((player) => [player.id, []])));
+
+    addCustomCounter(game.customCountersState, game.players[0].id, 'Storm Count', game.undoStack);
+    expect(game.customCountersState[game.players[0].id]).toHaveLength(1);
+
+    const newGame = new Game();
+    expect(newGame.customCountersState).toEqual(Object.fromEntries(newGame.players.map((player) => [player.id, []])));
   });
 
   it('starts with no Ring-bearer, including after a fresh "New Game" (issue #163)', () => {
