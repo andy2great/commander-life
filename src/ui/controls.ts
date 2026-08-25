@@ -33,6 +33,61 @@ function degToRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
+// Same beveled fill as the DOM overlay panels' `linear-gradient(160deg,
+// #211c29 0%, #1a1620 100%)` (issue #116 "Foil & Felt"), applied here as a
+// canvas gradient along the same 160deg diagonal so the shared control disc
+// (issue #198) reads as part of the same elevated-panel family.
+const DISC_BEVEL_TOP = '#211c29';
+const DISC_BEVEL_BOTTOM = '#1a1620';
+
+// The app's foil accent (brass -> ember, matching the CTA/pulse-border
+// gradient used elsewhere post-#116), reused here at low opacity for a
+// subtle rim highlight instead of a flat white stroke.
+const FOIL_BRASS_RGB = '215, 165, 76';
+const FOIL_EMBER_RGB = '226, 103, 63';
+
+/**
+ * Draws the disc's beveled fill, drop shadow, and foil-accented rim — shared
+ * by Undo/Shortcut/Pause so all three controls on the disc get identical
+ * chrome (issue #198). Callers wrap this in their own `enabled`/`paused`
+ * globalAlpha handling, then draw their glyph on top.
+ */
+function drawDiscChrome(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number): void {
+  // CSS `160deg` measures clockwise from "up"; convert to a canvas gradient
+  // axis running from the panel-treatment's start point to its end point.
+  const angle = degToRad(160);
+  const dx = radius * Math.sin(angle);
+  const dy = -radius * Math.cos(angle);
+  const fill = ctx.createLinearGradient(centerX - dx, centerY - dy, centerX + dx, centerY + dy);
+  fill.addColorStop(0, DISC_BEVEL_TOP);
+  fill.addColorStop(1, DISC_BEVEL_BOTTOM);
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+  ctx.shadowBlur = radius * 0.6;
+  ctx.shadowOffsetY = radius * 0.25;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#f5f3f7';
+  ctx.stroke();
+
+  const rimHighlight = ctx.createLinearGradient(centerX, centerY - radius, centerX, centerY + radius);
+  rimHighlight.addColorStop(0, `rgba(${FOIL_BRASS_RGB}, 0.6)`);
+  rimHighlight.addColorStop(1, `rgba(${FOIL_EMBER_RGB}, 0.35)`);
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius - 1, 0, Math.PI * 2);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = rimHighlight;
+  ctx.stroke();
+}
+
 /**
  * Curved-arrow "undo" glyph (docs/concept.md: "vector-drawn with canvas path
  * calls — no icon fonts or bitmap images"), replacing the `↺` text glyph
@@ -168,13 +223,7 @@ export class UndoControl {
     ctx.save();
     ctx.globalAlpha = enabled ? 1 : 0.35;
 
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(20, 18, 28, 0.85)';
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#f5f3f7';
-    ctx.stroke();
+    drawDiscChrome(ctx, centerX, centerY, radius);
 
     ctx.fillStyle = '#f5f3f7';
     ctx.strokeStyle = '#f5f3f7';
@@ -215,13 +264,7 @@ export class ShortcutControl {
 
     ctx.save();
 
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(20, 18, 28, 0.85)';
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#f5f3f7';
-    ctx.stroke();
+    drawDiscChrome(ctx, centerX, centerY, radius);
 
     ctx.fillStyle = '#f5f3f7';
     drawShortcutGlyph(ctx, centerX, centerY, radius);
@@ -262,13 +305,7 @@ export class PauseControl {
 
     ctx.save();
 
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(20, 18, 28, 0.85)';
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#f5f3f7';
-    ctx.stroke();
+    drawDiscChrome(ctx, centerX, centerY, radius);
 
     ctx.fillStyle = '#f5f3f7';
     drawPauseGlyph(ctx, centerX, centerY, radius, paused);

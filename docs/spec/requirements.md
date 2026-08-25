@@ -41,6 +41,12 @@ R7. The active player's zone shall render its pulsing highlight border using the
     (`rgb(91, 140, 255)` or equivalent) that the Foil & Felt visual identity
     replaced.
 
+R8. The shared center control disc (undo, shortcut, and pause icons) shall
+    render with a beveled gradient fill, a foil-accented rim highlight, and a
+    drop shadow consistent with the Foil & Felt panel treatment used by the
+    app's DOM overlay screens, rather than a flat single-color fill and flat
+    stroke.
+
 R9. All canvas-drawn text on a player zone — life total, player name, and
     turn timer alike — shall use the app's `DISPLAY_FONT_STACK` display
     typeface; none shall fall back to a system-ui/generic sans-serif font.

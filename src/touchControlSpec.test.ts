@@ -21,6 +21,7 @@ function createFakeCtx(): CanvasRenderingContext2D {
     lineTo: () => {},
     fill: () => {},
     stroke: () => {},
+    createLinearGradient: () => ({ addColorStop: () => {} }),
   } as unknown as CanvasRenderingContext2D;
 }
 
