@@ -1,10 +1,12 @@
 // Board background themes (issue #168): the live board fills its canvas with
 // this shared color before drawing zones on top. Per-zone fills stay within
-// each player's own accent hue regardless of theme (issue #200/R10), so the
-// theme only shows through where zones don't fully cover the canvas, and
-// player accents/zone legibility stay untouched. All themes are plain hex
-// fills, drawn by the existing canvas gradient code rather than images, per
-// CLAUDE.md's no-external-assets rule.
+// each player's own accent hue regardless of theme (issue #200/R10) rather
+// than blending toward it, so game.ts's drawZones() leaves a thin gutter
+// (ZONE_GRADIENT_GUTTER_PX) around each zone letting this base layer show
+// through between zones and at the board's outer edge, keeping the theme
+// swap visible during gameplay while player accents/zone legibility stay
+// untouched. All themes are plain hex fills, drawn by the existing canvas
+// gradient code rather than images, per CLAUDE.md's no-external-assets rule.
 
 export interface BoardTheme {
   id: string;

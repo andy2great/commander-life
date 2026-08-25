@@ -1962,4 +1962,65 @@ describe('zone background fill stays within the player accent hue edge-to-edge (
       expect(outermost[1].toLowerCase()).not.toBe(boardBackgroundColor.toLowerCase());
     });
   });
+
+  /** Records every fillRect call along with the ctx.fillStyle in effect at call time. */
+  function createFillRectRecordingCtx(): {
+    ctx: CanvasRenderingContext2D;
+    fillRectCalls: Array<{ fillStyle: unknown; x: number; y: number; width: number; height: number }>;
+  } {
+    const state: Record<string, unknown> = {};
+    const fillRectCalls: Array<{ fillStyle: unknown; x: number; y: number; width: number; height: number }> = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'fillRect') {
+          return (x: number, y: number, width: number, height: number) => {
+            fillRectCalls.push({ fillStyle: target.fillStyle, x, y, width, height });
+          };
+        }
+        if (prop === 'createRadialGradient' || prop === 'createLinearGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, fillRectCalls };
+  }
+
+  it('leaves a gutter around each zone so the boardBackgroundColor base layer stays visible (per-theme swap, issue #168)', () => {
+    const game = new Game();
+    const width = 400;
+    const height = 800;
+    game.resize(width, height);
+    const { ctx, fillRectCalls } = createFillRectRecordingCtx();
+
+    game.render(ctx, width, height);
+
+    const boardBackgroundColor = getBoardTheme(undefined).backgroundColor;
+    // The base layer fill must still run...
+    const baseLayerCall = fillRectCalls.find(
+      (call) => call.fillStyle === boardBackgroundColor && call.x === 0 && call.y === 0 && call.width === width && call.height === height,
+    );
+    expect(baseLayerCall).toBeDefined();
+
+    // ...and every zone's own gradient fill must be inset from its full
+    // computeZoneRects bounds, so it can never fully occlude the base layer
+    // drawn underneath it.
+    const zoneRects = computeZoneRects(game.playerCount, width, height);
+    const zoneFillCalls = fillRectCalls.filter((call) => typeof call.fillStyle === 'object');
+    expect(zoneFillCalls.length).toBe(zoneRects.length);
+    zoneFillCalls.forEach((call, index) => {
+      const rect = zoneRects[index];
+      expect(call.x).toBeGreaterThan(rect.x);
+      expect(call.y).toBeGreaterThan(rect.y);
+      expect(call.width).toBeLessThan(rect.width);
+      expect(call.height).toBeLessThan(rect.height);
+    });
+  });
 });
