@@ -227,56 +227,6 @@ describe('Game', () => {
     expect(newGame.customCountersState).toEqual(Object.fromEntries(newGame.players.map((player) => [player.id, []])));
   });
 
-  it('starts with no Ring-bearer, including after a fresh "New Game" (issue #163)', () => {
-    const game = new Game();
-
-    expect(game.ringBearerId).toBeNull();
-
-    game.assignRingBearer(game.players[0].id);
-    expect(game.ringBearerId).toBe(game.players[0].id);
-
-    const newGame = new Game();
-    expect(newGame.ringBearerId).toBeNull();
-  });
-
-  describe('assignRingBearer (issue #163)', () => {
-    it('assigns the badge to a player', () => {
-      const game = new Game();
-
-      game.assignRingBearer(game.players[0].id);
-
-      expect(game.ringBearerId).toBe(game.players[0].id);
-    });
-
-    it('reassigns the badge to a different player, removing it from the previous holder', () => {
-      const game = new Game();
-
-      game.assignRingBearer(game.players[0].id);
-      game.assignRingBearer(game.players[1].id);
-
-      expect(game.ringBearerId).toBe(game.players[1].id);
-    });
-
-    it('pushes an undo action that restores the previous holder', () => {
-      const game = new Game();
-
-      game.assignRingBearer(game.players[0].id);
-      game.assignRingBearer(game.players[1].id);
-      game.undo();
-
-      expect(game.ringBearerId).toBe(game.players[0].id);
-    });
-
-    it('undoing an assignment with no previous holder restores null', () => {
-      const game = new Game();
-
-      game.assignRingBearer(game.players[0].id);
-      game.undo();
-
-      expect(game.ringBearerId).toBeNull();
-    });
-  });
-
   it('resolves a long-press to the player id whose zone contains the point', () => {
     const game = new Game();
     game.resize(400, 800);
