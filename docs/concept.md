@@ -20,7 +20,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 - Drag from your own zone back into itself (same ~10px movement threshold): opens a self-target menu (name shown once with a "(self)" label) with +/- steppers for plain damage, healing, and poison against your own total — commander damage and lifelink are omitted since they don't apply to yourself
 - Long-press (~500ms) anywhere inside the active player's own zone = pass turn, with a brief flash animation as it commits; long-pressing a non-active zone does nothing
 - Center shared control: tap = undo last action (dimmed/disabled when nothing to undo)
-- Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a name field to rename via the soft keyboard
+- Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a swatch to pick the board background theme, tap a name field to rename via the soft keyboard
 
 ## Layout by player count (portrait canvas, all code-drawn, no external assets)
 - 3 players: one zone spans the full width at the top (rotated 180°), two zones split the bottom half vertically
@@ -42,7 +42,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 Not applicable in the traditional score-chasing sense — this is a utility, not a score attack. "Progression" instead means configuration depth: the default game (4 players, 40 life) launches in two taps for casual use, while power users can dig into commander-damage sub-panels and the full stat history. Every screen must stay usable one-handed regardless of depth.
 
 ## Visual style (all code-drawn on canvas, zero external assets/fonts/images)
-- Dark neutral background (near-black, #121016) so colored player zones pop like felt on a card table
+- Dark neutral background (near-black, #121016 by default) so colored player zones pop like felt on a card table; the host can pick a different board theme (a handful of preset dark background colors, each code-drawn) from the setup screen, and the choice persists across games — player accent colors and zone legibility stay the same regardless of theme
 - Each player zone is assigned one of 6 preset saturated accent colors (crimson, teal, amber, violet, lime, sky), rendered as a soft radial gradient fill
 - Life numbers: huge, bold, centered, drawn with canvas text using a heavy sans stack, white with a subtle drop shadow, rotated 180° for top-row zones so every player reads their own number upright from their seat
 - The active player's zone renders an animated pulsing border (canvas stroke with a sine-driven width/opacity); a long-press that commits a turn pass also plays a brief flash animation on that zone, distinct from the idle pulse
