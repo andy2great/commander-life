@@ -57,3 +57,8 @@ R10. Each player zone's background fill shall be a same-hue, multi-stop
      radial gradient that remains visibly saturated with the player's accent
      color across the entire zone, including its outer edge — it shall never
      fade to the shared board background color at any gradient stop.
+
+R11. The board shall render a persistent turn-indicator badge, showing the
+     current turn number and the active player's name, anchored near the
+     shared center control area at all times during gameplay. The badge
+     shall never overlap or intercept taps on the center disc's controls.

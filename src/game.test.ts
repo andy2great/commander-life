@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects, resolveOverlayViewportSize } from './game';
 import { DISPLAY_FONT_STACK } from './ui/displayFont';
 import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS } from './ui/damagePanel';
+import { UNDO_RADIUS_RATIO } from './ui/controls';
 import { clockwiseSeatOrder } from './game/turn';
+import { BOARD_THEMES } from './game/boardTheme';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
 import { applyDamageDelta, applyHealDelta, applyLifelinkDelta } from './game/life';
 import { applyPoisonDelta } from './game/poison';
@@ -2021,6 +2023,114 @@ describe('zone background fill stays within the player accent hue edge-to-edge (
       expect(call.y).toBeGreaterThan(rect.y);
       expect(call.width).toBeLessThan(rect.width);
       expect(call.height).toBeLessThan(rect.height);
+    });
+  });
+});
+
+describe('turn-indicator badge near the shared center control (issue #201)', () => {
+  /** Records the badge's roundRect pill, every fillText call, and every fillStyle assignment across a full render() pass. */
+  function createBadgeRecordingCtx(): {
+    ctx: CanvasRenderingContext2D;
+    roundRectCalls: Array<{ x: number; y: number; w: number; h: number }>;
+    fillTextCalls: string[];
+    fillStyles: unknown[];
+  } {
+    const state: Record<string, unknown> = { font: '', letterSpacing: '0px', textAlign: '', textBaseline: '' };
+    const roundRectCalls: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const fillTextCalls: string[] = [];
+    const fillStyles: unknown[] = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'roundRect') {
+          return (x: number, y: number, w: number, h: number) => roundRectCalls.push({ x, y, w, h });
+        }
+        if (prop === 'fillText') {
+          return (text: string) => fillTextCalls.push(text);
+        }
+        if (prop === 'createLinearGradient' || prop === 'createRadialGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        if (prop === 'fillStyle') {
+          fillStyles.push(value);
+        }
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, roundRectCalls, fillTextCalls, fillStyles };
+  }
+
+  it('renders a "TURN n · NAME" pill showing the current turn number and active player\'s name', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+    game.resize(400, 800);
+    game.players[0].name = 'alice';
+    const { ctx, fillTextCalls } = createBadgeRecordingCtx();
+
+    game.render(ctx, 400, 800);
+
+    expect(fillTextCalls).toContain(`TURN ${game.turnCount} · ALICE`);
+  });
+
+  it('updates immediately when the active player advances (long-press pass-turn)', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+    game.resize(400, 800);
+    const before = game.turnBadgeText;
+
+    game.passTurn();
+
+    expect(game.turnBadgeText).not.toBe(before);
+    expect(game.turnBadgeText).toContain(game.players[game.activeIndex].name.toUpperCase());
+  });
+
+  it('reverts to the previous turn/name when undo reverts a turn pass', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+    game.resize(400, 800);
+    const before = game.turnBadgeText;
+    game.passTurn();
+    expect(game.turnBadgeText).not.toBe(before);
+
+    game.undo();
+
+    expect(game.turnBadgeText).toBe(before);
+  });
+
+  it.each([2, 3, 4, 5, 6, 7, 8])(
+    'keeps the badge pill clear of the shared Undo/Shortcut/Pause controls in a %i-player game',
+    (playerCount) => {
+      const game = new Game({ playerCount, startingLife: 40, players: [] });
+      const width = 360;
+      const height = 900;
+      game.resize(width, height);
+      const { ctx, roundRectCalls } = createBadgeRecordingCtx();
+
+      game.render(ctx, width, height);
+
+      expect(roundRectCalls).toHaveLength(1);
+      const badge = roundRectCalls[0];
+      const shortSide = Math.min(width, height);
+      // Undo/Shortcut/Pause share one radius and centerY (Game.resize()), so
+      // their shared bottom edge alone bounds all three discs.
+      const discsBottomEdge = height / 2 + shortSide * UNDO_RADIUS_RATIO;
+
+      expect(badge.y).toBeGreaterThanOrEqual(discsBottomEdge);
+    },
+  );
+
+  it('draws the badge with its own dark translucent fill, independent of the board theme, so it stays legible on every BOARD_THEMES entry', () => {
+    BOARD_THEMES.forEach((theme) => {
+      const game = new Game({ playerCount: 4, startingLife: 40, players: [], boardTheme: theme.id });
+      game.resize(400, 800);
+      const { ctx, fillStyles } = createBadgeRecordingCtx();
+
+      game.render(ctx, 400, 800);
+
+      expect(fillStyles).toContain('rgba(10, 9, 16, 0.6)');
     });
   });
 });
