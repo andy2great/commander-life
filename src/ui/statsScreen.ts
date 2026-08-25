@@ -5,6 +5,7 @@
 
 import type { GameStats } from '../game';
 import type { Player } from '../game/commanderDamage';
+import { saveMatchResult } from '../game/matchHistory';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
 export interface StatsScreenOptions {
@@ -79,6 +80,7 @@ export class StatsScreen {
   show(): void {
     injectStylesOnce();
     this.close();
+    this.saveToHistory();
 
     const overlay = document.createElement('div');
     overlay.className = 'stats-screen';
@@ -122,6 +124,17 @@ export class StatsScreen {
 
   private findPlayer(playerId: string): Player | undefined {
     return this.players.find((player) => player.id === playerId);
+  }
+
+  /** Records this completed game to the local match history (issue #166) as soon as the recap is shown. */
+  private saveToHistory(): void {
+    const winner = this.stats.winnerId ? this.findPlayer(this.stats.winnerId) : undefined;
+    saveMatchResult(window.localStorage, {
+      playedAt: new Date().toISOString(),
+      players: this.players.map((player) => player.name),
+      winnerName: this.stats.winnerId ? winner?.name ?? 'Unknown' : null,
+      eliminationOrder: this.stats.eliminationOrder.map((entry) => this.findPlayer(entry.playerId)?.name ?? 'Unknown'),
+    });
   }
 
   private buildWinnerCard(): HTMLElement {
