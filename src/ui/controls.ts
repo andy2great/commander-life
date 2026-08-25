@@ -4,6 +4,8 @@
 // disc with ShortcutControl (issue #80, board-wide damage shortcuts) — the
 // old PassTurnControl icon this file used to also host is gone (#64).
 
+import { DISPLAY_FONT_STACK } from './displayFont';
+
 // 0.079 keeps the hit-circle diameter around ~56-64px (comfortably above the
 // bare 44-48px platform minimum) down to the smallest supported phone width
 // (~360px); see #38, which raised this from the #31 bare-minimum sizing
@@ -310,6 +312,71 @@ export class PauseControl {
     ctx.fillStyle = '#f5f3f7';
     drawPauseGlyph(ctx, centerX, centerY, radius, paused);
 
+    ctx.restore();
+  }
+}
+
+// Vertical gap between the disc controls' shared bottom edge and the turn
+// badge's top edge, relative to the canvas's short side — same rationale as
+// CONTROL_GAP_RATIO's horizontal gap between Undo and Shortcut/Pause.
+export const TURN_BADGE_GAP_RATIO = 0.02;
+
+// Turn badge pill height, relative to the canvas's short side.
+export const TURN_BADGE_HEIGHT_RATIO = 0.045;
+
+const TURN_BADGE_FILL = 'rgba(10, 9, 16, 0.6)';
+const TURN_BADGE_TEXT_COLOR = 'rgba(255, 255, 255, 0.82)';
+
+interface TurnBadgeLayout {
+  centerX: number;
+  centerY: number;
+  height: number;
+}
+
+/**
+ * Persistent pill anchored just below the shared control disc, showing the
+ * current turn number and active player's name (issue #201), per
+ * docs/mockups/02-gameplay.html's `.turn-badge`. Purely cosmetic — it has no
+ * containsPoint/hit-testing, so it can never intercept a tap meant for
+ * Undo/Shortcut/Pause. Its pill width is sized from the text's character
+ * count rather than ctx.measureText(), so draw() has no text-metrics
+ * round-trip through the canvas.
+ */
+export class TurnBadge {
+  private layout: TurnBadgeLayout = { centerX: 0, centerY: 0, height: 0 };
+
+  /**
+   * `centerX`/`centerY` are caller-supplied (see Game.resize()) so the badge
+   * can sit centered on the disc but clear of its controls' shared
+   * hit-circle radius, at any canvas size or player count.
+   */
+  reflow(width: number, height: number, centerX: number, centerY: number): void {
+    const shortSide = Math.min(width, height);
+    this.layout = { centerX, centerY, height: shortSide * TURN_BADGE_HEIGHT_RATIO };
+  }
+
+  draw(ctx: CanvasRenderingContext2D, text: string): void {
+    const { centerX, centerY, height } = this.layout;
+    const fontSize = Math.round(height * 0.46);
+    // Average glyph advance for the condensed display typeface, in px —
+    // approximate on purpose (see class doc) rather than measured.
+    const approxCharWidth = fontSize * 0.62;
+    const paddingX = height * 0.55;
+    const pillWidth = text.length * approxCharWidth + paddingX * 2;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(centerX - pillWidth / 2, centerY - height / 2, pillWidth, height, height / 2);
+    ctx.fillStyle = TURN_BADGE_FILL;
+    ctx.fill();
+
+    ctx.fillStyle = TURN_BADGE_TEXT_COLOR;
+    ctx.font = `700 ${fontSize}px ${DISPLAY_FONT_STACK}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.letterSpacing = `${((fontSize * 0.6) / 18).toFixed(2)}px`;
+    ctx.fillText(text, centerX, centerY + 1);
+    ctx.letterSpacing = '0px';
     ctx.restore();
   }
 }

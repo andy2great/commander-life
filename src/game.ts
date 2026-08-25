@@ -21,6 +21,9 @@ import {
   PauseControl,
   SHORTCUT_RADIUS_RATIO,
   ShortcutControl,
+  TURN_BADGE_GAP_RATIO,
+  TURN_BADGE_HEIGHT_RATIO,
+  TurnBadge,
   UNDO_RADIUS_RATIO,
   UndoControl,
 } from './ui/controls';
@@ -357,6 +360,7 @@ export class Game {
   private readonly undoControl = new UndoControl();
   private readonly shortcutControl = new ShortcutControl();
   private readonly pauseControl = new PauseControl();
+  private readonly turnBadge = new TurnBadge();
   private readonly playersList: Player[];
   private readonly damage: CommanderDamageState;
   private readonly poison: PoisonState;
@@ -425,6 +429,12 @@ export class Game {
 
   get turnCount(): number {
     return this.turnState.turnCount;
+  }
+
+  /** Text shown on the shared center disc's turn badge (issue #201), e.g. "TURN 6 · ALICE" — recomputed every render() so it updates immediately on turn pass/undo. */
+  get turnBadgeText(): string {
+    const activeName = this.playersList[this.turnState.activeIndex].name.toUpperCase();
+    return `TURN ${this.turnState.turnCount} · ${activeName}`;
   }
 
   get players(): Player[] {
@@ -626,6 +636,15 @@ export class Game {
     const pauseCenterX = width / 2 - undoRadius - gap - pauseRadius;
     this.shortcutControl.reflow(width, height, shortcutCenterX, controlCenterY);
     this.pauseControl.reflow(width, height, pauseCenterX, controlCenterY);
+
+    // Turn badge (issue #201) sits just clear of the disc controls' shared
+    // hit-circle radius, centered underneath — undoRadius already bounds the
+    // tallest of the three controls (they're all the same radius), so
+    // offsetting past it clears Shortcut/Pause too without needing their
+    // radii here.
+    const badgeHeight = shortSide * TURN_BADGE_HEIGHT_RATIO;
+    const badgeCenterY = controlCenterY + undoRadius + shortSide * TURN_BADGE_GAP_RATIO + badgeHeight / 2;
+    this.turnBadge.reflow(width, height, width / 2, badgeCenterY);
   }
 
   onTap(x: number, y: number): void {
@@ -958,6 +977,7 @@ export class Game {
     this.undoControl.draw(ctx, this.canUndo);
     this.shortcutControl.draw(ctx);
     this.pauseControl.draw(ctx, this.pausedFlag);
+    this.turnBadge.draw(ctx, this.turnBadgeText);
 
     ctx.restore();
 
