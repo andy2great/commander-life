@@ -9,6 +9,7 @@ import { applyEnergyDelta } from './game/energy';
 import { applyExperienceDelta } from './game/experience';
 import { applyBoardShortcutDelta } from './game/boardShortcut';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
+import { PLAYER_ICON_IDS } from './game/playerIcons';
 
 /** Records every sound-trigger call so tests can assert on game events without a real AudioContext. */
 class MockSoundPlayer implements SoundPlayer {
@@ -35,6 +36,45 @@ function monarchBadgeCenter(rect: { x: number; y: number; width: number; height:
   const margin = shortSide * 0.06;
   return { x: rect.x + rect.width - margin - radius, y: rect.y + margin + radius };
 }
+
+describe('player icon assignment (issue #167)', () => {
+  it('assigns a default icon per seat when none is configured', () => {
+    const game = new Game({ playerCount: 3, startingLife: 40, players: [] });
+    expect(game.players.map((player) => player.icon)).toEqual([
+      PLAYER_ICON_IDS[0],
+      PLAYER_ICON_IDS[1],
+      PLAYER_ICON_IDS[2],
+    ]);
+  });
+
+  it('keeps each configured player icon independently', () => {
+    const game = new Game({
+      playerCount: 3,
+      startingLife: 40,
+      players: [
+        { name: 'Alice', color: '#e11d48', icon: 'flame' },
+        { name: 'Bob', color: '#14b8a6', icon: 'moon' },
+        { name: 'Cara', color: '#f59e0b', icon: 'flame' },
+      ],
+    });
+    expect(game.players.map((player) => player.icon)).toEqual(['flame', 'moon', 'flame']);
+  });
+
+  it('allows two players to pick the same icon without error', () => {
+    expect(
+      () =>
+        new Game({
+          playerCount: 2 + 1,
+          startingLife: 40,
+          players: [
+            { name: 'Alice', color: '#e11d48', icon: 'star' },
+            { name: 'Bob', color: '#14b8a6', icon: 'star' },
+            { name: 'Cara', color: '#f59e0b', icon: 'star' },
+          ],
+        }),
+    ).not.toThrow();
+  });
+});
 
 describe('clamp', () => {
   it('returns the value when inside the range', () => {

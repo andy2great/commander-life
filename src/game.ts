@@ -46,6 +46,7 @@ import {
   type ZoneEffectTrigger,
 } from './game/zoneEffect';
 import { DISPLAY_FONT_STACK } from './ui/displayFont';
+import { defaultIconForSeat, DEFAULT_PLAYER_ICON, type PlayerIconId } from './game/playerIcons';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -221,6 +222,8 @@ function computeFivePlayerZoneRects(width: number, height: number): ZoneRect[] {
 export interface PlayerConfig {
   name: string;
   color: string;
+  /** The code-drawn glyph chosen to identify this seat (issue #167), beyond accent color alone. */
+  icon?: PlayerIconId;
   /** True when this player runs two commanders (Partner pair, or Commander + Background) rather than one (issue #165). */
   hasTwoCommanders?: boolean;
 }
@@ -353,6 +356,148 @@ function computeMonarchBadgeLayouts(zoneRects: ZoneRect[], playerIds: string[]):
   });
 }
 
+// Player icon badge (issue #167): a small disc in each zone's top-left
+// (screen-space) corner — the mirror image of the Monarch badge's top-right
+// corner — showing that seat's chosen vector glyph so players are
+// recognizable beyond accent color alone (docs/concept.md). Purely
+// decorative, unlike the Monarch badge: the icon is only ever changed from
+// the setup screen, so there's no hit-testing for it here.
+const PLAYER_ICON_BADGE_RADIUS_RATIO = 0.09;
+const PLAYER_ICON_BADGE_MARGIN_RATIO = 0.06;
+
+interface PlayerIconBadgeLayout {
+  x: number;
+  y: number;
+  radius: number;
+  icon: PlayerIconId;
+  color: string;
+}
+
+/** Places one icon badge per zone in its top-left (screen-space) corner, sized/margined off that zone's own shorter side. */
+function computePlayerIconBadgeLayouts(zoneRects: ZoneRect[], players: Player[]): PlayerIconBadgeLayout[] {
+  return zoneRects.map((rect, seat) => {
+    const shortSide = Math.min(rect.width, rect.height);
+    const radius = shortSide * PLAYER_ICON_BADGE_RADIUS_RATIO;
+    const margin = shortSide * PLAYER_ICON_BADGE_MARGIN_RATIO;
+    const player = players[seat];
+    return {
+      x: rect.x + margin + radius,
+      y: rect.y + margin + radius,
+      radius,
+      icon: player.icon ?? DEFAULT_PLAYER_ICON,
+      color: player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length],
+    };
+  });
+}
+
+/** Vector-drawn player icon glyphs (issue #167), matching the style of drawCrownGlyph — no icon fonts or bitmap images. */
+function drawPlayerIconGlyph(ctx: CanvasRenderingContext2D, icon: PlayerIconId, cx: number, cy: number, radius: number): void {
+  switch (icon) {
+    case 'star':
+      drawStarGlyph(ctx, cx, cy, radius);
+      return;
+    case 'shield':
+      drawShieldGlyph(ctx, cx, cy, radius);
+      return;
+    case 'bolt':
+      drawBoltGlyph(ctx, cx, cy, radius);
+      return;
+    case 'moon':
+      drawMoonGlyph(ctx, cx, cy, radius);
+      return;
+    case 'flame':
+      drawFlameGlyph(ctx, cx, cy, radius);
+      return;
+    case 'leaf':
+      drawLeafGlyph(ctx, cx, cy, radius);
+      return;
+  }
+}
+
+function drawStarGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  const spikes = 5;
+  const innerRadius = radius * 0.45;
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i += 1) {
+    const r = i % 2 === 0 ? radius : innerRadius;
+    const angle = (Math.PI / spikes) * i - Math.PI / 2;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawShieldGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  const w = radius * 0.85;
+  const topY = cy - radius;
+  const midY = cy;
+  const bottomY = cy + radius;
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.lineTo(cx + w, topY + radius * 0.25);
+  ctx.lineTo(cx + w, midY);
+  ctx.quadraticCurveTo(cx + w, bottomY - radius * 0.2, cx, bottomY);
+  ctx.quadraticCurveTo(cx - w, bottomY - radius * 0.2, cx - w, midY);
+  ctx.lineTo(cx - w, topY + radius * 0.25);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBoltGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx + radius * 0.15, cy - radius);
+  ctx.lineTo(cx - radius * 0.55, cy + radius * 0.15);
+  ctx.lineTo(cx - radius * 0.05, cy + radius * 0.15);
+  ctx.lineTo(cx - radius * 0.15, cy + radius);
+  ctx.lineTo(cx + radius * 0.55, cy - radius * 0.15);
+  ctx.lineTo(cx + radius * 0.05, cy - radius * 0.15);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawMoonGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(cx + radius * 0.5, cy - radius * 0.2, radius * 0.85, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFlameGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - radius);
+  ctx.quadraticCurveTo(cx + radius * 0.9, cy - radius * 0.2, cx + radius * 0.35, cy + radius * 0.5);
+  ctx.quadraticCurveTo(cx + radius * 0.5, cy + radius * 0.1, cx, cy + radius * 0.3);
+  ctx.quadraticCurveTo(cx - radius * 0.5, cy + radius * 0.1, cx - radius * 0.35, cy + radius * 0.5);
+  ctx.quadraticCurveTo(cx - radius * 0.9, cy - radius * 0.2, cx, cy - radius);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawLeafGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - radius);
+  ctx.quadraticCurveTo(cx + radius, cy - radius * 0.2, cx, cy + radius);
+  ctx.quadraticCurveTo(cx - radius, cy - radius * 0.2, cx, cy - radius);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - radius * 0.6);
+  ctx.lineTo(cx, cy + radius * 0.8);
+  ctx.lineWidth = Math.max(radius * 0.12, 1);
+  ctx.stroke();
+}
+
 /** Vector-drawn crown glyph (issue #162), matching the icon style of src/ui/controls.ts — no icon fonts or bitmap images. */
 function drawCrownGlyph(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number): void {
   const w = radius * 0.9;
@@ -405,6 +550,7 @@ export class Game {
   private readonly monarch: MonarchState = createMonarchState();
   private zoneRects: ZoneRect[] = [];
   private monarchBadges: MonarchBadgeLayout[] = [];
+  private playerIconBadges: PlayerIconBadgeLayout[] = [];
   private canvasWidth = 0;
   private canvasHeight = 0;
   private animTime = 0;
@@ -443,6 +589,7 @@ export class Game {
         name: preset?.name || `Player ${seat + 1}`,
         life: startingLife,
         color: preset?.color || PLAYER_COLORS[seat % PLAYER_COLORS.length],
+        icon: preset?.icon || defaultIconForSeat(seat),
         hasTwoCommanders: preset?.hasTwoCommanders,
       };
     });
@@ -669,6 +816,7 @@ export class Game {
       this.zoneRects,
       this.playersList.map((player) => player.id),
     );
+    this.playerIconBadges = computePlayerIconBadgeLayouts(this.zoneRects, this.playersList);
     // The top/bottom rows always fill half the canvas height each, so
     // height / 2 is exactly the boundary between them for every player
     // count. The 5-player left seat (issue #81) spans full height, so its
@@ -1111,6 +1259,7 @@ export class Game {
       }
 
       this.drawMonarchBadge(ctx, this.monarchBadges[seat], player.id === this.monarch.holderId);
+      this.drawPlayerIconBadge(ctx, this.playerIconBadges[seat]);
     }
   }
 
@@ -1131,6 +1280,26 @@ export class Game {
 
     ctx.fillStyle = isHolder ? '#1b1822' : '#f5f3f7';
     drawCrownGlyph(ctx, x, y, radius * 0.55);
+
+    ctx.restore();
+  }
+
+  /** The player icon badge (issue #167): dark disc bordered in the seat's accent color, hosting that seat's chosen vector glyph. Always visible, unlike the Monarch badge — it's not tappable/reassignable in-game. */
+  private drawPlayerIconBadge(ctx: CanvasRenderingContext2D, badge: PlayerIconBadgeLayout): void {
+    const { x, y, radius, icon, color } = badge;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20, 18, 28, 0.75)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    ctx.fillStyle = '#f5f3f7';
+    ctx.strokeStyle = '#f5f3f7';
+    drawPlayerIconGlyph(ctx, icon, x, y, radius * 0.55);
 
     ctx.restore();
   }

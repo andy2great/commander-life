@@ -5,6 +5,7 @@
 // unit-testable module — src/ui/setupScreen.ts supplies `window.localStorage`.
 
 import { MAX_PLAYER_COUNT, MIN_PLAYER_COUNT, type GameConfig, type PlayerConfig } from '../game';
+import { isPlayerIconId } from './playerIcons';
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -47,7 +48,11 @@ function isPlayerConfig(value: unknown): value is PlayerConfig {
     return false;
   }
   const candidate = value as Record<string, unknown>;
-  return typeof candidate.name === 'string' && typeof candidate.color === 'string';
+  return (
+    typeof candidate.name === 'string' &&
+    typeof candidate.color === 'string' &&
+    (candidate.icon === undefined || isPlayerIconId(candidate.icon))
+  );
 }
 
 function isPersistedRoster(value: unknown): value is PersistedRoster {
