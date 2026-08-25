@@ -19,6 +19,13 @@ R4. After removal of the Ring-bearer, Monarch, and player-icon badges, each
     its sole visual focal point — no vestigial empty badge slots, dead
     hit-test regions, or spacing sized for the removed badges.
 
+R5. On the pre-game setup screen, the shared center hub shall never visually
+    overlap or intercept taps intended for any player zone's controls (name
+    field, color swatches, start-first button, remove-player button,
+    two-commanders toggle) at any supported player count (2-8) or viewport
+    size; every zone control shall remain fully visible and tappable
+    regardless of the hub's rendered size.
+
 R6. The pre-game setup hub shall show only the essential table-wide controls
     (player count, starting life, and Start Game) by default; roll-for-start,
     board theme, and match history shall be reachable from a secondary
