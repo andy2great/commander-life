@@ -17,6 +17,7 @@ function createFakeCtx(): CanvasRenderingContext2D {
     restore: () => {},
     beginPath: () => {},
     arc: () => {},
+    clip: () => {},
     moveTo: () => {},
     lineTo: () => {},
     fill: () => {},
