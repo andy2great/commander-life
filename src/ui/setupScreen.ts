@@ -29,6 +29,7 @@ import {
   resolveDisplayValue,
   resolveSubmittedName,
 } from '../game/playerRoster';
+import { rollForStartingSeat } from '../game/diceRoller';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
@@ -37,9 +38,20 @@ const MIN_STARTING_LIFE = 5;
 const MAX_STARTING_LIFE = 999;
 const BOARD_BACKGROUND_COLOR = '#121016';
 
+// Roll-animation timing (issue #164): a short, decelerating flicker through
+// random seats before landing on the real roll, long enough to read as an
+// animated roll without delaying the host.
+const ROLL_TICK_COUNT = 10;
+const ROLL_TICK_BASE_DELAY_MS = 70;
+const ROLL_TICK_DELAY_STEP_MS = 10;
+
 const START_PLAYER_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 const REMOVE_PLAYER_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="19" x2="19" y2="5"/><line x1="5" y1="5" x2="19" y2="19"/></svg>';
+// Five-pip die face (issue #164), drawn with SVG path/circle calls per the
+// no-external-assets rule, matching the other hub icons' style.
+const DIE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/></svg>';
 
 export interface SetupScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
@@ -83,6 +95,12 @@ function injectStylesOnce(): void {
     .setup-hub-stepper button.setup-hub-minus { background: rgba(229, 72, 77, 0.16); color: #ff8a8f; }
     .setup-hub-stepper button.setup-hub-plus { background: rgba(34, 197, 148, 0.16); color: #4be3c4; }
     .setup-hub-stepper-val { min-width: 26px; text-align: center; color: #fff; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .setup-hub-roll-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .setup-hub-roll-face { min-width: 22px; text-align: center; color: #fff; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .setup-hub-roll-btn { box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 6px; width: 44px; height: 44px; border: none; border-radius: 10px; background: #2d2938; color: #d7a54c; }
+    .setup-hub-roll-btn svg { width: 20px; height: 20px; }
+    .setup-hub-roll-btn:active { transform: scale(0.94); }
+    .setup-hub-roll-btn:disabled { opacity: 0.5; }
     .setup-hub-cta { box-sizing: border-box; margin-top: 4px; background: linear-gradient(135deg, #d7a54c, #e2673f); color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; }
     .setup-hub-cta:active { transform: scale(0.98); }
   `;
@@ -107,6 +125,9 @@ export class SetupScreen {
    */
   private untouchedPlayers = new Set<PlayerConfig>();
   private resizeHandler: (() => void) | null = null;
+  /** Seat flickering during an in-progress roll animation (issue #164), or null when idle. Drives both the hub face readout and the per-zone start-icon highlight. */
+  private rollingHighlightIndex: number | null = null;
+  private rollTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: SetupScreenOptions) {
     this.root = options.root;
@@ -182,6 +203,46 @@ export class SetupScreen {
       window.visualViewport?.removeEventListener('resize', this.resizeHandler);
       this.resizeHandler = null;
     }
+    this.cancelRoll();
+  }
+
+  /** Stops an in-progress roll animation, if any, without changing any already-landed startingPlayer pick. */
+  private cancelRoll(): void {
+    if (this.rollTimer) {
+      clearTimeout(this.rollTimer);
+      this.rollTimer = null;
+    }
+    this.rollingHighlightIndex = null;
+  }
+
+  /**
+   * Rolls a die/coin (rollForStartingSeat, issue #164) to pre-select the
+   * starting player: a brief decelerating flicker across random seats, then
+   * lands on the real roll and sets startingPlayer to it — same as tapping a
+   * zone's own start icon directly, so the host can still override the pick
+   * by tapping a different zone, or roll again, before pressing Start Game.
+   * Never itself starts the game.
+   */
+  private rollForStartingPlayer(): void {
+    if (this.rollTimer) {
+      return;
+    }
+    const finalSeat = rollForStartingSeat(this.playerCount);
+    let tick = 0;
+    const runTick = (): void => {
+      if (tick >= ROLL_TICK_COUNT) {
+        this.rollingHighlightIndex = null;
+        this.rollTimer = null;
+        this.startingPlayer = this.players[finalSeat];
+        this.render();
+        return;
+      }
+      this.rollingHighlightIndex = Math.floor(Math.random() * this.playerCount);
+      this.render();
+      tick += 1;
+      this.rollTimer = setTimeout(runTick, ROLL_TICK_BASE_DELAY_MS + tick * ROLL_TICK_DELAY_STEP_MS);
+    };
+    runTick();
   }
 
   private render(): void {
@@ -238,10 +299,12 @@ export class SetupScreen {
     startBtn.className = 'setup-zone-start-btn';
     startBtn.innerHTML = START_PLAYER_ICON;
     startBtn.title = 'Starts first';
-    const isStarting = (this.startingPlayer ?? this.players[0]) === player;
+    const isStarting =
+      this.rollingHighlightIndex !== null ? index === this.rollingHighlightIndex : (this.startingPlayer ?? this.players[0]) === player;
     startBtn.classList.toggle('setup-zone-start-btn-active', isStarting);
     startBtn.setAttribute('aria-pressed', String(isStarting));
     startBtn.addEventListener('pointerdown', () => {
+      this.cancelRoll();
       this.startingPlayer = player;
       this.render();
     });
@@ -258,6 +321,7 @@ export class SetupScreen {
       if (next === this.players) {
         return;
       }
+      this.cancelRoll();
       if (player === this.startingPlayer) {
         this.startingPlayer = null;
       }
@@ -324,6 +388,7 @@ export class SetupScreen {
         if (nextCount === this.playerCount) {
           return;
         }
+        this.cancelRoll();
         if (nextCount > this.playerCount) {
           this.players.push(this.createDefaultPlayer(this.players.length));
         } else {
@@ -344,6 +409,8 @@ export class SetupScreen {
       }),
     );
 
+    hub.appendChild(this.buildRollRow());
+
     // The "Start Game" action lives here on the shared center hub, alongside
     // the table-wide steppers, rather than as a separate full-width CTA
     // pinned below a scrolling list (issue #150). `start()` persists the
@@ -359,6 +426,41 @@ export class SetupScreen {
     hub.appendChild(cta);
 
     return hub;
+  }
+
+  /**
+   * "Roll for start" control (issue #164): rolls a die (or, for a 2-player
+   * table, flips a coin — see rollForStartingSeat) to pre-select the
+   * starting player, shown here as an animated face readout and, per zone,
+   * as the same start-icon highlight the manual pick uses. Never itself
+   * starts the game — Start Game (buildHub) still requires a separate tap.
+   */
+  private buildRollRow(): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'setup-hub-roll-row';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'setup-hub-stepper-label';
+    labelEl.textContent = 'Roll for start';
+
+    const faceEl = document.createElement('div');
+    faceEl.className = 'setup-hub-roll-face';
+    const landedSeat = this.startingPlayer ? this.players.indexOf(this.startingPlayer) : null;
+    const shownSeat = this.rollingHighlightIndex ?? landedSeat;
+    faceEl.textContent = shownSeat === null ? '–' : String(shownSeat + 1);
+
+    const rollBtn = document.createElement('button');
+    rollBtn.type = 'button';
+    rollBtn.className = 'setup-hub-roll-btn';
+    rollBtn.innerHTML = DIE_ICON;
+    rollBtn.title = 'Roll to pick starting player';
+    rollBtn.disabled = this.rollTimer !== null;
+    rollBtn.addEventListener('pointerdown', () => this.rollForStartingPlayer());
+
+    row.appendChild(labelEl);
+    row.appendChild(faceEl);
+    row.appendChild(rollBtn);
+    return row;
   }
 
   private buildHubStepper(label: string, getValue: () => string, onChange: (delta: 1 | -1) => void): HTMLElement {
