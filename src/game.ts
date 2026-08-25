@@ -15,7 +15,6 @@ import { assignMonarch, createMonarchState, type MonarchState } from './game/mon
 import { createEnergyState, type EnergyState } from './game/energy';
 import { createExperienceState, type ExperienceState } from './game/experience';
 import { createCustomCountersState, type CustomCountersState } from './game/customCounters';
-import { assignRingBearer, createRingBearerState, type RingBearerState } from './game/ringBearer';
 import { createStatsState, createStatsTrigger, type BiggestHit, type StatsState, type StatsTrigger } from './game/stats';
 import {
   CONTROL_GAP_RATIO,
@@ -282,12 +281,6 @@ const PASS_TURN_FLASH_DURATION_S = 0.35;
 const TURN_HOLD_RING_RADIUS_RATIO = 0.07;
 const TURN_HOLD_RING_LINE_WIDTH_RATIO = 0.014;
 
-// Ring-bearer badge (issue #163): a small disc, drawn above the life number
-// like a lapel pin, marking the current holder's zone — sized/styled after
-// the shared-disc controls (UndoControl et al., src/ui/controls.ts).
-const RING_BEARER_BADGE_RADIUS_RATIO = 0.09;
-const RING_BEARER_BADGE_COLOR = '#d7a54c';
-
 class ArrayUndoStack implements UndoStack {
   private readonly actions: UndoAction[] = [];
 
@@ -550,7 +543,6 @@ export class Game {
   private readonly energy: EnergyState;
   private readonly experience: ExperienceState;
   private readonly customCounters: CustomCountersState;
-  private readonly ringBearer: RingBearerState = createRingBearerState();
   private readonly sound: SoundPlayer;
   private readonly stack = new ArrayUndoStack();
   private readonly monarch: MonarchState = createMonarchState();
@@ -641,16 +633,6 @@ export class Game {
 
   get customCountersState(): CustomCountersState {
     return this.customCounters;
-  }
-
-  /** The current Ring-bearer's player id, or null when no one holds it (issue #163). */
-  get ringBearerId(): string | null {
-    return this.ringBearer.holderId;
-  }
-
-  /** Assigns the Ring-bearer badge to `playerId`, reassigning it away from any previous holder (issue #163). */
-  assignRingBearer(playerId: string): void {
-    assignRingBearer(this.ringBearer, playerId, this.stack);
   }
 
   get undoStack(): UndoStack {
@@ -1245,11 +1227,6 @@ export class Game {
         ctx.fillText(formatMmSs(this.turnTimerElapsedS), 0, lifeFontSize / 2 + 4 + nameFontSize + 4);
       }
 
-      if (player.id === this.ringBearer.holderId) {
-        const badgeRadius = shortSide * RING_BEARER_BADGE_RADIUS_RATIO;
-        this.drawRingBearerBadge(ctx, badgeRadius, 0, -(lifeFontSize / 2 + badgeRadius + shortSide * 0.05));
-      }
-
       ctx.restore();
 
       if (isActive) {
@@ -1341,28 +1318,6 @@ export class Game {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = effect.color;
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-    ctx.restore();
-  }
-
-  /**
-   * Draws the Ring-bearer badge (issue #163): a small gold-ringed disc,
-   * matching the shared-disc controls' look (dark fill + colored stroke),
-   * centered at (x, y) in the zone's own (already-rotated) coordinate space
-   * so it reads upright from that seat.
-   */
-  private drawRingBearerBadge(ctx: CanvasRenderingContext2D, radius: number, x: number, y: number): void {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(20, 18, 28, 0.85)';
-    ctx.fill();
-    ctx.lineWidth = Math.max(radius * 0.3, 1.5);
-    ctx.strokeStyle = RING_BEARER_BADGE_COLOR;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 0.55, 0, Math.PI * 2);
-    ctx.lineWidth = Math.max(radius * 0.16, 1);
-    ctx.stroke();
     ctx.restore();
   }
 
