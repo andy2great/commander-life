@@ -17,9 +17,9 @@ class MockShake implements ScreenShakeTrigger {
 }
 
 class MockZoneEffects implements ZoneEffectTrigger {
-  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
-  trigger(playerId: string, type: ZoneEffectType, color: string): void {
-    this.calls.push({ playerId, type, color });
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string; delta: number }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string, delta: number): void {
+    this.calls.push({ playerId, type, color, delta });
   }
 }
 

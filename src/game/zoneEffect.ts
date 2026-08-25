@@ -12,6 +12,7 @@ export type ZoneEffectType = 'damage' | 'heal' | 'poison' | 'commanderDamage';
 interface ActiveZoneEffect {
   type: ZoneEffectType;
   color: string;
+  delta: number;
   elapsedS: number;
 }
 
@@ -19,8 +20,12 @@ interface ActiveZoneEffect {
 export type ZoneEffectState = Record<string, ActiveZoneEffect | undefined>;
 
 export interface ZoneEffectTrigger {
-  /** Starts (or restarts) `playerId`'s zone flash as `type`, rendered in `color`. */
-  trigger(playerId: string, type: ZoneEffectType, color: string): void;
+  /**
+   * Starts (or restarts) `playerId`'s zone flash as `type`, rendered in
+   * `color`. `delta` is the signed change to that zone's counter (e.g. -3 for
+   * 3 damage, +2 for 2 poison) shown by the floating numeral (issue #202).
+   */
+  trigger(playerId: string, type: ZoneEffectType, color: string, delta: number): void;
 }
 
 /** Flash color for a plain or commander damage tick — red. */
@@ -38,8 +43,14 @@ export function createZoneEffectState(): ZoneEffectState {
 }
 
 /** Starts (or restarts, resetting its fade) `playerId`'s zone flash. Call once per landed action. */
-export function triggerZoneEffect(state: ZoneEffectState, playerId: string, type: ZoneEffectType, color: string): void {
-  state[playerId] = { type, color, elapsedS: 0 };
+export function triggerZoneEffect(
+  state: ZoneEffectState,
+  playerId: string,
+  type: ZoneEffectType,
+  color: string,
+  delta: number,
+): void {
+  state[playerId] = { type, color, delta, elapsedS: 0 };
 }
 
 /** Ages every active zone flash and clears any that have fully faded. Call once per frame from Game.update(). */
@@ -59,6 +70,8 @@ export function updateZoneEffects(state: ZoneEffectState, dt: number): void {
 export interface ZoneEffectRender {
   type: ZoneEffectType;
   color: string;
+  /** Signed change to render as a floating numeral, e.g. -3 or +2 (issue #202). */
+  delta: number;
   /** 0 (just triggered) to 1 (fully faded); callers fade opacity by (1 - progress). */
   progress: number;
 }
@@ -69,5 +82,10 @@ export function getZoneEffect(state: ZoneEffectState, playerId: string): ZoneEff
   if (!effect) {
     return null;
   }
-  return { type: effect.type, color: effect.color, progress: Math.min(1, effect.elapsedS / ZONE_EFFECT_DURATION_S) };
+  return {
+    type: effect.type,
+    color: effect.color,
+    delta: effect.delta,
+    progress: Math.min(1, effect.elapsedS / ZONE_EFFECT_DURATION_S),
+  };
 }

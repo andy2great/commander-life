@@ -13,9 +13,9 @@ class MockShake implements ScreenShakeTrigger {
 }
 
 class MockZoneEffects implements ZoneEffectTrigger {
-  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
-  trigger(playerId: string, type: ZoneEffectType, color: string): void {
-    this.calls.push({ playerId, type, color });
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string; delta: number }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string, delta: number): void {
+    this.calls.push({ playerId, type, color, delta });
   }
 }
 
@@ -149,9 +149,9 @@ describe('applyBoardShortcutDelta', () => {
     applyBoardShortcutDelta(players, 0, 'all', 3, undoStack, undefined, undefined, zoneEffects);
 
     expect(zoneEffects.calls).toEqual([
-      { playerId: players[0].id, type: 'damage', color: DAMAGE_EFFECT_COLOR },
-      { playerId: players[1].id, type: 'damage', color: DAMAGE_EFFECT_COLOR },
-      { playerId: players[2].id, type: 'damage', color: DAMAGE_EFFECT_COLOR },
+      { playerId: players[0].id, type: 'damage', color: DAMAGE_EFFECT_COLOR, delta: -3 },
+      { playerId: players[1].id, type: 'damage', color: DAMAGE_EFFECT_COLOR, delta: -3 },
+      { playerId: players[2].id, type: 'damage', color: DAMAGE_EFFECT_COLOR, delta: -3 },
     ]);
   });
 
@@ -163,8 +163,8 @@ describe('applyBoardShortcutDelta', () => {
     applyBoardShortcutDelta(players, 0, 'opponents', -2, undoStack, undefined, undefined, zoneEffects);
 
     expect(zoneEffects.calls).toEqual([
-      { playerId: players[1].id, type: 'heal', color: HEAL_EFFECT_COLOR },
-      { playerId: players[2].id, type: 'heal', color: HEAL_EFFECT_COLOR },
+      { playerId: players[1].id, type: 'heal', color: HEAL_EFFECT_COLOR, delta: 2 },
+      { playerId: players[2].id, type: 'heal', color: HEAL_EFFECT_COLOR, delta: 2 },
     ]);
   });
 

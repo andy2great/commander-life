@@ -21,9 +21,9 @@ class MockShake implements ScreenShakeTrigger {
 }
 
 class MockZoneEffects implements ZoneEffectTrigger {
-  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
-  trigger(playerId: string, type: ZoneEffectType, color: string): void {
-    this.calls.push({ playerId, type, color });
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string; delta: number }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string, delta: number): void {
+    this.calls.push({ playerId, type, color, delta });
   }
 }
 
@@ -121,7 +121,7 @@ describe('applyDamageDelta', () => {
 
     applyDamageDelta(target, 3, undoStack, undefined, undefined, zoneEffects);
 
-    expect(zoneEffects.calls).toEqual([{ playerId: target.id, type: 'damage', color: DAMAGE_EFFECT_COLOR }]);
+    expect(zoneEffects.calls).toEqual([{ playerId: target.id, type: 'damage', color: DAMAGE_EFFECT_COLOR, delta: -3 }]);
   });
 
   it('does not trigger a zone effect for a negative delta', () => {
@@ -233,7 +233,7 @@ describe('applyHealDelta', () => {
 
     applyHealDelta(target, 4, undoStack, undefined, zoneEffects);
 
-    expect(zoneEffects.calls).toEqual([{ playerId: target.id, type: 'heal', color: HEAL_EFFECT_COLOR }]);
+    expect(zoneEffects.calls).toEqual([{ playerId: target.id, type: 'heal', color: HEAL_EFFECT_COLOR, delta: 4 }]);
   });
 
   it('does not trigger a zone effect for a negative delta', () => {
@@ -350,8 +350,8 @@ describe('applyLifelinkDelta', () => {
     applyLifelinkDelta(attacker, target, 4, undoStack, undefined, undefined, zoneEffects);
 
     expect(zoneEffects.calls).toEqual([
-      { playerId: target.id, type: 'damage', color: DAMAGE_EFFECT_COLOR },
-      { playerId: attacker.id, type: 'heal', color: HEAL_EFFECT_COLOR },
+      { playerId: target.id, type: 'damage', color: DAMAGE_EFFECT_COLOR, delta: -4 },
+      { playerId: attacker.id, type: 'heal', color: HEAL_EFFECT_COLOR, delta: 4 },
     ]);
   });
 

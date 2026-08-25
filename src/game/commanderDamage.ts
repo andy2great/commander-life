@@ -104,7 +104,7 @@ export function applyCommanderDamageDelta(
   if (applied > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
     const attacker = players.find((player) => player.id === fromId);
-    zoneEffects?.trigger(targetId, 'commanderDamage', attacker?.color ?? DAMAGE_EFFECT_COLOR);
+    zoneEffects?.trigger(targetId, 'commanderDamage', attacker?.color ?? DAMAGE_EFFECT_COLOR, -applied);
     stats?.recordCommanderDamage(fromId, targetId, applied);
     stats?.recordHit(fromId, applied, targetId);
   }

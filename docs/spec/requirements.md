@@ -62,3 +62,9 @@ R11. The board shall render a persistent turn-indicator badge, showing the
      current turn number and the active player's name, anchored near the
      shared center control area at all times during gameplay. The badge
      shall never overlap or intercept taps on the center disc's controls.
+
+R12. When a life, commander-damage, poison, or other tracked counter changes,
+     the board shall display a floating numeral showing the signed delta
+     (e.g. "-3", "+2") at the affected zone, animating with a rise-and-fade
+     motion and oriented upright for that player's seat, in addition to the
+     zone's existing color-wash feedback.
