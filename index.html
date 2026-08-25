@@ -24,6 +24,13 @@
         width: 100vw;
         height: 100vh;
       }
+      /* Issue #204: blurs+dims the board behind a full-board overlay (attack
+         menu, board-wide shortcut menu) to match docs/mockups/03-commander-
+         damage.html's depth-of-field treatment. No transition, so the effect
+         is removed instantly (no flash/pop) when the overlay closes. */
+      canvas.board-blurred {
+        filter: blur(2px) brightness(0.4);
+      }
       button {
         user-select: none;
         -webkit-user-select: none;

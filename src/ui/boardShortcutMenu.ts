@@ -56,6 +56,8 @@ export interface BoardShortcutMenuOptions {
   getAlivePlayers: () => Player[];
   /** Ends the game with the confirmed winner, once "End game" is selected and confirmed (issue #117). */
   onEndGame: (winnerId: string) => void;
+  /** Called with `true` when the overlay opens and `false` when it closes, so the caller (main.ts) can blur+dim the canvas board behind it (issue #204). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 let stylesInjected = false;
@@ -106,6 +108,7 @@ export class BoardShortcutMenu {
   private readonly stats?: StatsTrigger;
   private readonly getAlivePlayers: () => Player[];
   private readonly onEndGame: (winnerId: string) => void;
+  private readonly onOpenChange?: (open: boolean) => void;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
 
@@ -120,6 +123,7 @@ export class BoardShortcutMenu {
     this.stats = options.stats;
     this.getAlivePlayers = options.getAlivePlayers;
     this.onEndGame = options.onEndGame;
+    this.onOpenChange = options.onOpenChange;
   }
 
   get isOpen(): boolean {
@@ -164,12 +168,14 @@ export class BoardShortcutMenu {
     overlay.appendChild(panel);
     this.root.appendChild(overlay);
     this.overlay = overlay;
+    this.onOpenChange?.(true);
   }
 
   close(): void {
     if (this.overlay) {
       this.overlay.remove();
       this.overlay = null;
+      this.onOpenChange?.(false);
     }
     for (const detach of this.holdToRepeatDetachFns) {
       detach();

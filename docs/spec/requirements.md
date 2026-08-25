@@ -73,3 +73,8 @@ R13. The board's background, beneath the player zones, shall render a
      subtle code-drawn felt-like texture layered over its gradient fill, for
      every board theme, using canvas drawing code only (no external image or
      texture assets), without reducing life-total or player-name legibility.
+
+R14. While the attack menu, board-wide shortcut menu, or any other full-board
+     overlay is open, the canvas board behind it shall render with a
+     blur-and-dim filter (not a flat dim-only scrim), removed immediately
+     when the overlay closes.
