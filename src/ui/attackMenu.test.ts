@@ -46,7 +46,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -63,7 +63,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       attacker,
       true,
-      createCommanderDamageState(['a']),
+      createCommanderDamageState([attacker]),
       createPoisonState(['a']),
       createEnergyState(['a']),
       createExperienceState(['a']),
@@ -80,7 +80,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -102,7 +102,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       attacker,
       true,
-      createCommanderDamageState(['a']),
+      createCommanderDamageState([attacker]),
       createPoisonState(['a']),
       energyState,
       createExperienceState(['a']),
@@ -128,7 +128,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       attacker,
       true,
-      createCommanderDamageState(['a']),
+      createCommanderDamageState([attacker]),
       createPoisonState(['a']),
       createEnergyState(['a']),
       createExperienceState(['a']),
@@ -152,7 +152,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       attacker,
       true,
-      createCommanderDamageState(['a']),
+      createCommanderDamageState([attacker]),
       createPoisonState(['a']),
       createEnergyState(['a']),
       experienceState,
@@ -178,7 +178,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       attacker,
       true,
-      createCommanderDamageState(['a']),
+      createCommanderDamageState([attacker]),
       createPoisonState(['a']),
       createEnergyState(['a']),
       createExperienceState(['a']),
@@ -198,7 +198,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       attacker,
       true,
-      createCommanderDamageState(['a']),
+      createCommanderDamageState([attacker]),
       createPoisonState(['a']),
       createEnergyState(['a']),
       createExperienceState(['a']),
@@ -211,8 +211,8 @@ describe('buildDamageTypeDefs', () => {
 
   it('reads commander damage from the shared damageState and updates it via apply', () => {
     const [attacker, target] = makePlayers();
-    const damageState = createCommanderDamageState(['a', 'b']);
-    damageState[target.id][attacker.id] = 3;
+    const damageState = createCommanderDamageState([attacker, target]);
+    damageState[target.id][attacker.id] = [3];
     const undoStack = makeUndoStack();
 
     const types = buildDamageTypeDefs(
@@ -240,6 +240,64 @@ describe('buildDamageTypeDefs', () => {
     expect(target.life).toBe(40);
   });
 
+  it('offers two independent commander-damage toggles for a two-commander attacker (issue #165)', () => {
+    const [attacker, target] = makePlayers();
+    attacker.hasTwoCommanders = true;
+    const damageState = createCommanderDamageState([attacker, target]);
+    const undoStack = makeUndoStack();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      damageState,
+      createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
+      [attacker, target],
+      undoStack,
+    );
+
+    expect(types.map((type) => type.key)).toEqual(['damage', 'commander1', 'commander2', 'lifelink', 'heal', 'poison']);
+
+    const commander1 = types.find((type) => type.key === 'commander1')!;
+    const commander2 = types.find((type) => type.key === 'commander2')!;
+
+    commander1.apply(1);
+    commander2.apply(1);
+    commander2.apply(1);
+
+    expect(commander1.getValue()).toBe(1);
+    expect(commander2.getValue()).toBe(2);
+    expect(damageState[target.id][attacker.id]).toEqual([1, 2]);
+    expect(target.life).toBe(37);
+
+    undoStack.actions[2].undo();
+    expect(commander2.getValue()).toBe(1);
+    expect(commander1.getValue()).toBe(1);
+    expect(target.life).toBe(38);
+  });
+
+  it('still offers a single "commander" toggle for a single-commander attacker even when the target has two commanders', () => {
+    const [attacker, target] = makePlayers();
+    target.hasTwoCommanders = true;
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState([attacker, target]),
+      createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+    );
+
+    expect(types.map((type) => type.key)).toContain('commander');
+    expect(types.map((type) => type.key)).not.toContain('commander1');
+  });
+
   it('reads poison from the shared poisonState and updates it via apply', () => {
     const [attacker, target] = makePlayers();
     const poisonState = createPoisonState(['a', 'b']);
@@ -250,7 +308,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       poisonState,
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -273,7 +331,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -303,7 +361,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -326,7 +384,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -353,7 +411,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -380,7 +438,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -414,7 +472,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -455,7 +513,7 @@ describe('buildDamageTypeDefs', () => {
       attacker,
       attacker,
       true,
-      createCommanderDamageState(['a']),
+      createCommanderDamageState([attacker]),
       createPoisonState(['a']),
       createEnergyState(['a']),
       createExperienceState(['a']),
@@ -489,7 +547,7 @@ describe('createAttackMenuSession', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),
@@ -528,7 +586,7 @@ describe('createAttackMenuSession', () => {
       attacker,
       target,
       false,
-      createCommanderDamageState(['a', 'b']),
+      createCommanderDamageState([attacker, target]),
       createPoisonState(['a', 'b']),
       createEnergyState(['a', 'b']),
       createExperienceState(['a', 'b']),

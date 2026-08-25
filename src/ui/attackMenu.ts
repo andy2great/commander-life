@@ -31,7 +31,16 @@ import type { StatsTrigger } from '../game/stats';
 import { attachHoldToRepeat } from './holdToRepeat';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 
-export type DamageTypeKey = 'damage' | 'commander' | 'lifelink' | 'heal' | 'poison' | 'energy' | 'experience';
+export type DamageTypeKey =
+  | 'damage'
+  | 'commander'
+  | 'commander1'
+  | 'commander2'
+  | 'lifelink'
+  | 'heal'
+  | 'poison'
+  | 'energy'
+  | 'experience';
 
 export interface DamageTypeDef {
   key: DamageTypeKey;
@@ -60,6 +69,12 @@ export interface DamageTypeDef {
  * (issue #160) and `experience` (issue #161) are only offered for a
  * self-target pair — they're personal resources, not something
  * logged against an opponent.
+ *
+ * When `attacker.hasTwoCommanders` is set (issue #165), the single
+ * `commander` toggle is replaced by two — `commander1` and `commander2` —
+ * each reading/writing its own counter in `damageState[target.id][attacker.id]`
+ * (index 0 or 1), so a two-commander attacker (Partner pair, or Commander +
+ * Background) tracks lethal per individual commander rather than merged.
  */
 export function buildDamageTypeDefs(
   attacker: Player,
@@ -107,17 +122,18 @@ export function buildDamageTypeDefs(
   ];
 
   if (!isSelfTarget) {
-    types.push({
-      key: 'commander',
-      label: 'Commander damage',
+    const commanderType = (key: 'commander' | 'commander1' | 'commander2', label: string, index: number): DamageTypeDef => ({
+      key,
+      label,
       color: attacker.color ?? '#948fa3',
-      getValue: () => damageState[target.id]?.[attacker.id] ?? 0,
+      getValue: () => damageState[target.id]?.[attacker.id]?.[index] ?? 0,
       apply: (delta) =>
         applyCommanderDamageDelta(
           damageState,
           players,
           target.id,
           attacker.id,
+          index,
           delta,
           undoStack,
           sound,
@@ -126,6 +142,12 @@ export function buildDamageTypeDefs(
           stats,
         ),
     });
+    if (attacker.hasTwoCommanders) {
+      types.push(commanderType('commander1', 'Commander damage (1)', 0));
+      types.push(commanderType('commander2', 'Commander damage (2)', 1));
+    } else {
+      types.push(commanderType('commander', 'Commander damage', 0));
+    }
     types.push(
       localType('lifelink', 'Lifelink damage', attacker.color ?? '#948fa3', (delta) =>
         applyLifelinkDelta(attacker, target, delta, undoStack, sound, shake, zoneEffects, stats),

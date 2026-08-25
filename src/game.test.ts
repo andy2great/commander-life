@@ -20,7 +20,7 @@ class MockSoundPlayer implements SoundPlayer {
 
 /** Deals commander damage from one player to another — the only sanctioned way life changes (issue #54). */
 function dealDamage(game: Game, fromId: string, toId: string, amount: number, sound?: SoundPlayer): void {
-  applyCommanderDamageDelta(game.damageState, game.players, toId, fromId, amount, game.undoStack, sound);
+  applyCommanderDamageDelta(game.damageState, game.players, toId, fromId, 0, amount, game.undoStack, sound);
 }
 
 /** Mirrors UndoControl's reflow math (it's the sole occupant of the shared disc, issue #64) so tests can tap the icon by coordinate. */
@@ -108,9 +108,30 @@ describe('Game', () => {
     expect(game.players.every((player) => player.life === 40)).toBe(true);
     expect(game.damageState[game.players[0].id]).toEqual(
       Object.fromEntries(
-        game.players.slice(1).map((player) => [player.id, 0]),
+        game.players.slice(1).map((player) => [player.id, [0]]),
       ),
     );
+  });
+
+  it('gives a two-commander player\'s opponents two independent commander-damage counters against them (issue #165)', () => {
+    const game = new Game({
+      playerCount: 3,
+      startingLife: 40,
+      players: [
+        { name: 'Alara', color: '#111111', hasTwoCommanders: true },
+        { name: 'Kess', color: '#222222' },
+        { name: 'Yorion', color: '#333333' },
+      ],
+    });
+    const [alara, kess, yorion] = game.players;
+
+    expect(alara.hasTwoCommanders).toBe(true);
+    expect(kess.hasTwoCommanders).toBeUndefined();
+    expect(game.damageState[kess.id][alara.id]).toEqual([0, 0]);
+    expect(game.damageState[yorion.id][alara.id]).toEqual([0, 0]);
+    // Kess and Yorion are single-commander, so damage dealt by them still uses one counter.
+    expect(game.damageState[alara.id][kess.id]).toEqual([0]);
+    expect(game.damageState[yorion.id][kess.id]).toEqual([0]);
   });
 
   it('starts every player at 0 poison counters', () => {
@@ -645,7 +666,7 @@ describe('Game', () => {
 
       expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[2].id });
       expect(game.players.map((player) => player.life)).toEqual(livesBefore);
-      expect(game.damageState[game.players[2].id][game.players[0].id]).toBe(0);
+      expect(game.damageState[game.players[2].id][game.players[0].id]).toEqual([0]);
     });
 
     it('resolves a drag that starts and ends in the same zone as a self-target pair once past the move tolerance (issue #70)', () => {
@@ -1247,6 +1268,7 @@ describe('end of game', () => {
       game.players,
       kess.id,
       alara.id,
+      0,
       9,
       game.undoStack,
       undefined,

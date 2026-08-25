@@ -85,6 +85,8 @@ function injectStylesOnce(): void {
     .setup-zone-remove-btn { box-sizing: border-box; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; border: none; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, 0.18); color: #ff8a8f; }
     .setup-zone-remove-btn svg { width: 18px; height: 18px; }
     .setup-zone-remove-btn:disabled { opacity: 0.3; }
+    .setup-zone-commander-toggle { box-sizing: border-box; padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(0, 0, 0, 0.25); color: rgba(245, 243, 247, 0.65); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+    .setup-zone-commander-toggle-active { background: rgba(215, 165, 76, 0.35); color: #f0c98a; border-color: #d7a54c; }
     .setup-hub { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: min(240px, 78vw); box-sizing: border-box; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
     .setup-hub-title { margin: 0; text-align: center; font-size: 15px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; font-family: ${DISPLAY_FONT_STACK}; background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .setup-hub-stepper-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -359,8 +361,26 @@ export class SetupScreen {
       swatchRow.appendChild(mini);
     }
 
+    // "Two commanders" toggle (issue #165): marks this player as running a
+    // Partner pair or a Commander + Background instead of a single
+    // commander, so commander damage dealt to opponents is tracked as two
+    // separate counters (see AttackMenu.buildDamageTypeDefs) rather than one
+    // merged counter.
+    const commanderToggle = document.createElement('button');
+    commanderToggle.type = 'button';
+    commanderToggle.className = 'setup-zone-commander-toggle';
+    commanderToggle.textContent = '2 Commanders';
+    commanderToggle.setAttribute('aria-pressed', String(player.hasTwoCommanders ?? false));
+    commanderToggle.classList.toggle('setup-zone-commander-toggle-active', player.hasTwoCommanders ?? false);
+    commanderToggle.addEventListener('pointerdown', () => {
+      player.hasTwoCommanders = !player.hasTwoCommanders;
+      commanderToggle.classList.toggle('setup-zone-commander-toggle-active', player.hasTwoCommanders);
+      commanderToggle.setAttribute('aria-pressed', String(player.hasTwoCommanders));
+    });
+
     content.appendChild(nameRow);
     content.appendChild(swatchRow);
+    content.appendChild(commanderToggle);
     zone.appendChild(content);
     return zone;
   }
