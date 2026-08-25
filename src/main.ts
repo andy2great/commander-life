@@ -43,6 +43,14 @@ function startGame(config: GameConfig): void {
   cleanupGame?.();
 
   const game = new Game(config, sound);
+  // Issue #204: blurs+dims the canvas board while a full-board overlay
+  // (attack menu, board-wide shortcut menu) is open, removed immediately on
+  // close. Only main.ts touches the canvas element, so each menu reports its
+  // open/close state via `onOpenChange` rather than reaching for the canvas.
+  const setBoardBlurred = (blurred: boolean): void => {
+    canvas.classList.toggle('board-blurred', blurred);
+  };
+
   const attackMenu = new AttackMenu({
     root: document.body,
     players: game.players,
@@ -56,6 +64,7 @@ function startGame(config: GameConfig): void {
     shake: game.shakeTrigger,
     zoneEffects: game.zoneEffectTrigger,
     stats: game.statsTrigger,
+    onOpenChange: setBoardBlurred,
   });
   const boardShortcutMenu = new BoardShortcutMenu({
     root: document.body,
@@ -68,6 +77,7 @@ function startGame(config: GameConfig): void {
     stats: game.statsTrigger,
     getAlivePlayers: () => game.alivePlayers,
     onEndGame: (winnerId) => game.endGameWithWinner(winnerId),
+    onOpenChange: setBoardBlurred,
   });
 
   canvas.style.display = 'block';

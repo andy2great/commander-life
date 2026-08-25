@@ -271,6 +271,8 @@ export interface AttackMenuOptions {
   shake?: ScreenShakeTrigger;
   zoneEffects?: ZoneEffectTrigger;
   stats?: StatsTrigger;
+  /** Called with `true` when the overlay opens and `false` when it closes, so the caller (main.ts) can blur+dim the canvas board behind it (issue #204). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 let stylesInjected = false;
@@ -322,6 +324,7 @@ export class AttackMenu {
   private readonly shake?: ScreenShakeTrigger;
   private readonly zoneEffects?: ZoneEffectTrigger;
   private readonly stats?: StatsTrigger;
+  private readonly onOpenChange?: (open: boolean) => void;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
   private session: AttackMenuSession | null = null;
@@ -337,6 +340,7 @@ export class AttackMenu {
     this.undoStack = options.undoStack;
     this.sound = options.sound;
     this.shake = options.shake;
+    this.onOpenChange = options.onOpenChange;
     this.zoneEffects = options.zoneEffects;
     this.stats = options.stats;
   }
@@ -404,6 +408,7 @@ export class AttackMenu {
     overlay.appendChild(panel);
     this.root.appendChild(overlay);
     this.overlay = overlay;
+    this.onOpenChange?.(true);
   }
 
   /**
@@ -460,6 +465,7 @@ export class AttackMenu {
     if (this.overlay) {
       this.overlay.remove();
       this.overlay = null;
+      this.onOpenChange?.(false);
     }
     for (const detach of this.holdToRepeatDetachFns) {
       detach();
