@@ -998,9 +998,13 @@ export class Game {
       ctx.fillText(String(player.life), 0, 0);
 
       const nameFontSize = Math.round(shortSide * 0.14);
-      ctx.font = `600 ${nameFontSize}px system-ui, sans-serif`;
+      ctx.font = `600 ${nameFontSize}px ${DISPLAY_FONT_STACK}`;
       ctx.textBaseline = 'top';
-      ctx.fillText(player.name, 0, lifeFontSize / 2 + 4);
+      // Match the DOM overlay headers' uppercase/tracked-letterform treatment
+      // (e.g. .cmdr-atk-title's 0.6px at 18px font-size), scaled to this font size.
+      ctx.letterSpacing = `${((nameFontSize * 0.6) / 18).toFixed(2)}px`;
+      ctx.fillText(player.name.toUpperCase(), 0, lifeFontSize / 2 + 4);
+      ctx.letterSpacing = '0px';
 
       if (isActive) {
         const timerFontSize = Math.round(shortSide * 0.1);
