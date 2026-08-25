@@ -546,6 +546,11 @@ export class Game {
     this.pausedFlag = !this.pausedFlag;
   }
 
+  /** Sets pause state directly (issue #213): lets the rotate-to-landscape prompt force-pause without disturbing a manual pause the player already set. */
+  setPaused(paused: boolean): void {
+    this.pausedFlag = paused;
+  }
+
   /** The seat currently playing the turn-pass flash animation (issue #64), or null. */
   get passTurnFlashSeat(): number | null {
     return this.passTurnFlashSeatIndex;

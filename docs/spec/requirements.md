@@ -79,6 +79,15 @@ R14. While the attack menu, board-wide shortcut menu, or any other full-board
      blur-and-dim filter (not a flat dim-only scrim), removed immediately
      when the overlay closes.
 
+R15. Whenever the viewport is in portrait orientation (height greater than
+     width), the app shall display a full-board "rotate to landscape" prompt
+     that blocks all gameplay and overlay interaction and pauses the turn
+     timer, disappearing automatically the instant the viewport becomes
+     landscape. On platforms where the Screen Orientation API supports
+     locking, the app shall additionally attempt to lock orientation to
+     landscape on load, failing silently where locking is unsupported or
+     rejected.
+
 R16. Every interactive control's rendered visual bounds — including any
      shadow, glow, or decorative chrome drawn around it — shall never extend
      beyond its tappable/hit-tested area, on both canvas-drawn controls and

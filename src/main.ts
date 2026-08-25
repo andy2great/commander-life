@@ -1,7 +1,9 @@
 import { computeOverlaySafeArea, Game, resolveOverlayViewportSize, type GameConfig } from './game';
+import { isPortraitOrientation } from './game/orientation';
 import { attachTapAndLongPress } from './ui/damagePanel';
 import { AttackMenu } from './ui/attackMenu';
 import { BoardShortcutMenu } from './ui/boardShortcutMenu';
+import { RotatePrompt } from './ui/rotatePrompt';
 import { SetupScreen } from './ui/setupScreen';
 import { StatsScreen } from './ui/statsScreen';
 import { WebAudioSoundPlayer } from './audio/webAudioSoundPlayer';
@@ -10,6 +12,48 @@ const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 canvas.style.display = 'none';
 const sound = new WebAudioSoundPlayer();
+
+// Best-effort orientation lock (issue #213, R15): the Screen Orientation
+// API's `lock()` isn't in TypeScript's DOM lib yet, and it's unsupported (or
+// rejects outside a fullscreen tab) on iOS Safari and elsewhere — wrapped so
+// any of that fails silently and falls back to the rotate prompt below.
+type LockableScreenOrientation = ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
+function lockLandscapeOrientationBestEffort(): void {
+  try {
+    (screen.orientation as LockableScreenOrientation | undefined)?.lock?.('landscape')?.catch(() => {});
+  } catch {
+    // Unsupported environment — the rotate prompt covers this case instead.
+  }
+}
+lockLandscapeOrientationBestEffort();
+
+// Rotate-to-landscape prompt (issue #213, R15): mounted once at the app
+// root so it covers the setup screen, the live board, and the stats screen
+// alike, rather than being tied to any one screen's lifecycle.
+const rotatePrompt = new RotatePrompt({ root: document.body });
+// The Game currently on screen, if any (null on the setup/stats screens);
+// used only so the rotate prompt can pause/resume gameplay's turn timer.
+let currentGame: Game | null = null;
+// True only when the rotate prompt itself paused currentGame, so leaving
+// portrait resumes it — without stomping a pause the player set manually.
+let pausedByRotation = false;
+
+function updateOrientation(): void {
+  const portrait = isPortraitOrientation(window.innerWidth, window.innerHeight);
+  if (portrait) {
+    rotatePrompt.show();
+    if (currentGame && !currentGame.paused) {
+      currentGame.setPaused(true);
+      pausedByRotation = true;
+    }
+  } else {
+    rotatePrompt.hide();
+    if (currentGame && pausedByRotation) {
+      currentGame.setPaused(false);
+    }
+    pausedByRotation = false;
+  }
+}
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -27,12 +71,18 @@ function resize(): void {
   const { width, height } = resolveOverlayViewportSize(window.innerWidth, window.innerHeight, window.visualViewport);
   const { maxHeight } = computeOverlaySafeArea(width, height);
   document.documentElement.style.setProperty('--overlay-max-h', `${maxHeight}px`);
+
+  updateOrientation();
 }
 
 window.addEventListener('resize', resize);
 // iOS Safari doesn't fire `resize` on `window` when the on-screen keyboard
 // opens/closes — only on `visualViewport` (issue #114).
 window.visualViewport?.addEventListener('resize', resize);
+// Belt-and-suspenders alongside the resize listener above (issue #213):
+// some browsers fire `orientationchange` slightly ahead of `resize`, so the
+// rotate prompt/pause reacts as soon as either fires.
+window.addEventListener('orientationchange', resize);
 resize();
 
 // Detaches the previous game's listeners and animation loop, e.g. when
@@ -43,6 +93,11 @@ function startGame(config: GameConfig): void {
   cleanupGame?.();
 
   const game = new Game(config, sound);
+  currentGame = game;
+  // Rotate prompt may have shown before this game existed (e.g. still
+  // portrait when "New Game"/setup finished) — re-check now there's a game
+  // to actually pause (issue #213).
+  updateOrientation();
   // Issue #204: blurs+dims the canvas board while a full-board overlay
   // (attack menu, board-wide shortcut menu) is open, removed immediately on
   // close. Only main.ts touches the canvas element, so each menu reports its
@@ -164,6 +219,10 @@ function startGame(config: GameConfig): void {
     attackMenu.close();
     boardShortcutMenu.close();
     canvas.style.display = 'none';
+    if (currentGame === game) {
+      currentGame = null;
+      pausedByRotation = false;
+    }
   };
 
   function showStats(): void {
