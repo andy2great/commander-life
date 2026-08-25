@@ -952,15 +952,15 @@ describe('Game', () => {
     ]);
   });
 
-  it('clamps a configured player count to the 2-6 range', () => {
+  it('clamps a configured player count to the 2-8 range', () => {
     const tooFew = new Game({ playerCount: 1, startingLife: 40, players: [] });
     const tooMany = new Game({ playerCount: 9, startingLife: 40, players: [] });
 
     expect(tooFew.playerCount).toBe(2);
-    expect(tooMany.playerCount).toBe(6);
+    expect(tooMany.playerCount).toBe(8);
   });
 
-  it.each([2, 3, 4, 5, 6])(
+  it.each([2, 3, 4, 5, 6, 7, 8])(
     'keeps the shared undo control off every zone center in a %i-player game',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
@@ -978,7 +978,7 @@ describe('Game', () => {
     },
   );
 
-  it.each([2, 3, 4, 5, 6])(
+  it.each([2, 3, 4, 5, 6, 7, 8])(
     'keeps the shared shortcut control off every zone center and off the undo control, at the smallest supported width, in a %i-player game (issue #80)',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
@@ -999,7 +999,7 @@ describe('Game', () => {
     },
   );
 
-  it.each([2, 3, 4, 5, 6])(
+  it.each([2, 3, 4, 5, 6, 7, 8])(
     'lays out %i players in the table-like grid from docs/concept.md, and tapping either half changes nothing (issue #54)',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
@@ -1154,6 +1154,114 @@ describe('Game', () => {
       expect(game.ended).toBe(true);
       expect(game.stats?.winnerId).toBe(p1.id);
       expect(game.stats?.eliminationOrder.map((entry) => entry.playerId)).toEqual([p0.id]);
+    });
+  });
+
+  describe('7 and 8 player layouts (issue #170)', () => {
+    it('accepts 7- and 8-player configs without clamping down to the old 6-player max', () => {
+      const seven = new Game({ playerCount: 7, startingLife: 40, players: [] });
+      const eight = new Game({ playerCount: 8, startingLife: 40, players: [] });
+
+      expect(seven.playerCount).toBe(7);
+      expect(seven.players).toHaveLength(7);
+      expect(eight.playerCount).toBe(8);
+      expect(eight.players).toHaveLength(8);
+    });
+
+    it('gives 7 players a 4-seat top row (rotated 180°) and a 3-seat bottom row (upright), tiling the canvas with no gaps or overlaps', () => {
+      const width = 400;
+      const height = 900;
+      const topColWidth = width / 4;
+      const bottomColWidth = width / 3;
+      const rowHeight = height / 2;
+
+      expect(computeZoneRects(7, width, height)).toEqual([
+        { x: 0, y: 0, width: topColWidth, height: rowHeight, rotation: 180 },
+        { x: topColWidth, y: 0, width: topColWidth, height: rowHeight, rotation: 180 },
+        { x: topColWidth * 2, y: 0, width: topColWidth, height: rowHeight, rotation: 180 },
+        { x: topColWidth * 3, y: 0, width: topColWidth, height: rowHeight, rotation: 180 },
+        { x: 0, y: rowHeight, width: bottomColWidth, height: rowHeight, rotation: 0 },
+        { x: bottomColWidth, y: rowHeight, width: bottomColWidth, height: rowHeight, rotation: 0 },
+        { x: bottomColWidth * 2, y: rowHeight, width: bottomColWidth, height: rowHeight, rotation: 0 },
+      ]);
+    });
+
+    it('gives 8 players a 4x2 grid, top row rotated 180°, bottom row upright, tiling the canvas with no gaps or overlaps', () => {
+      const width = 400;
+      const height = 900;
+      const colWidth = width / 4;
+      const rowHeight = height / 2;
+
+      expect(computeZoneRects(8, width, height)).toEqual([
+        { x: 0, y: 0, width: colWidth, height: rowHeight, rotation: 180 },
+        { x: colWidth, y: 0, width: colWidth, height: rowHeight, rotation: 180 },
+        { x: colWidth * 2, y: 0, width: colWidth, height: rowHeight, rotation: 180 },
+        { x: colWidth * 3, y: 0, width: colWidth, height: rowHeight, rotation: 180 },
+        { x: 0, y: rowHeight, width: colWidth, height: rowHeight, rotation: 0 },
+        { x: colWidth, y: rowHeight, width: colWidth, height: rowHeight, rotation: 0 },
+        { x: colWidth * 2, y: rowHeight, width: colWidth, height: rowHeight, rotation: 0 },
+        { x: colWidth * 3, y: rowHeight, width: colWidth, height: rowHeight, rotation: 0 },
+      ]);
+    });
+
+    it('walks the 7 seats in clockwise order — top row left-to-right, then bottom row right-to-left — when passing turns', () => {
+      const game = new Game({ playerCount: 7, startingLife: 40, players: [] });
+      game.resize(400, 900);
+
+      const order = [0, 1, 2, 3, 6, 5, 4];
+      expect(game.activeIndex).toBe(order[0]);
+      for (let i = 1; i < order.length; i += 1) {
+        game.passTurn();
+        expect(game.activeIndex).toBe(order[i]);
+      }
+    });
+
+    it('walks the 8 seats in clockwise order — top row left-to-right, then bottom row right-to-left — when passing turns', () => {
+      const game = new Game({ playerCount: 8, startingLife: 40, players: [] });
+      game.resize(400, 900);
+
+      const order = [0, 1, 2, 3, 7, 6, 5, 4];
+      expect(game.activeIndex).toBe(order[0]);
+      for (let i = 1; i < order.length; i += 1) {
+        game.passTurn();
+        expect(game.activeIndex).toBe(order[i]);
+      }
+    });
+
+    it('resolves a cross-zone drag between two of the 8 zones as commander damage', () => {
+      const game = new Game({ playerCount: 8, startingLife: 40, players: [] });
+      const width = 400;
+      const height = 900;
+      game.resize(width, height);
+      const rects = computeZoneRects(8, width, height);
+      const from = rects[0];
+      const to = rects[7];
+
+      const drag = game.resolveZoneDrag(
+        from.x + from.width / 2,
+        from.y + from.height / 2,
+        to.x + to.width / 2,
+        to.y + to.height / 2,
+      );
+      expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[7].id });
+
+      dealDamage(game, game.players[0].id, game.players[7].id, 5);
+      expect(game.players[7].life).toBe(35);
+      expect(game.damageState[game.players[7].id][game.players[0].id]).toEqual([5]);
+    });
+
+    it('ends the game once only one of 8 players remains above 0 life', () => {
+      const game = new Game({ playerCount: 8, startingLife: 1, players: [] });
+      const [p0, ...rest] = game.players;
+
+      rest.forEach((opponent) => {
+        dealDamage(game, p0.id, opponent.id, 1);
+      });
+      game.update(0.016);
+
+      expect(game.ended).toBe(true);
+      expect(game.stats?.winnerId).toBe(p0.id);
+      expect(game.stats?.eliminationOrder).toHaveLength(rest.length);
     });
   });
 });
