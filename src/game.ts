@@ -283,6 +283,12 @@ const PULSE_MAX_WIDTH = 7;
 // full, ungapped rect so touch targets stay exactly as reachable as before.
 const ZONE_GRADIENT_GUTTER_PX = 4;
 
+// Floating "+N"/"-N" delta numeral drawn over the zone color wash on every
+// life/counter change (issue #202): rises this fraction of the zone's short
+// side over the wash's full ZONE_EFFECT_DURATION_S while fading out.
+const ZONE_EFFECT_DELTA_RISE_RATIO = 0.18;
+const ZONE_EFFECT_DELTA_FONT_RATIO = 0.16;
+
 // Brief flash on the active zone the moment a long-press commits the turn
 // pass (issue #64) — distinct from, and layered on top of, the idle pulsing
 // border above.
@@ -384,7 +390,7 @@ export class Game {
   };
   private readonly zoneEffectState: ZoneEffectState = createZoneEffectState();
   private readonly zoneEffectTriggerObj: ZoneEffectTrigger = {
-    trigger: (playerId, type, color) => triggerZoneEffect(this.zoneEffectState, playerId, type, color),
+    trigger: (playerId, type, color, delta) => triggerZoneEffect(this.zoneEffectState, playerId, type, color, delta),
   };
   private readonly activeTimeList: number[];
   private readonly eliminationOrderList: EliminationEntry[] = [];
@@ -1105,7 +1111,10 @@ export class Game {
    * Brief colored flash on a zone confirming a life/counter change landed
    * (issue #89), fading out over ZONE_EFFECT_DURATION_S. `effect.color`
    * varies per action type (see src/game/zoneEffect.ts) so damage, heal,
-   * poison, and commander damage read as visually distinct.
+   * poison, and commander damage read as visually distinct. Also draws a
+   * floating numeral of `effect.delta` (e.g. "-3", "+2") that rises and
+   * fades over the same duration, oriented upright for that zone's seat
+   * (issue #202).
    */
   private drawZoneEffect(ctx: CanvasRenderingContext2D, rect: ZoneRect, effect: ZoneEffectRender): void {
     const alpha = (1 - effect.progress) * 0.55;
@@ -1114,6 +1123,34 @@ export class Game {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = effect.color;
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.restore();
+
+    this.drawZoneEffectDelta(ctx, rect, effect);
+  }
+
+  /** Floating "+N"/"-N" numeral half of drawZoneEffect (issue #202); see that method's docs. */
+  private drawZoneEffectDelta(ctx: CanvasRenderingContext2D, rect: ZoneRect, effect: ZoneEffectRender): void {
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    const shortSide = Math.min(rect.width, rect.height);
+    const riseY = shortSide * ZONE_EFFECT_DELTA_RISE_RATIO * effect.progress;
+    const fontSize = Math.round(shortSide * ZONE_EFFECT_DELTA_FONT_RATIO);
+    const label = effect.delta > 0 ? `+${effect.delta}` : String(effect.delta);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (rect.rotation !== 0) {
+      ctx.rotate((rect.rotation * Math.PI) / 180);
+    }
+    ctx.globalAlpha = 1 - effect.progress;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${fontSize}px ${DISPLAY_FONT_STACK}`;
+    ctx.fillText(label, 0, -riseY);
     ctx.restore();
   }
 

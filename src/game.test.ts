@@ -1538,15 +1538,15 @@ describe('zone effect (issue #89)', () => {
     const game = makeThreePlayerGame(40);
     const [, target] = game.players;
 
-    game.zoneEffectTrigger.trigger(target.id, 'damage', '#ef4444');
+    game.zoneEffectTrigger.trigger(target.id, 'damage', '#ef4444', -3);
 
-    expect(game.zoneEffectFor(target.id)).toEqual({ type: 'damage', color: '#ef4444', progress: 0 });
+    expect(game.zoneEffectFor(target.id)).toEqual({ type: 'damage', color: '#ef4444', delta: -3, progress: 0 });
   });
 
   it('fades and eventually clears the flash over successive update() calls', () => {
     const game = makeThreePlayerGame(40);
     const [, target] = game.players;
-    game.zoneEffectTrigger.trigger(target.id, 'heal', '#22c55e');
+    game.zoneEffectTrigger.trigger(target.id, 'heal', '#22c55e', 2);
 
     game.update(0.2);
     const midProgress = game.zoneEffectFor(target.id)?.progress ?? 0;
@@ -1572,14 +1572,14 @@ describe('zone effect (issue #89)', () => {
     );
 
     game.players.forEach((player) => {
-      expect(game.zoneEffectFor(player.id)).toEqual({ type: 'damage', color: '#ef4444', progress: 0 });
+      expect(game.zoneEffectFor(player.id)).toEqual({ type: 'damage', color: '#ef4444', delta: -3, progress: 0 });
     });
   });
 
   it('leaves hit-testing (e.g. the undo control) unaffected while a zone effect is active', () => {
     const game = makeThreePlayerGame(40);
     game.resize(400, 900);
-    game.zoneEffectTrigger.trigger(game.players[0].id, 'poison', '#a855f7');
+    game.zoneEffectTrigger.trigger(game.players[0].id, 'poison', '#a855f7', 2);
 
     expect(game.isOverUndoControl(200, 450)).toBe(true);
     expect(game.isOverUndoControl(0, 0)).toBe(false);

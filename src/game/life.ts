@@ -35,7 +35,7 @@ export function applyDamageDelta(
   sound?.play(delta > 0 ? 'lifeDown' : 'lifeUp');
   if (delta > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
-    zoneEffects?.trigger(target.id, 'damage', DAMAGE_EFFECT_COLOR);
+    zoneEffects?.trigger(target.id, 'damage', DAMAGE_EFFECT_COLOR, -delta);
     stats?.recordLifeChange(target.id, -delta);
     if (attackerId) {
       stats?.recordHit(attackerId, delta);
@@ -69,7 +69,7 @@ export function applyHealDelta(
   target.life += delta;
   sound?.play(delta > 0 ? 'lifeUp' : 'lifeDown');
   if (delta > 0) {
-    zoneEffects?.trigger(target.id, 'heal', HEAL_EFFECT_COLOR);
+    zoneEffects?.trigger(target.id, 'heal', HEAL_EFFECT_COLOR, delta);
     stats?.recordLifeChange(target.id, delta);
   }
   undoStack.push({
@@ -108,8 +108,8 @@ export function applyLifelinkDelta(
   sound?.play(delta > 0 ? 'lifeDown' : 'lifeUp');
   if (delta > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
-    zoneEffects?.trigger(target.id, 'damage', DAMAGE_EFFECT_COLOR);
-    zoneEffects?.trigger(attacker.id, 'heal', HEAL_EFFECT_COLOR);
+    zoneEffects?.trigger(target.id, 'damage', DAMAGE_EFFECT_COLOR, -delta);
+    zoneEffects?.trigger(attacker.id, 'heal', HEAL_EFFECT_COLOR, delta);
     stats?.recordLifeChange(target.id, -delta);
     stats?.recordLifeChange(attacker.id, delta);
     stats?.recordHit(attacker.id, delta);

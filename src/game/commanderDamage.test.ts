@@ -26,9 +26,9 @@ class MockShake implements ScreenShakeTrigger {
 }
 
 class MockZoneEffects implements ZoneEffectTrigger {
-  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
-  trigger(playerId: string, type: ZoneEffectType, color: string): void {
-    this.calls.push({ playerId, type, color });
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string; delta: number }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string, delta: number): void {
+    this.calls.push({ playerId, type, color, delta });
   }
 }
 
@@ -226,7 +226,7 @@ describe('applyCommanderDamageDelta', () => {
 
     applyCommanderDamageDelta(state, players, 'p1', 'p2', 0, 3, undoStack, undefined, undefined, zoneEffects);
 
-    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'commanderDamage', color: '#8b5cf6' }]);
+    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'commanderDamage', color: '#8b5cf6', delta: -3 }]);
   });
 
   it('falls back to the plain damage color when the attacker has no accent color set', () => {
@@ -237,7 +237,7 @@ describe('applyCommanderDamageDelta', () => {
 
     applyCommanderDamageDelta(state, players, 'p1', 'p2', 0, 3, undoStack, undefined, undefined, zoneEffects);
 
-    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'commanderDamage', color: DAMAGE_EFFECT_COLOR }]);
+    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'commanderDamage', color: DAMAGE_EFFECT_COLOR, delta: -3 }]);
   });
 
   it('does not trigger a zone effect for a decrease', () => {

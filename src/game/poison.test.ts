@@ -12,9 +12,9 @@ class MockShake implements ScreenShakeTrigger {
 }
 
 class MockZoneEffects implements ZoneEffectTrigger {
-  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string }> = [];
-  trigger(playerId: string, type: ZoneEffectType, color: string): void {
-    this.calls.push({ playerId, type, color });
+  readonly calls: Array<{ playerId: string; type: ZoneEffectType; color: string; delta: number }> = [];
+  trigger(playerId: string, type: ZoneEffectType, color: string, delta: number): void {
+    this.calls.push({ playerId, type, color, delta });
   }
 }
 
@@ -129,7 +129,7 @@ describe('applyPoisonDelta', () => {
 
     applyPoisonDelta(state, 'p1', 2, undoStack, undefined, zoneEffects);
 
-    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'poison', color: POISON_EFFECT_COLOR }]);
+    expect(zoneEffects.calls).toEqual([{ playerId: 'p1', type: 'poison', color: POISON_EFFECT_COLOR, delta: 2 }]);
   });
 
   it('does not trigger a zone effect for a decrease', () => {

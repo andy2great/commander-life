@@ -46,7 +46,7 @@ export function applyPoisonDelta(
   state[playerId] = after;
   if (applied > 0) {
     shake?.trigger(DAMAGE_SHAKE_TRAUMA);
-    zoneEffects?.trigger(playerId, 'poison', POISON_EFFECT_COLOR);
+    zoneEffects?.trigger(playerId, 'poison', POISON_EFFECT_COLOR, applied);
   }
   undoStack.push({
     undo(): void {
