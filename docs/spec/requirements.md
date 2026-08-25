@@ -13,3 +13,8 @@ R2. The game shall not track or display a Monarch designation. No control
 R3. The game shall not offer selectable player icons. Player zones shall be
     distinguished by accent color only; no icon badge shall render on the
     board and no icon picker shall appear on the setup screen.
+
+R4. After removal of the Ring-bearer, Monarch, and player-icon badges, each
+    player zone shall retain a clean, balanced layout with the life total as
+    its sole visual focal point — no vestigial empty badge slots, dead
+    hit-test regions, or spacing sized for the removed badges.
