@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { CONTROL_GAP_RATIO, ShortcutControl, SHORTCUT_RADIUS_RATIO, UndoControl, UNDO_RADIUS_RATIO } from './controls';
+import {
+  CONTROL_GAP_RATIO,
+  PauseControl,
+  PAUSE_RADIUS_RATIO,
+  ShortcutControl,
+  SHORTCUT_RADIUS_RATIO,
+  UndoControl,
+  UNDO_RADIUS_RATIO,
+} from './controls';
 
 // Common phone widths this app must stay comfortably tappable on, per #31/#38.
 const PHONE_WIDTHS = [360, 390, 414, 430];
@@ -77,4 +85,80 @@ describe('shared control layout', () => {
       expect(centerX + shortcutRadius).toBeLessThanOrEqual(width);
     },
   );
+});
+
+describe('disc chrome never renders past its tappable circle (issue #214)', () => {
+  /**
+   * Records every `arc()` call's radius argument, standing in for
+   * CanvasRenderingContext2D like game.test.ts's mocks — enough to check
+   * that nothing drawDiscChrome draws (fill, shadow, stroke, rim, or the
+   * hard clip it applies) reaches past a given radius.
+   */
+  function createArcRecordingCtx(): { ctx: CanvasRenderingContext2D; arcRadii: number[] } {
+    const state: Record<string, unknown> = {};
+    const arcRadii: number[] = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'arc') {
+          return (_x: number, _y: number, radius: number) => {
+            arcRadii.push(radius);
+          };
+        }
+        if (prop === 'createLinearGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, arcRadii };
+  }
+
+  it.each(PHONE_WIDTHS)('keeps UndoControl chrome (including its shadow) within containsPoint\'s radius at %ipx width', (width) => {
+    const height = width * 2;
+    const control = new UndoControl();
+    control.reflow(width, height, height / 2);
+    const { ctx, arcRadii } = createArcRecordingCtx();
+
+    control.draw(ctx, true);
+
+    const tappableRadius = width * UNDO_RADIUS_RATIO;
+    expect(arcRadii.length).toBeGreaterThan(0);
+    arcRadii.forEach((radius) => expect(radius).toBeLessThanOrEqual(tappableRadius));
+    expect(Math.max(...arcRadii)).toBeCloseTo(tappableRadius);
+  });
+
+  it.each(PHONE_WIDTHS)('keeps ShortcutControl chrome (including its shadow) within containsPoint\'s radius at %ipx width', (width) => {
+    const height = width * 2;
+    const control = new ShortcutControl();
+    control.reflow(width, height, width / 2, height / 2);
+    const { ctx, arcRadii } = createArcRecordingCtx();
+
+    control.draw(ctx);
+
+    const tappableRadius = width * SHORTCUT_RADIUS_RATIO;
+    expect(arcRadii.length).toBeGreaterThan(0);
+    arcRadii.forEach((radius) => expect(radius).toBeLessThanOrEqual(tappableRadius));
+    expect(Math.max(...arcRadii)).toBeCloseTo(tappableRadius);
+  });
+
+  it.each(PHONE_WIDTHS)('keeps PauseControl chrome (including its shadow) within containsPoint\'s radius at %ipx width', (width) => {
+    const height = width * 2;
+    const control = new PauseControl();
+    control.reflow(width, height, width / 2, height / 2);
+    const { ctx, arcRadii } = createArcRecordingCtx();
+
+    control.draw(ctx, false);
+
+    const tappableRadius = width * PAUSE_RADIUS_RATIO;
+    expect(arcRadii.length).toBeGreaterThan(0);
+    arcRadii.forEach((radius) => expect(radius).toBeLessThanOrEqual(tappableRadius));
+    expect(Math.max(...arcRadii)).toBeCloseTo(tappableRadius);
+  });
 });

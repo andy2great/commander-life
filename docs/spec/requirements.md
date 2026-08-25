@@ -78,3 +78,9 @@ R14. While the attack menu, board-wide shortcut menu, or any other full-board
      overlay is open, the canvas board behind it shall render with a
      blur-and-dim filter (not a flat dim-only scrim), removed immediately
      when the overlay closes.
+
+R16. Every interactive control's rendered visual bounds — including any
+     shadow, glow, or decorative chrome drawn around it — shall never extend
+     beyond its tappable/hit-tested area, on both canvas-drawn controls and
+     DOM controls; a player shall never see a control that looks larger than
+     the region that actually responds to their tap.

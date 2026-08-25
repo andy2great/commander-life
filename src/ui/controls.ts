@@ -48,46 +48,80 @@ const DISC_BEVEL_BOTTOM = '#1a1620';
 const FOIL_BRASS_RGB = '215, 165, 76';
 const FOIL_EMBER_RGB = '226, 103, 63';
 
+// The shadow's blur+offset, as fractions of the tappable radius, reserved as
+// a margin that the opaque disc insets by (see `discChromeRadius` below) —
+// this is what keeps the shadow's visible footprint from extending past
+// containsPoint()'s hit-circle (issue #214); drawDiscChrome also hard-clips
+// to the full tappable radius as a backstop against browser-specific blur
+// rasterization.
+const DISC_SHADOW_BLUR_RATIO = 0.1;
+const DISC_SHADOW_OFFSET_RATIO = 0.06;
+
+/**
+ * The radius of the disc's opaque fill/stroke/rim, inset from the tappable
+ * radius by the shadow's own blur+offset so the shadow has room to render
+ * without pushing the disc's total visible footprint past `radius` (issue
+ * #214). Undo/Shortcut/Pause all use this for both their chrome and their
+ * glyph sizing, so the glyph stays proportioned to the disc that's actually
+ * drawn rather than to the (slightly larger) tappable circle.
+ */
+function discChromeRadius(radius: number): number {
+  return radius * (1 - DISC_SHADOW_BLUR_RATIO - DISC_SHADOW_OFFSET_RATIO);
+}
+
 /**
  * Draws the disc's beveled fill, drop shadow, and foil-accented rim — shared
  * by Undo/Shortcut/Pause so all three controls on the disc get identical
  * chrome (issue #198). Callers wrap this in their own `enabled`/`paused`
- * globalAlpha handling, then draw their glyph on top.
+ * globalAlpha handling, then draw their glyph on top. `radius` is the
+ * tappable radius (containsPoint's own radius); the chrome itself renders
+ * inset from it — see `discChromeRadius` — and everything, including the
+ * shadow, is clipped to `radius` so the drawn disc's visible footprint can
+ * never exceed its hit-circle (issue #214).
  */
 function drawDiscChrome(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number): void {
+  const chromeRadius = discChromeRadius(radius);
+
   // CSS `160deg` measures clockwise from "up"; convert to a canvas gradient
   // axis running from the panel-treatment's start point to its end point.
   const angle = degToRad(160);
-  const dx = radius * Math.sin(angle);
-  const dy = -radius * Math.cos(angle);
+  const dx = chromeRadius * Math.sin(angle);
+  const dy = -chromeRadius * Math.cos(angle);
   const fill = ctx.createLinearGradient(centerX - dx, centerY - dy, centerX + dx, centerY + dy);
   fill.addColorStop(0, DISC_BEVEL_TOP);
   fill.addColorStop(1, DISC_BEVEL_BOTTOM);
 
   ctx.save();
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-  ctx.shadowBlur = radius * 0.6;
-  ctx.shadowOffsetY = radius * 0.25;
   ctx.beginPath();
   ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.clip();
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+  ctx.shadowBlur = radius * DISC_SHADOW_BLUR_RATIO;
+  ctx.shadowOffsetY = radius * DISC_SHADOW_OFFSET_RATIO;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, chromeRadius, 0, Math.PI * 2);
   ctx.fillStyle = fill;
   ctx.fill();
   ctx.restore();
 
   ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, chromeRadius, 0, Math.PI * 2);
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = '#f5f3f7';
   ctx.stroke();
 
-  const rimHighlight = ctx.createLinearGradient(centerX, centerY - radius, centerX, centerY + radius);
+  const rimHighlight = ctx.createLinearGradient(centerX, centerY - chromeRadius, centerX, centerY + chromeRadius);
   rimHighlight.addColorStop(0, `rgba(${FOIL_BRASS_RGB}, 0.6)`);
   rimHighlight.addColorStop(1, `rgba(${FOIL_EMBER_RGB}, 0.35)`);
   ctx.beginPath();
-  ctx.arc(centerX, centerY, radius - 1, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, chromeRadius - 1, 0, Math.PI * 2);
   ctx.lineWidth = 1;
   ctx.strokeStyle = rimHighlight;
   ctx.stroke();
+
+  ctx.restore();
 }
 
 /**
@@ -229,7 +263,7 @@ export class UndoControl {
 
     ctx.fillStyle = '#f5f3f7';
     ctx.strokeStyle = '#f5f3f7';
-    drawUndoGlyph(ctx, centerX, centerY, radius);
+    drawUndoGlyph(ctx, centerX, centerY, discChromeRadius(radius));
 
     ctx.restore();
   }
@@ -269,7 +303,7 @@ export class ShortcutControl {
     drawDiscChrome(ctx, centerX, centerY, radius);
 
     ctx.fillStyle = '#f5f3f7';
-    drawShortcutGlyph(ctx, centerX, centerY, radius);
+    drawShortcutGlyph(ctx, centerX, centerY, discChromeRadius(radius));
 
     ctx.restore();
   }
@@ -310,7 +344,7 @@ export class PauseControl {
     drawDiscChrome(ctx, centerX, centerY, radius);
 
     ctx.fillStyle = '#f5f3f7';
-    drawPauseGlyph(ctx, centerX, centerY, radius, paused);
+    drawPauseGlyph(ctx, centerX, centerY, discChromeRadius(radius), paused);
 
     ctx.restore();
   }
