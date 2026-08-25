@@ -221,6 +221,8 @@ function computeFivePlayerZoneRects(width: number, height: number): ZoneRect[] {
 export interface PlayerConfig {
   name: string;
   color: string;
+  /** True when this player runs two commanders (Partner pair, or Commander + Background) rather than one (issue #165). */
+  hasTwoCommanders?: boolean;
 }
 
 export interface GameConfig {
@@ -441,9 +443,10 @@ export class Game {
         name: preset?.name || `Player ${seat + 1}`,
         life: startingLife,
         color: preset?.color || PLAYER_COLORS[seat % PLAYER_COLORS.length],
+        hasTwoCommanders: preset?.hasTwoCommanders,
       };
     });
-    this.damage = createCommanderDamageState(this.playersList.map((player) => player.id));
+    this.damage = createCommanderDamageState(this.playersList);
     this.poison = createPoisonState(this.playersList.map((player) => player.id));
     this.energy = createEnergyState(this.playersList.map((player) => player.id));
     this.experience = createExperienceState(this.playersList.map((player) => player.id));
