@@ -57,11 +57,11 @@ describe('saveLastRoster / loadLastRoster', () => {
     expect(loadLastRoster(storage)).toBeNull();
   });
 
-  it('returns null when playerCount is out of the supported 3-6 range', () => {
+  it('returns null when playerCount is out of the supported 2-6 range', () => {
     const storage = new MemoryStorage();
     storage.setItem(
       'commander-life:last-roster',
-      JSON.stringify({ playerCount: 2, startingLife: 40, players: makePlayers(2) }),
+      JSON.stringify({ playerCount: 1, startingLife: 40, players: makePlayers(1) }),
     );
     expect(loadLastRoster(storage)).toBeNull();
   });

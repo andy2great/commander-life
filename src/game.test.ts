@@ -952,15 +952,15 @@ describe('Game', () => {
     ]);
   });
 
-  it('clamps a configured player count to the 3-6 range', () => {
+  it('clamps a configured player count to the 2-6 range', () => {
     const tooFew = new Game({ playerCount: 1, startingLife: 40, players: [] });
     const tooMany = new Game({ playerCount: 9, startingLife: 40, players: [] });
 
-    expect(tooFew.playerCount).toBe(3);
+    expect(tooFew.playerCount).toBe(2);
     expect(tooMany.playerCount).toBe(6);
   });
 
-  it.each([3, 4, 5, 6])(
+  it.each([2, 3, 4, 5, 6])(
     'keeps the shared undo control off every zone center in a %i-player game',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
@@ -978,7 +978,7 @@ describe('Game', () => {
     },
   );
 
-  it.each([3, 4, 5, 6])(
+  it.each([2, 3, 4, 5, 6])(
     'keeps the shared shortcut control off every zone center and off the undo control, at the smallest supported width, in a %i-player game (issue #80)',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
@@ -999,7 +999,7 @@ describe('Game', () => {
     },
   );
 
-  it.each([3, 4, 5, 6])(
+  it.each([2, 3, 4, 5, 6])(
     'lays out %i players in the table-like grid from docs/concept.md, and tapping either half changes nothing (issue #54)',
     (playerCount) => {
       const game = new Game({ playerCount, startingLife: 40, players: [] });
@@ -1084,6 +1084,76 @@ describe('Game', () => {
         game.passTurn();
         expect(game.activeIndex).toBe(order[i]);
       }
+    });
+  });
+
+  describe('2-player 1v1 Duel Commander layout (issue #169)', () => {
+    it('gives 2 full-width zones stacked top and bottom, the top one rotated 180°, tiling the canvas with no gaps or overlaps', () => {
+      const width = 400;
+      const height = 900;
+
+      expect(computeZoneRects(2, width, height)).toEqual([
+        { x: 0, y: 0, width, height: height / 2, rotation: 180 },
+        { x: 0, y: height / 2, width, height: height / 2, rotation: 0 },
+      ]);
+    });
+
+    it('accepts a 2-player config without clamping up to the old 3-player minimum', () => {
+      const game = new Game({ playerCount: 2, startingLife: 40, players: [] });
+      expect(game.playerCount).toBe(2);
+      expect(game.players).toHaveLength(2);
+    });
+
+    it('alternates turns between the 2 seats, incrementing turnCount once per lap', () => {
+      const game = new Game({ playerCount: 2, startingLife: 40, players: [] });
+      expect(game.activeIndex).toBe(0);
+
+      game.passTurn();
+      expect(game.activeIndex).toBe(1);
+      expect(game.turnCount).toBe(0);
+
+      game.passTurn();
+      expect(game.activeIndex).toBe(0);
+      expect(game.turnCount).toBe(1);
+    });
+
+    it('resolves a drag between the 2 zones for commander damage, and a same-zone drag as a self-target pair', () => {
+      const game = new Game({ playerCount: 2, startingLife: 40, players: [] });
+      game.resize(400, 900);
+      const [p0, p1] = game.players;
+
+      const crossDrag = game.resolveZoneDrag(50, 10, 50, 460);
+      expect(crossDrag).toEqual({ fromPlayerId: p0.id, toPlayerId: p1.id });
+
+      dealDamage(game, p0.id, p1.id, 5);
+      expect(p1.life).toBe(35);
+      expect(game.damageState[p1.id][p0.id]).toEqual([5]);
+
+      const selfDrag = game.resolveZoneDrag(50, 10, 70, 400);
+      expect(selfDrag).toEqual({ fromPlayerId: p0.id, toPlayerId: p0.id });
+    });
+
+    it('undoes the most recent action, e.g. reverting commander damage', () => {
+      const game = new Game({ playerCount: 2, startingLife: 40, players: [] });
+      const [p0, p1] = game.players;
+
+      dealDamage(game, p0.id, p1.id, 5);
+      expect(p1.life).toBe(35);
+
+      game.undo();
+      expect(p1.life).toBe(40);
+    });
+
+    it('ends the game as soon as one of the 2 players is eliminated, with the survivor as winner', () => {
+      const game = new Game({ playerCount: 2, startingLife: 1, players: [] });
+      const [p0, p1] = game.players;
+
+      dealDamage(game, p1.id, p0.id, 1); // p0: 1 -> 0
+      game.update(0.016);
+
+      expect(game.ended).toBe(true);
+      expect(game.stats?.winnerId).toBe(p1.id);
+      expect(game.stats?.eliminationOrder.map((entry) => entry.playerId)).toEqual([p0.id]);
     });
   });
 });

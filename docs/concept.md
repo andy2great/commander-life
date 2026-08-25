@@ -1,13 +1,13 @@
 # Commander Life Counter — Concept
 
 ## Pitch
-A gorgeous, tap-driven life counter built specifically for Magic: The Gathering Commander (EDH) games of 3-6 players. Track life, commander damage, whose turn it is, and get a beautiful stat recap when the game ends.
+A gorgeous, tap-driven life counter built specifically for Magic: The Gathering Commander (EDH) games of 2-6 players, including 1v1 Duel Commander. Track life, commander damage, whose turn it is, and get a beautiful stat recap when the game ends.
 
 ## Goal
 Replace pen-and-paper trackers and generic counter apps with a single shared portrait device passed around (or laid flat) at the table. Every player's life total is oriented so it's readable from their own seat, controls are one-thumb tap-driven, turn order is always visible, mistakes are one tap to undo, and the end of the game produces a rich, shareable stat summary.
 
 ## Core loop
-1. Host configures the game (player count 3-6, starting life, names/colors) on the setup screen.
+1. Host configures the game (player count 2-6, starting life, names/colors) on the setup screen.
 2. The canvas splits into N player zones, each rotated to face that player's seat.
 3. The active player's zone is highlighted with a pulsing border; long-pressing anywhere inside that zone advances the active-player highlight clockwise around the table (with a brief flash animation as the press commits), and the turn counter increments each full lap.
 4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log plain damage, commander damage, lifelink damage, healing, or poison dealt in that direction. Dragging from your own zone back into itself (past the same movement threshold as a cross-zone drag) opens a self-target menu instead — labeled with your name and "(self)" rather than an attacker → target pair — for logging self-damage, healing, or poison against your own total; commander damage and lifelink don't apply to yourself, so those options are omitted. A drag released outside any player zone is ignored. This drag gesture is the only way life totals change — tapping a zone does nothing.
@@ -23,6 +23,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 - Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a swatch to pick the board background theme, tap a name field to rename via the soft keyboard
 
 ## Layout by player count (portrait canvas, all code-drawn, no external assets)
+- 2 players (1v1 Duel Commander): both zones span the full width, stacked top and bottom; the top zone is rotated 180° so each player reads their own life upright from their seat
 - 3 players: one zone spans the full width at the top (rotated 180°), two zones split the bottom half vertically
 - 4 players: 2x2 grid; top row rotated 180°, bottom row upright
 - 5 players: 2 zones along the top edge (rotated 180°), 2 zones along the bottom edge (upright), and 1 full-height zone along the left edge (rotated 90° so its life total and name read upright from that seat), with all three columns equal width
