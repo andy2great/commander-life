@@ -107,7 +107,7 @@ function formatMmSs(seconds: number): string {
   return `${mm}:${String(ss).padStart(2, '0')}`;
 }
 
-export const MIN_PLAYER_COUNT = 3;
+export const MIN_PLAYER_COUNT = 2;
 export const MAX_PLAYER_COUNT = 6;
 export const DEFAULT_PLAYER_COUNT = 4;
 export const DEFAULT_STARTING_LIFE = 40;

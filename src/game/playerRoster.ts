@@ -23,7 +23,7 @@ export function movePlayer<T>(players: T[], fromIndex: number, toIndex: number):
   return next;
 }
 
-/** Removes the item at `index`. No-op at or below MIN_PLAYER_COUNT, or for an out-of-range index — a table always needs at least 3 seats. */
+/** Removes the item at `index`. No-op at or below MIN_PLAYER_COUNT, or for an out-of-range index — a table always needs at least 2 seats. */
 export function removePlayerAt<T>(players: T[], index: number): T[] {
   if (players.length <= MIN_PLAYER_COUNT || index < 0 || index >= players.length) {
     return players;

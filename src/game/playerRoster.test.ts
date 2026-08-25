@@ -40,8 +40,8 @@ describe('removePlayerAt', () => {
     expect(removePlayerAt(['a', 'b', 'c', 'd'], 1)).toEqual(['a', 'c', 'd']);
   });
 
-  it('is a no-op at the minimum player count (3)', () => {
-    const players = ['a', 'b', 'c'];
+  it('is a no-op at the minimum player count (2)', () => {
+    const players = ['a', 'b'];
     expect(removePlayerAt(players, 0)).toBe(players);
   });
 
