@@ -6,15 +6,12 @@ import type { SoundPlayer } from '../audio/soundPlayer';
 import { DAMAGE_SHAKE_TRAUMA, type ScreenShakeTrigger } from './screenShake';
 import { DAMAGE_EFFECT_COLOR, type ZoneEffectTrigger } from './zoneEffect';
 import type { StatsTrigger } from './stats';
-import type { PlayerIconId } from './playerIcons';
 
 export interface Player {
   id: string;
   name: string;
   life: number;
   color?: string;
-  /** The code-drawn glyph chosen to identify this seat (issue #167), beyond accent color alone. */
-  icon?: PlayerIconId;
   /**
    * True when this player runs two commanders (a Partner pair, or a
    * Commander + Background) rather than one (issue #165). Commander damage
