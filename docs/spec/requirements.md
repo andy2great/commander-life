@@ -40,3 +40,9 @@ R7. The active player's zone shall render its pulsing highlight border using the
     or highlight anywhere in the app shall use the blue accent family
     (`rgb(91, 140, 255)` or equivalent) that the Foil & Felt visual identity
     replaced.
+
+R9. All canvas-drawn text on a player zone — life total, player name, and
+    turn timer alike — shall use the app's `DISPLAY_FONT_STACK` display
+    typeface; none shall fall back to a system-ui/generic sans-serif font.
+    Player-name text shall render uppercase with letter-spacing consistent
+    with the DOM overlay screens' header treatment.

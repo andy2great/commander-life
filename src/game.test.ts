@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects, resolveOverlayViewportSize } from './game';
+import { DISPLAY_FONT_STACK } from './ui/displayFont';
 import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS } from './ui/damagePanel';
 import { clockwiseSeatOrder } from './game/turn';
 import { applyCommanderDamageDelta } from './game/commanderDamage';
@@ -1845,5 +1846,60 @@ describe('active-player zone pulse border uses the foil accent, not the pre-rede
     idleStrokeStyles.forEach((style) => {
       expect(style).toBe('rgba(255, 255, 255, 0.12)');
     });
+  });
+});
+
+describe('canvas player-name text uses the display font, uppercase, tracked (issue #199)', () => {
+  /** Records every fillText call along with the ctx.font/letterSpacing in effect at call time. */
+  function createTextRecordingCtx(): {
+    ctx: CanvasRenderingContext2D;
+    fillTextCalls: Array<{ text: string; font: string; letterSpacing: string }>;
+  } {
+    const state: Record<string, unknown> = { font: '', letterSpacing: '0px' };
+    const fillTextCalls: Array<{ text: string; font: string; letterSpacing: string }> = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'fillText') {
+          return (text: string) => {
+            fillTextCalls.push({ text, font: target.font as string, letterSpacing: target.letterSpacing as string });
+          };
+        }
+        if (prop === 'createLinearGradient' || prop === 'createRadialGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, fillTextCalls };
+  }
+
+  it('draws the player name uppercase in the display font with letter-spacing, without changing the life/timer text', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    game.players[0].name = 'alice';
+    const { ctx, fillTextCalls } = createTextRecordingCtx();
+
+    game.render(ctx, 400, 800);
+
+    const nameCall = fillTextCalls.find((call) => call.text === 'ALICE');
+    expect(nameCall).toBeDefined();
+    expect(nameCall!.font).toContain(DISPLAY_FONT_STACK);
+    expect(nameCall!.letterSpacing).not.toBe('0px');
+
+    const lifeCall = fillTextCalls.find((call) => call.text === String(game.players[0].life));
+    expect(lifeCall).toBeDefined();
+    expect(lifeCall!.font).toContain(DISPLAY_FONT_STACK);
+
+    const timerCall = fillTextCalls.find((call) => /^\d{1,2}:\d{2}$/.test(call.text));
+    expect(timerCall).toBeDefined();
+    expect(timerCall!.font).toContain(DISPLAY_FONT_STACK);
+    expect(timerCall!.letterSpacing).toBe('0px');
   });
 });
