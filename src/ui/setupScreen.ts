@@ -32,6 +32,7 @@ import {
 import { rollForStartingSeat } from '../game/diceRoller';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
+import { HistoryScreen } from './historyScreen';
 
 const STARTING_LIFE_STEP = 5;
 const MIN_STARTING_LIFE = 5;
@@ -105,6 +106,8 @@ function injectStylesOnce(): void {
     .setup-hub-roll-btn:disabled { opacity: 0.5; }
     .setup-hub-cta { box-sizing: border-box; margin-top: 4px; background: linear-gradient(135deg, #d7a54c, #e2673f); color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; }
     .setup-hub-cta:active { transform: scale(0.98); }
+    .setup-hub-history-btn { box-sizing: border-box; background: #2d2938; color: #d7a54c; border: none; border-radius: 10px; padding: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+    .setup-hub-history-btn:active { transform: scale(0.98); }
   `;
   document.head.appendChild(style);
 }
@@ -430,6 +433,16 @@ export class SetupScreen {
     );
 
     hub.appendChild(this.buildRollRow());
+
+    // History view (issue #166): reachable from setup so a host can check
+    // past results — winner and player list per game, most-recent-first —
+    // before starting the next game, without leaving this screen.
+    const historyBtn = document.createElement('button');
+    historyBtn.type = 'button';
+    historyBtn.className = 'setup-hub-history-btn';
+    historyBtn.textContent = 'History';
+    historyBtn.addEventListener('pointerdown', () => new HistoryScreen({ root: this.root }).show());
+    hub.appendChild(historyBtn);
 
     // The "Start Game" action lives here on the shared center hub, alongside
     // the table-wide steppers, rather than as a separate full-width CTA
