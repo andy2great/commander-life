@@ -108,12 +108,14 @@ function formatMmSs(seconds: number): string {
 }
 
 export const MIN_PLAYER_COUNT = 2;
-export const MAX_PLAYER_COUNT = 6;
+export const MAX_PLAYER_COUNT = 8;
 export const DEFAULT_PLAYER_COUNT = 4;
 export const DEFAULT_STARTING_LIFE = 40;
 
 // The 6 preset saturated accent colors from docs/concept.md, assigned to
-// seats in order (crimson, teal, amber, violet, lime, sky).
+// seats in order (crimson, teal, amber, violet, lime, sky). Cycles (via
+// `% PLAYER_COLORS.length`) for 7-8 player games, where two seats share a
+// color (issue #170).
 export const PLAYER_COLORS = ['#e11d48', '#14b8a6', '#f59e0b', '#8b5cf6', '#84cc16', '#38bdf8'];
 
 // Landscape phones have far less vertical space than portrait, so a DOM

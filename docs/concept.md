@@ -1,13 +1,13 @@
 # Commander Life Counter — Concept
 
 ## Pitch
-A gorgeous, tap-driven life counter built specifically for Magic: The Gathering Commander (EDH) games of 2-6 players, including 1v1 Duel Commander. Track life, commander damage, whose turn it is, and get a beautiful stat recap when the game ends.
+A gorgeous, tap-driven life counter built specifically for Magic: The Gathering Commander (EDH) games of 2-8 players, including 1v1 Duel Commander and large casual pods. Track life, commander damage, whose turn it is, and get a beautiful stat recap when the game ends.
 
 ## Goal
 Replace pen-and-paper trackers and generic counter apps with a single shared portrait device passed around (or laid flat) at the table. Every player's life total is oriented so it's readable from their own seat, controls are one-thumb tap-driven, turn order is always visible, mistakes are one tap to undo, and the end of the game produces a rich, shareable stat summary.
 
 ## Core loop
-1. Host configures the game (player count 2-6, starting life, names/colors) on the setup screen.
+1. Host configures the game (player count 2-8, starting life, names/colors) on the setup screen.
 2. The canvas splits into N player zones, each rotated to face that player's seat.
 3. The active player's zone is highlighted with a pulsing border; long-pressing anywhere inside that zone advances the active-player highlight clockwise around the table (with a brief flash animation as the press commits), and the turn counter increments each full lap.
 4. Dragging a pointer from your own zone into another player's zone (à la Playgroup) opens a damage-type menu for that attacker/target pair, letting you log plain damage, commander damage, lifelink damage, healing, or poison dealt in that direction. Dragging from your own zone back into itself (past the same movement threshold as a cross-zone drag) opens a self-target menu instead — labeled with your name and "(self)" rather than an attacker → target pair — for logging self-damage, healing, or poison against your own total; commander damage and lifelink don't apply to yourself, so those options are omitted. A drag released outside any player zone is ignored. This drag gesture is the only way life totals change — tapping a zone does nothing.
@@ -28,6 +28,8 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 - 4 players: 2x2 grid; top row rotated 180°, bottom row upright
 - 5 players: 2 zones along the top edge (rotated 180°), 2 zones along the bottom edge (upright), and 1 full-height zone along the left edge (rotated 90° so its life total and name read upright from that seat), with all three columns equal width
 - 6 players: 3x2 grid; top row rotated 180°, bottom row upright
+- 7 players: 4x2 grid with the bottom row short one seat (top row: 4 zones rotated 180°; bottom row: 3 zones upright)
+- 8 players: 4x2 grid; top row rotated 180°, bottom row upright
 - A shared circular control disc sits where all zones meet, at the vertical center of the canvas, hosting the undo icon
 
 ## Scoring / "impact" stats (shown only at game end, never mid-game)
@@ -44,7 +46,7 @@ Not applicable in the traditional score-chasing sense — this is a utility, not
 
 ## Visual style (all code-drawn on canvas, zero external assets/fonts/images)
 - Dark neutral background (near-black, #121016 by default) so colored player zones pop like felt on a card table; the host can pick a different board theme (a handful of preset dark background colors, each code-drawn) from the setup screen, and the choice persists across games — player accent colors and zone legibility stay the same regardless of theme
-- Each player zone is assigned one of 6 preset saturated accent colors (crimson, teal, amber, violet, lime, sky), rendered as a soft radial gradient fill
+- Each player zone is assigned one of 6 preset saturated accent colors (crimson, teal, amber, violet, lime, sky), rendered as a soft radial gradient fill; games with 7-8 players cycle back through the same 6 colors, so two seats share a color
 - Life numbers: huge, bold, centered, drawn with canvas text using a heavy sans stack, white with a subtle drop shadow, rotated 180° for top-row zones so every player reads their own number upright from their seat
 - The active player's zone renders an animated pulsing border (canvas stroke with a sine-driven width/opacity); a long-press that commits a turn pass also plays a brief flash animation on that zone, distinct from the idle pulse
 - Center control disc: circular, translucent dark fill, hosting a curved-arrow icon (undo), vector-drawn with canvas path calls — no icon fonts or bitmap images
