@@ -90,13 +90,13 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-/** Blends a player accent color toward white, for the arrow's "3D" shaded gradient. */
+/** Blends a player accent color toward white, e.g. for the arrow's "3D" shaded gradient. */
 function lightenColor(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);
   return `rgb(${Math.round(r + (255 - r) * amount)}, ${Math.round(g + (255 - g) * amount)}, ${Math.round(b + (255 - b) * amount)})`;
 }
 
-/** Blends a player accent color toward black, for the arrow's "3D" shaded gradient. */
+/** Blends a player accent color toward black, e.g. for the arrow's "3D" shaded gradient. */
 function darkenColor(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);
   return `rgb(${Math.round(r * (1 - amount))}, ${Math.round(g * (1 - amount))}, ${Math.round(b * (1 - amount))})`;
@@ -269,6 +269,16 @@ export interface GameStats {
 const PULSE_SPEED_RAD_S = 4;
 const PULSE_MIN_WIDTH = 3;
 const PULSE_MAX_WIDTH = 7;
+
+// Thin gap left between each zone's own gradient fill and its computed rect
+// (issue #200/R10): computeZoneRects/computeFivePlayerZoneRects tile the
+// canvas edge-to-edge with no gaps, and the zone gradient's stops all stay
+// within the player's own accent hue now, so without this gutter the
+// boardBackgroundColor base layer drawn in render() would be fully occluded
+// everywhere and the per-theme swap (issue #168/getBoardTheme) would never
+// be visible during actual gameplay. Hit-testing (seatAt) still uses the
+// full, ungapped rect so touch targets stay exactly as reachable as before.
+const ZONE_GRADIENT_GUTTER_PX = 4;
 
 // Brief flash on the active zone the moment a long-press commits the turn
 // pass (issue #64) — distinct from, and layered on top of, the idle pulsing
@@ -925,6 +935,14 @@ export class Game {
   render(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     this.resize(width, height);
     ctx.clearRect(0, 0, width, height);
+    // Board theme (issue #168) base fill. Zone fills themselves stay within
+    // the player's own accent hue (issue #200/R10) instead of blending
+    // toward it, and drawZones() leaves a thin gutter around each zone
+    // (ZONE_GRADIENT_GUTTER_PX) so this base layer still shows through and
+    // the per-theme swap stays visible during gameplay, not just on the
+    // setup screen's preview.
+    ctx.fillStyle = this.boardBackgroundColor;
+    ctx.fillRect(0, 0, width, height);
 
     // Screen-shake (issue #88) only offsets what's drawn below, via ctx
     // translate — resize() above already recomputed zoneRects/controls from
@@ -974,11 +992,24 @@ export class Game {
       const cy = rect.y + rect.height / 2;
       const shortSide = Math.min(rect.width, rect.height);
 
+      const zoneColor = player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length];
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rect.width, rect.height) * 0.75);
-      gradient.addColorStop(0, player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length]);
-      gradient.addColorStop(1, this.boardBackgroundColor);
+      // Same-hue 3-stop fill (R10): stays within the player's accent color
+      // across the whole zone instead of fading to the near-black board
+      // background at the outer edge.
+      gradient.addColorStop(0, lightenColor(zoneColor, 0.35));
+      gradient.addColorStop(0.55, zoneColor);
+      gradient.addColorStop(1, darkenColor(zoneColor, 0.35));
       ctx.fillStyle = gradient;
-      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+      // Inset by ZONE_GRADIENT_GUTTER_PX so boardBackgroundColor peeks
+      // through between zones and around the board's outer edge/corners,
+      // keeping the per-theme swap visible (see constant's comment above).
+      ctx.fillRect(
+        rect.x + ZONE_GRADIENT_GUTTER_PX,
+        rect.y + ZONE_GRADIENT_GUTTER_PX,
+        rect.width - ZONE_GRADIENT_GUTTER_PX * 2,
+        rect.height - ZONE_GRADIENT_GUTTER_PX * 2,
+      );
 
       ctx.save();
       ctx.translate(cx, cy);

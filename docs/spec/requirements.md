@@ -52,3 +52,8 @@ R9. All canvas-drawn text on a player zone — life total, player name, and
     typeface; none shall fall back to a system-ui/generic sans-serif font.
     Player-name text shall render uppercase with letter-spacing consistent
     with the DOM overlay screens' header treatment.
+
+R10. Each player zone's background fill shall be a same-hue, multi-stop
+     radial gradient that remains visibly saturated with the player's accent
+     color across the entire zone, including its outer edge — it shall never
+     fade to the shared board background color at any gradient stop.

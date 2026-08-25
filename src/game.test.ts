@@ -10,6 +10,7 @@ import { applyEnergyDelta } from './game/energy';
 import { applyExperienceDelta } from './game/experience';
 import { addCustomCounter } from './game/customCounters';
 import { applyBoardShortcutDelta } from './game/boardShortcut';
+import { getBoardTheme } from './game/boardTheme';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
 
 /** Records every sound-trigger call so tests can assert on game events without a real AudioContext. */
@@ -1909,5 +1910,117 @@ describe('canvas player-name text uses the display font, uppercase, tracked (iss
     expect(timerCall).toBeDefined();
     expect(timerCall!.font).toContain(DISPLAY_FONT_STACK);
     expect(timerCall!.letterSpacing).toBe('0px');
+  });
+});
+
+describe('zone background fill stays within the player accent hue edge-to-edge (issue #200)', () => {
+  /** Captures each zone's createRadialGradient stops, in call order, so the fill's stops can be asserted on directly. */
+  function createRadialGradientRecordingCtx(): {
+    ctx: CanvasRenderingContext2D;
+    radialGradientStops: Array<Array<[number, string]>>;
+  } {
+    const state: Record<string, unknown> = {};
+    const radialGradientStops: Array<Array<[number, string]>> = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'createRadialGradient') {
+          return () => {
+            const stops: Array<[number, string]> = [];
+            radialGradientStops.push(stops);
+            return { addColorStop: (offset: number, color: string) => stops.push([offset, color]) };
+          };
+        }
+        if (prop === 'createLinearGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, radialGradientStops };
+  }
+
+  it('renders each zone as a 3+ stop same-hue gradient whose outermost stop is never the board background color', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const { ctx, radialGradientStops } = createRadialGradientRecordingCtx();
+
+    game.render(ctx, 400, 800);
+
+    const boardBackgroundColor = getBoardTheme(undefined).backgroundColor;
+    expect(radialGradientStops.length).toBe(game.players.length);
+    radialGradientStops.forEach((stops) => {
+      expect(stops.length).toBeGreaterThanOrEqual(3);
+      const outermost = stops[stops.length - 1];
+      expect(outermost[0]).toBe(1);
+      expect(outermost[1].toLowerCase()).not.toBe(boardBackgroundColor.toLowerCase());
+    });
+  });
+
+  /** Records every fillRect call along with the ctx.fillStyle in effect at call time. */
+  function createFillRectRecordingCtx(): {
+    ctx: CanvasRenderingContext2D;
+    fillRectCalls: Array<{ fillStyle: unknown; x: number; y: number; width: number; height: number }>;
+  } {
+    const state: Record<string, unknown> = {};
+    const fillRectCalls: Array<{ fillStyle: unknown; x: number; y: number; width: number; height: number }> = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'fillRect') {
+          return (x: number, y: number, width: number, height: number) => {
+            fillRectCalls.push({ fillStyle: target.fillStyle, x, y, width, height });
+          };
+        }
+        if (prop === 'createRadialGradient' || prop === 'createLinearGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, fillRectCalls };
+  }
+
+  it('leaves a gutter around each zone so the boardBackgroundColor base layer stays visible (per-theme swap, issue #168)', () => {
+    const game = new Game();
+    const width = 400;
+    const height = 800;
+    game.resize(width, height);
+    const { ctx, fillRectCalls } = createFillRectRecordingCtx();
+
+    game.render(ctx, width, height);
+
+    const boardBackgroundColor = getBoardTheme(undefined).backgroundColor;
+    // The base layer fill must still run...
+    const baseLayerCall = fillRectCalls.find(
+      (call) => call.fillStyle === boardBackgroundColor && call.x === 0 && call.y === 0 && call.width === width && call.height === height,
+    );
+    expect(baseLayerCall).toBeDefined();
+
+    // ...and every zone's own gradient fill must be inset from its full
+    // computeZoneRects bounds, so it can never fully occlude the base layer
+    // drawn underneath it.
+    const zoneRects = computeZoneRects(game.playerCount, width, height);
+    const zoneFillCalls = fillRectCalls.filter((call) => typeof call.fillStyle === 'object');
+    expect(zoneFillCalls.length).toBe(zoneRects.length);
+    zoneFillCalls.forEach((call, index) => {
+      const rect = zoneRects[index];
+      expect(call.x).toBeGreaterThan(rect.x);
+      expect(call.y).toBeGreaterThan(rect.y);
+      expect(call.width).toBeLessThan(rect.width);
+      expect(call.height).toBeLessThan(rect.height);
+    });
   });
 });
