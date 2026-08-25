@@ -6,8 +6,13 @@
 // face that seat, so every player can configure their own zone from their
 // own seat at the same time — see docs/concept.md's pass-around-the-table
 // premise. A compact control hub at the shared center (mirroring the
-// in-game undo disc's position) hosts the player-count/starting-life
-// steppers and the "Start Game" CTA. Only the canvas element itself is
+// in-game undo disc's position) hosts only the essential table-wide
+// controls — the player-count/starting-life steppers and the "Start Game"
+// CTA (issue #193) — so its footprint stays small and predictable across
+// player counts. Secondary settings (roll-for-start, board theme, match
+// history) live behind the hub's "More" button, which opens a dimmed
+// bottom sheet using the same overlay pattern as attackMenu.ts/
+// boardShortcutMenu.ts/historyScreen.ts. Only the canvas element itself is
 // off-limits outside main.ts — this overlay is plain DOM, like the
 // commander-damage panel.
 
@@ -59,6 +64,11 @@ const REMOVE_PLAYER_ICON =
 // no-external-assets rule, matching the other hub icons' style.
 const DIE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/></svg>';
+// Sliders/settings icon for the hub's "More" button (issue #193), which
+// opens the secondary-settings bottom sheet — vector-drawn like the other
+// hub icons per the no-external-assets rule.
+const MORE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="11" cy="17" r="2" fill="currentColor" stroke="none"/></svg>';
 
 export interface SetupScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
@@ -119,6 +129,16 @@ function injectStylesOnce(): void {
     .setup-hub-cta:active { transform: scale(0.98); }
     .setup-hub-history-btn { box-sizing: border-box; background: #2d2938; color: #d7a54c; border: none; border-radius: 10px; padding: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
     .setup-hub-history-btn:active { transform: scale(0.98); }
+    .setup-hub-more-btn { box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; background: #2d2938; color: #d7a54c; border: none; border-radius: 10px; padding: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; font-family: system-ui, sans-serif; }
+    .setup-hub-more-btn svg { width: 18px; height: 18px; }
+    .setup-hub-more-btn:active { transform: scale(0.98); }
+    .setup-more-overlay { position: fixed; inset: 0; background: rgba(8, 7, 12, 0.55); z-index: 30; display: flex; align-items: flex-end; }
+    .setup-more-panel { width: 100%; max-height: var(--overlay-max-h, 88vh); overflow-y: auto; box-sizing: border-box; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 24px 24px 0 0; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
+    .setup-more-head { display: flex; align-items: center; padding-bottom: 12px; border-bottom: 2px solid #2d2938; }
+    .setup-more-title { color: #f5f3f7; font-size: 18px; font-weight: 400; letter-spacing: 0.6px; text-transform: uppercase; flex: 1; font-family: ${DISPLAY_FONT_STACK}; }
+    .setup-more-close { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: none; background: #241f2d; color: #948fa3; transition: transform 100ms ease, filter 100ms ease; }
+    .setup-more-close:active { transform: scale(0.9); filter: brightness(1.2); }
+    .setup-more-close svg { width: 14px; height: 14px; }
   `;
   document.head.appendChild(style);
 }
@@ -146,6 +166,8 @@ export class SetupScreen {
   /** Seat flickering during an in-progress roll animation (issue #164), or null when idle. Drives both the hub face readout and the per-zone start-icon highlight. */
   private rollingHighlightIndex: number | null = null;
   private rollTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The "More" bottom sheet (issue #193) hosting roll-for-start, board theme, and history — null when closed. */
+  private moreSheetOverlay: HTMLElement | null = null;
 
   constructor(options: SetupScreenOptions) {
     this.root = options.root;
@@ -222,6 +244,7 @@ export class SetupScreen {
       this.overlay.remove();
       this.overlay = null;
     }
+    this.closeMoreSheet();
     if (this.resizeHandler) {
       window.removeEventListener('resize', this.resizeHandler);
       window.visualViewport?.removeEventListener('resize', this.resizeHandler);
@@ -283,6 +306,11 @@ export class SetupScreen {
     });
 
     overlay.appendChild(this.buildHub());
+    // Keeps the "More" sheet's roll-face readout and theme highlight in sync
+    // with state changes (roll ticks, theme picks, player-count edits) that
+    // trigger a full render() while the sheet is open, since the sheet is a
+    // separate root-level overlay that render() doesn't otherwise touch.
+    this.renderMoreSheet();
   }
 
   /** Radial gradient string for a zone: player accent color at center fading to the selected board theme's background color at the edge (issue #168) — same shape the live board's drawZones uses. */
@@ -414,12 +442,17 @@ export class SetupScreen {
   }
 
   /**
-   * The two table-wide settings — "Players" and "Starting life" — live here
-   * on the shared center hub rather than per-zone, since they apply to the
-   * whole table rather than one seat (issue #149). This is also where the
-   * board's shared center control hosts undo/shortcut/pause during play, so
-   * setup mode keeps everything on the one page the on-board layout (#148)
-   * introduced instead of a separate screen.
+   * The essential table-wide controls — "Players", "Starting life", and
+   * "Start Game" — live here on the shared center hub rather than per-zone,
+   * since they apply to the whole table rather than one seat (issue #149).
+   * This is also where the board's shared center control hosts
+   * undo/shortcut/pause during play, so setup mode keeps everything on the
+   * one page the on-board layout (#148) introduced instead of a separate
+   * screen. Everything else — roll-for-start, board theme, match history —
+   * moved behind the "More" button into a secondary bottom sheet (issue
+   * #193), so the default hub's footprint stays small and predictable
+   * across player counts, comparable to the in-game undo/shortcut/pause
+   * disc area, instead of growing with every optional setting.
    */
   private buildHub(): HTMLElement {
     const hub = document.createElement('div');
@@ -457,18 +490,7 @@ export class SetupScreen {
       }),
     );
 
-    hub.appendChild(this.buildRollRow());
-    hub.appendChild(this.buildThemeRow());
-
-    // History view (issue #166): reachable from setup so a host can check
-    // past results — winner and player list per game, most-recent-first —
-    // before starting the next game, without leaving this screen.
-    const historyBtn = document.createElement('button');
-    historyBtn.type = 'button';
-    historyBtn.className = 'setup-hub-history-btn';
-    historyBtn.textContent = 'History';
-    historyBtn.addEventListener('pointerdown', () => new HistoryScreen({ root: this.root }).show());
-    hub.appendChild(historyBtn);
+    hub.appendChild(this.buildMoreButton());
 
     // The "Start Game" action lives here on the shared center hub, alongside
     // the table-wide steppers, rather than as a separate full-width CTA
@@ -485,6 +507,107 @@ export class SetupScreen {
     hub.appendChild(cta);
 
     return hub;
+  }
+
+  /**
+   * Secondary control (issue #193) that opens the "More" bottom sheet
+   * hosting roll-for-start, board theme, and match history — everything
+   * that isn't essential to starting a game, kept off the always-visible
+   * hub so its footprint doesn't grow with optional settings.
+   */
+  private buildMoreButton(): HTMLElement {
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'setup-hub-more-btn';
+    moreBtn.innerHTML = `${MORE_ICON}<span>More</span>`;
+    moreBtn.title = 'Roll for start, board theme, match history';
+    moreBtn.addEventListener('pointerdown', () => this.openMoreSheet());
+    return moreBtn;
+  }
+
+  /**
+   * Opens the "More" sheet as a dimmed, full-screen overlay appended to
+   * `root` (not the setup-board overlay), same pattern as
+   * attackMenu.ts/boardShortcutMenu.ts/historyScreen.ts — so it stacks above
+   * the setup board (z-index 30 vs. 20) and survives the setup board's own
+   * `render()` rebuilds.
+   */
+  private openMoreSheet(): void {
+    if (this.moreSheetOverlay) {
+      return;
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'setup-more-overlay';
+    overlay.addEventListener('pointerdown', (event) => {
+      if (event.target === overlay) {
+        this.closeMoreSheet();
+      }
+    });
+
+    const panel = document.createElement('div');
+    panel.className = 'setup-more-panel';
+    overlay.appendChild(panel);
+
+    this.root.appendChild(overlay);
+    this.moreSheetOverlay = overlay;
+    this.renderMoreSheet();
+  }
+
+  private closeMoreSheet(): void {
+    if (this.moreSheetOverlay) {
+      this.moreSheetOverlay.remove();
+      this.moreSheetOverlay = null;
+    }
+  }
+
+  /**
+   * Rebuilds the "More" sheet's panel content in place, if open. Called both
+   * from `openMoreSheet()` and from every `render()`, so roll-animation
+   * ticks and theme picks — which drive a full setup-board `render()` — keep
+   * the sheet's roll-face readout and theme highlight in sync too.
+   */
+  private renderMoreSheet(): void {
+    const overlay = this.moreSheetOverlay;
+    if (!overlay) {
+      return;
+    }
+    const panel = overlay.firstElementChild as HTMLElement;
+    panel.replaceChildren();
+
+    const head = document.createElement('div');
+    head.className = 'setup-more-head';
+    const title = document.createElement('div');
+    title.className = 'setup-more-title';
+    title.textContent = 'More settings';
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'setup-more-close';
+    closeButton.innerHTML = REMOVE_PLAYER_ICON;
+    closeButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      this.closeMoreSheet();
+    });
+    head.appendChild(title);
+    head.appendChild(closeButton);
+
+    panel.appendChild(head);
+    panel.appendChild(this.buildRollRow());
+    panel.appendChild(this.buildThemeRow());
+    panel.appendChild(this.buildHistoryButton());
+  }
+
+  /**
+   * History view (issue #166): reachable from the "More" sheet so a host can
+   * check past results — winner and player list per game, most-recent-first
+   * — before starting the next game, without leaving this screen.
+   */
+  private buildHistoryButton(): HTMLElement {
+    const historyBtn = document.createElement('button');
+    historyBtn.type = 'button';
+    historyBtn.className = 'setup-hub-history-btn';
+    historyBtn.textContent = 'History';
+    historyBtn.addEventListener('pointerdown', () => new HistoryScreen({ root: this.root }).show());
+    return historyBtn;
   }
 
   /**
