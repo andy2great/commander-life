@@ -9,3 +9,7 @@ R2. The game shall not track or display a Monarch designation. No control
     shall allow assigning, displaying, or hit-testing Monarch status for any
     player, and no badge shall render on top of a player's life counter for
     it.
+
+R3. The game shall not offer selectable player icons. Player zones shall be
+    distinguished by accent color only; no icon badge shall render on the
+    board and no icon picker shall appear on the setup screen.
