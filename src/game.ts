@@ -47,6 +47,7 @@ import {
 } from './game/zoneEffect';
 import { DISPLAY_FONT_STACK } from './ui/displayFont';
 import { defaultIconForSeat, DEFAULT_PLAYER_ICON, type PlayerIconId } from './game/playerIcons';
+import { getBoardTheme } from './game/boardTheme';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -60,7 +61,6 @@ export function clamp(value: number, min: number, max: number): number {
 
 const ACTIVE_ZONE_COLOR_RGB = '91, 140, 255';
 const IDLE_ZONE_COLOR = 'rgba(255, 255, 255, 0.12)';
-const BACKGROUND_COLOR = '#121016';
 
 // Zone-to-zone drag arrow (issue #55): drawn live from the origin zone to
 // the pointer while a drag is in progress, so a Playgroup-style preview of
@@ -234,6 +234,8 @@ export interface GameConfig {
   players: PlayerConfig[];
   /** Seat that starts as the active player (issue #126); defaults to seat 0 when omitted or out of range. */
   startingIndex?: number;
+  /** Selected board background theme id (issue #168), from game/boardTheme.ts; defaults to DEFAULT_BOARD_THEME_ID when omitted or unknown. */
+  boardTheme?: string;
 }
 
 export interface EliminationEntry {
@@ -576,9 +578,11 @@ export class Game {
   private durationS = 0;
   private pausedFlag = false;
   private turnTimerElapsedS = 0;
+  private readonly boardBackgroundColor: string;
 
   constructor(config?: GameConfig, sound: SoundPlayer = new NoopSoundPlayer()) {
     this.sound = sound;
+    this.boardBackgroundColor = getBoardTheme(config?.boardTheme).backgroundColor;
     this.playerCount = clamp(config?.playerCount ?? DEFAULT_PLAYER_COUNT, MIN_PLAYER_COUNT, MAX_PLAYER_COUNT);
     this.turnState = createTurnState(clampStartingIndex(config?.startingIndex ?? 0, this.playerCount));
     const startingLife = config?.startingLife ?? DEFAULT_STARTING_LIFE;
@@ -1200,7 +1204,7 @@ export class Game {
 
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rect.width, rect.height) * 0.75);
       gradient.addColorStop(0, player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length]);
-      gradient.addColorStop(1, BACKGROUND_COLOR);
+      gradient.addColorStop(1, this.boardBackgroundColor);
       ctx.fillStyle = gradient;
       ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
 

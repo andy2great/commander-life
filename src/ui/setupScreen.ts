@@ -32,13 +32,19 @@ import {
 import { defaultIconForSeat, PLAYER_ICON_IDS, type PlayerIconId } from '../game/playerIcons';
 import { rollForStartingSeat } from '../game/diceRoller';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
+import { BOARD_THEMES, DEFAULT_BOARD_THEME_ID, getBoardTheme } from '../game/boardTheme';
+import { loadLastBoardTheme, saveLastBoardTheme } from '../game/boardThemeStorage';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 import { HistoryScreen } from './historyScreen';
 
 const STARTING_LIFE_STEP = 5;
 const MIN_STARTING_LIFE = 5;
 const MAX_STARTING_LIFE = 999;
-const BOARD_BACKGROUND_COLOR = '#121016';
+// Static default for the stylesheet injected once by injectStylesOnce (issue
+// #168) — the actual selected theme is applied per-render as an inline
+// style on the overlay/zones below, since it can change after that one-time
+// injection.
+const BOARD_BACKGROUND_COLOR = getBoardTheme(DEFAULT_BOARD_THEME_ID).backgroundColor;
 
 // Roll-animation timing (issue #164): a short, decelerating flicker through
 // random seats before landing on the real roll, long enough to read as an
@@ -122,6 +128,11 @@ function injectStylesOnce(): void {
     .setup-hub-roll-btn svg { width: 20px; height: 20px; }
     .setup-hub-roll-btn:active { transform: scale(0.94); }
     .setup-hub-roll-btn:disabled { opacity: 0.5; }
+    .setup-hub-theme-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .setup-hub-theme-swatches { display: flex; gap: 6px; }
+    .setup-hub-theme-swatch { box-sizing: border-box; width: 26px; height: 26px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); padding: 0; flex: 0 0 auto; transition: transform 100ms ease, box-shadow 150ms ease; }
+    .setup-hub-theme-swatch:active { transform: scale(0.88); }
+    .setup-hub-theme-swatch-active { box-shadow: 0 0 0 2px #d7a54c, 0 0 0 4px rgba(0, 0, 0, 0.35); }
     .setup-hub-cta { box-sizing: border-box; margin-top: 4px; background: linear-gradient(135deg, #d7a54c, #e2673f); color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; }
     .setup-hub-cta:active { transform: scale(0.98); }
     .setup-hub-history-btn { box-sizing: border-box; background: #2d2938; color: #d7a54c; border: none; border-radius: 10px; padding: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -137,6 +148,8 @@ export class SetupScreen {
   private playerCount: number;
   private startingLife: number;
   private players: PlayerConfig[];
+  /** Selected board background theme id (issue #168); persisted independently of the roster via boardThemeStorage. */
+  private boardThemeId: string;
   /** The player picked to start first, or null to default to seat 0 — a fresh per-game choice, never carried over from a previous game (issue #126). */
   private startingPlayer: PlayerConfig | null = null;
   /**
@@ -180,6 +193,12 @@ export class SetupScreen {
       this.startingLife = DEFAULT_STARTING_LIFE;
       this.players = Array.from({ length: this.playerCount }, (_, seat) => this.createDefaultPlayer(seat));
     }
+
+    // Same priority as the roster above: a previous game's config wins,
+    // otherwise fall back to the last theme persisted to localStorage
+    // (issue #168) — persisted independently of the roster since it's a
+    // display setting, not part of "who's playing".
+    this.boardThemeId = getBoardTheme(options.initialConfig?.boardTheme ?? loadLastBoardTheme(window.localStorage) ?? undefined).id;
   }
 
   private createDefaultPlayer(seat: number): PlayerConfig {
@@ -276,6 +295,7 @@ export class SetupScreen {
       return;
     }
     overlay.replaceChildren();
+    overlay.style.background = getBoardTheme(this.boardThemeId).backgroundColor;
 
     const rects = computeZoneRects(this.playerCount, window.innerWidth, window.innerHeight);
     this.players.forEach((player, index) => {
@@ -285,6 +305,11 @@ export class SetupScreen {
     overlay.appendChild(this.buildHub());
   }
 
+  /** Radial gradient string for a zone: player accent color at center fading to the selected board theme's background color at the edge (issue #168) — same shape the live board's drawZones uses. */
+  private zoneBackground(color: string): string {
+    return `radial-gradient(circle at 50% 50%, ${color} 0%, ${getBoardTheme(this.boardThemeId).backgroundColor} 75%)`;
+  }
+
   private buildZone(player: PlayerConfig, index: number, rect: ZoneRect): HTMLElement {
     const zone = document.createElement('div');
     zone.className = 'setup-zone';
@@ -292,7 +317,7 @@ export class SetupScreen {
     zone.style.top = `${rect.y}px`;
     zone.style.width = `${rect.width}px`;
     zone.style.height = `${rect.height}px`;
-    zone.style.background = `radial-gradient(circle at 50% 50%, ${player.color} 0%, ${BOARD_BACKGROUND_COLOR} 75%)`;
+    zone.style.background = this.zoneBackground(player.color);
 
     const rotated90 = rect.rotation === 90;
     const contentWidth = rotated90 ? rect.height : rect.width;
@@ -374,7 +399,7 @@ export class SetupScreen {
       }
       mini.addEventListener('pointerdown', () => {
         player.color = color;
-        zone.style.background = `radial-gradient(circle at 50% 50%, ${color} 0%, ${BOARD_BACKGROUND_COLOR} 75%)`;
+        zone.style.background = this.zoneBackground(color);
         nameField.style.caretColor = color;
         for (const sibling of Array.from(swatchRow.children)) {
           (sibling as HTMLElement).style.boxShadow = '';
@@ -481,6 +506,7 @@ export class SetupScreen {
     );
 
     hub.appendChild(this.buildRollRow());
+    hub.appendChild(this.buildThemeRow());
 
     // History view (issue #166): reachable from setup so a host can check
     // past results — winner and player list per game, most-recent-first —
@@ -544,6 +570,43 @@ export class SetupScreen {
     return row;
   }
 
+  /**
+   * Board theme picker (issue #168): a row of swatches, one per BOARD_THEMES
+   * entry, mirroring the per-zone player color swatches. Selecting one
+   * updates every zone's background (via a full re-render, same as the
+   * player-count/starting-life steppers) and, unlike a player color pick, is
+   * not tied to any focused input, so a full render() is safe here.
+   */
+  private buildThemeRow(): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'setup-hub-theme-row';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'setup-hub-stepper-label';
+    labelEl.textContent = 'Board Theme';
+    row.appendChild(labelEl);
+
+    const swatchRow = document.createElement('div');
+    swatchRow.className = 'setup-hub-theme-swatches';
+    for (const theme of BOARD_THEMES) {
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      swatch.className = 'setup-hub-theme-swatch';
+      swatch.style.background = theme.backgroundColor;
+      swatch.title = theme.label;
+      swatch.setAttribute('aria-label', theme.label);
+      swatch.setAttribute('aria-pressed', String(theme.id === this.boardThemeId));
+      swatch.classList.toggle('setup-hub-theme-swatch-active', theme.id === this.boardThemeId);
+      swatch.addEventListener('pointerdown', () => {
+        this.boardThemeId = theme.id;
+        this.render();
+      });
+      swatchRow.appendChild(swatch);
+    }
+    row.appendChild(swatchRow);
+    return row;
+  }
+
   private buildHubStepper(label: string, getValue: () => string, onChange: (delta: 1 | -1) => void): HTMLElement {
     const row = document.createElement('div');
     row.className = 'setup-hub-stepper-row';
@@ -592,8 +655,10 @@ export class SetupScreen {
         name: resolveSubmittedName(player, index, this.untouchedPlayers.has(player)),
       })),
       startingIndex,
+      boardTheme: this.boardThemeId,
     };
     saveLastRoster(window.localStorage, config);
+    saveLastBoardTheme(window.localStorage, this.boardThemeId);
     this.onStartCallback(config);
     this.close();
   }
