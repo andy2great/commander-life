@@ -10,6 +10,7 @@ import { applyEnergyDelta } from './game/energy';
 import { applyExperienceDelta } from './game/experience';
 import { addCustomCounter } from './game/customCounters';
 import { applyBoardShortcutDelta } from './game/boardShortcut';
+import { getBoardTheme } from './game/boardTheme';
 import type { SoundEvent, SoundPlayer } from './audio/soundPlayer';
 
 /** Records every sound-trigger call so tests can assert on game events without a real AudioContext. */
@@ -1909,5 +1910,56 @@ describe('canvas player-name text uses the display font, uppercase, tracked (iss
     expect(timerCall).toBeDefined();
     expect(timerCall!.font).toContain(DISPLAY_FONT_STACK);
     expect(timerCall!.letterSpacing).toBe('0px');
+  });
+});
+
+describe('zone background fill stays within the player accent hue edge-to-edge (issue #200)', () => {
+  /** Captures each zone's createRadialGradient stops, in call order, so the fill's stops can be asserted on directly. */
+  function createRadialGradientRecordingCtx(): {
+    ctx: CanvasRenderingContext2D;
+    radialGradientStops: Array<Array<[number, string]>>;
+  } {
+    const state: Record<string, unknown> = {};
+    const radialGradientStops: Array<Array<[number, string]>> = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'createRadialGradient') {
+          return () => {
+            const stops: Array<[number, string]> = [];
+            radialGradientStops.push(stops);
+            return { addColorStop: (offset: number, color: string) => stops.push([offset, color]) };
+          };
+        }
+        if (prop === 'createLinearGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, radialGradientStops };
+  }
+
+  it('renders each zone as a 3+ stop same-hue gradient whose outermost stop is never the board background color', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const { ctx, radialGradientStops } = createRadialGradientRecordingCtx();
+
+    game.render(ctx, 400, 800);
+
+    const boardBackgroundColor = getBoardTheme(undefined).backgroundColor;
+    expect(radialGradientStops.length).toBe(game.players.length);
+    radialGradientStops.forEach((stops) => {
+      expect(stops.length).toBeGreaterThanOrEqual(3);
+      const outermost = stops[stops.length - 1];
+      expect(outermost[0]).toBe(1);
+      expect(outermost[1].toLowerCase()).not.toBe(boardBackgroundColor.toLowerCase());
+    });
   });
 });

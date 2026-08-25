@@ -90,13 +90,13 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-/** Blends a player accent color toward white, for the arrow's "3D" shaded gradient. */
+/** Blends a player accent color toward white, e.g. for the arrow's "3D" shaded gradient. */
 function lightenColor(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);
   return `rgb(${Math.round(r + (255 - r) * amount)}, ${Math.round(g + (255 - g) * amount)}, ${Math.round(b + (255 - b) * amount)})`;
 }
 
-/** Blends a player accent color toward black, for the arrow's "3D" shaded gradient. */
+/** Blends a player accent color toward black, e.g. for the arrow's "3D" shaded gradient. */
 function darkenColor(hex: string, amount: number): string {
   const [r, g, b] = hexToRgb(hex);
   return `rgb(${Math.round(r * (1 - amount))}, ${Math.round(g * (1 - amount))}, ${Math.round(b * (1 - amount))})`;
@@ -925,6 +925,11 @@ export class Game {
   render(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     this.resize(width, height);
     ctx.clearRect(0, 0, width, height);
+    // Board theme (issue #168) now only shows as this base fill — zone fills
+    // themselves stay within the player's own accent hue (issue #200/R10)
+    // instead of blending toward it — so the per-theme swap stays visible.
+    ctx.fillStyle = this.boardBackgroundColor;
+    ctx.fillRect(0, 0, width, height);
 
     // Screen-shake (issue #88) only offsets what's drawn below, via ctx
     // translate — resize() above already recomputed zoneRects/controls from
@@ -974,9 +979,14 @@ export class Game {
       const cy = rect.y + rect.height / 2;
       const shortSide = Math.min(rect.width, rect.height);
 
+      const zoneColor = player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length];
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rect.width, rect.height) * 0.75);
-      gradient.addColorStop(0, player.color ?? PLAYER_COLORS[seat % PLAYER_COLORS.length]);
-      gradient.addColorStop(1, this.boardBackgroundColor);
+      // Same-hue 3-stop fill (R10): stays within the player's accent color
+      // across the whole zone instead of fading to the near-black board
+      // background at the outer edge.
+      gradient.addColorStop(0, lightenColor(zoneColor, 0.35));
+      gradient.addColorStop(0.55, zoneColor);
+      gradient.addColorStop(1, darkenColor(zoneColor, 0.35));
       ctx.fillStyle = gradient;
       ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
 
