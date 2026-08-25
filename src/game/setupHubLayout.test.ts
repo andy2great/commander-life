@@ -15,13 +15,28 @@ function expectHubClearsEveryZone(playerCount: number, width: number, height: nu
   }
 }
 
+// Common phone CSS widths, reused across tests below (issue #192 review: the
+// prior "typical viewport" test only exercised width=390, which let a
+// width-collapse regression for 6-8 players at other common widths, e.g.
+// 430, slip through unnoticed).
+const COMMON_PHONE_WIDTHS = [320, 360, 375, 390, 414, 430];
+
+// A hub smaller than this on either axis can no longer fit its own controls
+// (44px buttons, steppers, the Start Game CTA) usably — regression guard for
+// issue #192's review defect, where a fixed content-width estimate applied
+// uniformly to every zone collapsed maxWidth to a 6.7-42.5px sliver for 6-8
+// players at common phone widths (390, 430) even though nothing was close to
+// overlapping. Comfortably below the tightest *legitimate* squeeze (the
+// 5-player layout, ~120-150px) so it only fails on a real regression.
+const MIN_USABLE_HUB_SIZE = 100;
+
 describe('computeSetupHubMaxSize', () => {
   // The 5-player layout's full-height left-edge seat sits at the exact
   // same vertical center as the hub (previously the tightest fit, issue
   // #192) — only a width cap, not a height cap, can keep the hub clear of
   // it, across a range of common phone widths.
   it('keeps the hub clear of every zone for the 5-player layout across common phone widths', () => {
-    for (const width of [320, 360, 375, 390, 414, 430]) {
+    for (const width of COMMON_PHONE_WIDTHS) {
       expectHubClearsEveryZone(5, width, 800);
     }
   });
@@ -37,9 +52,27 @@ describe('computeSetupHubMaxSize', () => {
     }
   });
 
-  it('keeps the hub clear of every zone at every supported player count on a typical viewport', () => {
-    for (let playerCount = MIN_PLAYER_COUNT; playerCount <= MAX_PLAYER_COUNT; playerCount += 1) {
-      expectHubClearsEveryZone(playerCount, 390, 844);
+  it('keeps the hub clear of every zone at every supported player count across common phone widths on a typical viewport', () => {
+    for (const width of COMMON_PHONE_WIDTHS) {
+      for (let playerCount = MIN_PLAYER_COUNT; playerCount <= MAX_PLAYER_COUNT; playerCount += 1) {
+        expectHubClearsEveryZone(playerCount, width, 844);
+      }
+    }
+  });
+
+  // Regression guard (issue #192 review) for the width-collapse defect: a
+  // fixed, uniformly-applied content-width estimate let far-but-narrow
+  // columns (6-8 players, whose row-grid has 3-4 columns) spuriously starve
+  // maxWidth down to a 6.7-42.5px sliver at common phone widths, even though
+  // `expectHubClearsEveryZone`'s non-overlap check alone couldn't catch it
+  // (a trivially tiny hub always "clears" every zone).
+  it('never shrinks the hub below a usable size at any supported player count across common phone widths', () => {
+    for (const width of COMMON_PHONE_WIDTHS) {
+      for (let playerCount = MIN_PLAYER_COUNT; playerCount <= MAX_PLAYER_COUNT; playerCount += 1) {
+        const { maxWidth, maxHeight } = computeSetupHubMaxSize(playerCount, width, 844);
+        expect(maxWidth).toBeGreaterThanOrEqual(MIN_USABLE_HUB_SIZE);
+        expect(maxHeight).toBeGreaterThanOrEqual(MIN_USABLE_HUB_SIZE);
+      }
     }
   });
 });

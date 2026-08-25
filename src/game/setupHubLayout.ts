@@ -32,17 +32,31 @@ export interface Rect {
 export const ZONE_CONTENT_WIDTH = 280;
 export const ZONE_CONTENT_HEIGHT = 150;
 
+// Mirrors setupScreen.ts's buildZone, where the real `.setup-zone-content`
+// box is explicitly sized to the zone rect's own dimensions minus this
+// margin (`contentWidth - 20`/`contentHeight - 20`), regardless of rotation.
+const ZONE_CONTENT_MARGIN = 20;
+
 /**
  * Approximate bounding rect of a zone's control cluster, centered in the
  * zone rect. A 90°-rotated zone (the 5-player left-edge seat) swaps the
- * footprint's width/height, since the controls are rotated with it.
+ * *natural* footprint's width/height, since the controls are rotated with
+ * it — but the real `.setup-zone-content` box is always capped at the
+ * zone's own rect size (minus a small margin) regardless of rotation, so a
+ * narrow column (many players sharing a row) can never have a wider real
+ * footprint than the zone that contains it, even though the fixed
+ * ZONE_CONTENT_WIDTH/HEIGHT estimate is generous for a typical, unconstrained
+ * seat (issue #192 review: applying the fixed estimate uniformly starved
+ * maxWidth for 6-8 players on common phone widths).
  */
 export function zoneContentRect(rect: ZoneRect): Rect {
   const centerX = rect.x + rect.width / 2;
   const centerY = rect.y + rect.height / 2;
   const rotated = rect.rotation === 90;
-  const width = rotated ? ZONE_CONTENT_HEIGHT : ZONE_CONTENT_WIDTH;
-  const height = rotated ? ZONE_CONTENT_WIDTH : ZONE_CONTENT_HEIGHT;
+  const naturalWidth = rotated ? ZONE_CONTENT_HEIGHT : ZONE_CONTENT_WIDTH;
+  const naturalHeight = rotated ? ZONE_CONTENT_WIDTH : ZONE_CONTENT_HEIGHT;
+  const width = Math.min(naturalWidth, Math.max(rect.width - ZONE_CONTENT_MARGIN, 0));
+  const height = Math.min(naturalHeight, Math.max(rect.height - ZONE_CONTENT_MARGIN, 0));
   return { x: centerX - width / 2, y: centerY - height / 2, width, height };
 }
 
@@ -71,12 +85,14 @@ export interface SetupHubMaxSize {
  * the other overlays use) rather than a forced size, so the hub still
  * shrinks to fit its natural content when that's smaller than the cap.
  *
- * Only the 5-player layout's full-height left-edge seat ever constrains
- * `maxWidth`: every other zone's control cluster sits comfortably clear of
- * the shared center point horizontally. `maxHeight` is constrained by
- * every player count's top/bottom-row zones once the viewport is short
- * enough for their content bands (around the 25%/75% height marks) to
- * approach the vertical center.
+ * Each zone constrains whichever of `maxWidth`/`maxHeight` it needs less of
+ * (see the loop below) — in practice that means the 5-player layout's
+ * full-height left-edge seat, whose vertical span always contains the
+ * center point, is the only zone that ever constrains `maxWidth`; every
+ * ordinary row-grid zone sits well clear of the center vertically and so
+ * constrains `maxHeight` instead, once the viewport is short enough for
+ * their content bands (around the 25%/75% height marks) to approach the
+ * vertical center.
  */
 export function computeSetupHubMaxSize(playerCount: number, viewportWidth: number, viewportHeight: number): SetupHubMaxSize {
   const centerX = viewportWidth / 2;
@@ -96,12 +112,22 @@ export function computeSetupHubMaxSize(playerCount: number, viewportWidth: numbe
     // its vertical span always contains the center point and only the
     // horizontal axis can keep the hub clear of it.
     const widthCandidate = 2 * (Math.abs(contentCenterX - centerX) - content.width / 2);
-    if (widthCandidate > 0) {
-      maxWidth = Math.min(maxWidth, widthCandidate);
-    }
-
     const heightCandidate = 2 * (Math.abs(contentCenterY - centerY) - content.height / 2);
-    if (heightCandidate > 0) {
+
+    // Per the AABB non-overlap rule (rectsOverlap), only ONE axis needs to
+    // separate the hub from a given zone's content — not both. So when both
+    // axes offer separation for a zone (the common case for an ordinary
+    // row-grid seat: comfortably clear vertically, and only marginally clear
+    // horizontally because a many-column row leaves little horizontal
+    // margin), constrain only the less restrictive axis and leave the other
+    // one unconstrained by this zone. Applying both unconditionally (as a
+    // prior version of this function did) double-constrains every zone and
+    // starves maxWidth for 6-8 players on common phone widths, even though
+    // those zones are already fully protected by height alone (issue #192
+    // review).
+    if (widthCandidate > 0 && widthCandidate >= heightCandidate) {
+      maxWidth = Math.min(maxWidth, widthCandidate);
+    } else if (heightCandidate > 0) {
       maxHeight = Math.min(maxHeight, heightCandidate);
     }
   }
