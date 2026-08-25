@@ -35,6 +35,7 @@ import {
   resolveSubmittedName,
 } from '../game/playerRoster';
 import { rollForStartingSeat } from '../game/diceRoller';
+import { computeSetupHubMaxSize } from '../game/setupHubLayout';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
 import { BOARD_THEMES, DEFAULT_BOARD_THEME_ID, getBoardTheme } from '../game/boardTheme';
 import { loadLastBoardTheme, saveLastBoardTheme } from '../game/boardThemeStorage';
@@ -104,7 +105,7 @@ function injectStylesOnce(): void {
     .setup-zone-remove-btn:disabled { opacity: 0.3; }
     .setup-zone-commander-toggle { box-sizing: border-box; padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(0, 0, 0, 0.25); color: rgba(245, 243, 247, 0.65); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
     .setup-zone-commander-toggle-active { background: rgba(215, 165, 76, 0.35); color: #f0c98a; border-color: #d7a54c; }
-    .setup-hub { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: min(240px, 78vw); box-sizing: border-box; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
+    .setup-hub { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: min(240px, 78vw); box-sizing: border-box; background: linear-gradient(160deg, #211c29 0%, #1a1620 100%); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05); overflow-y: auto; }
     .setup-hub-title { margin: 0; text-align: center; font-size: 15px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; font-family: ${DISPLAY_FONT_STACK}; background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .setup-hub-stepper-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .setup-hub-stepper-label { color: #948fa3; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
@@ -457,6 +458,15 @@ export class SetupScreen {
   private buildHub(): HTMLElement {
     const hub = document.createElement('div');
     hub.className = 'setup-hub';
+    // Caps the hub's rendered size so it never grows into a player zone's
+    // controls (issue #192) — see computeSetupHubMaxSize for why only the
+    // 5-player layout's left-edge seat constrains width, while every
+    // player count's top/bottom-row zones can constrain height on short
+    // viewports. Paired with the `overflow-y: auto` rule above so content
+    // that doesn't fit scrolls within the hub instead of spilling out.
+    const hubMaxSize = computeSetupHubMaxSize(this.playerCount, window.innerWidth, window.innerHeight);
+    hub.style.maxWidth = `${hubMaxSize.maxWidth}px`;
+    hub.style.maxHeight = `${hubMaxSize.maxHeight}px`;
 
     const title = document.createElement('h1');
     title.className = 'setup-hub-title';
