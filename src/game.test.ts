@@ -2134,3 +2134,100 @@ describe('turn-indicator badge near the shared center control (issue #201)', () 
     });
   });
 });
+
+describe('board felt texture (issue #203)', () => {
+  /** Records the call order of fillRect/strokeStyle-with-stroke/fillStyle(gradient) to check the felt grain layers between the board fill and the zones. */
+  function createOrderRecordingCtx(): { ctx: CanvasRenderingContext2D; calls: string[] } {
+    const state: Record<string, unknown> = {};
+    const calls: string[] = [];
+    const ctx = new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'fillRect') {
+          return () => calls.push('fillRect');
+        }
+        if (prop === 'stroke') {
+          return () => calls.push(`stroke:${target.strokeStyle}`);
+        }
+        if (prop === 'createRadialGradient' || prop === 'createLinearGradient') {
+          return () => {
+            calls.push('createGradient');
+            return { addColorStop: () => {} };
+          };
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    return { ctx, calls };
+  }
+
+  /** The board draws several other strokes later (zone borders, control discs); the felt grain is the only thing that strokes before drawZones' first gradient, so isolate its two calls by that window. */
+  function feltStrokesBeforeFirstGradient(calls: string[]): string[] {
+    const firstGradientIndex = calls.indexOf('createGradient');
+    return calls.filter((call, i) => call.startsWith('stroke:') && i < firstGradientIndex);
+  }
+
+  it('draws the felt grain (two subtle strokes) after the board fill and before the zone gradients', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+    game.resize(400, 800);
+    const { ctx, calls } = createOrderRecordingCtx();
+
+    game.render(ctx, 400, 800);
+
+    const boardFillIndex = calls.indexOf('fillRect');
+    const feltStrokes = feltStrokesBeforeFirstGradient(calls);
+    const feltStrokeIndices = feltStrokes.map((call) => calls.indexOf(call));
+
+    expect(boardFillIndex).toBeGreaterThanOrEqual(0);
+    expect(feltStrokes).toHaveLength(2);
+    feltStrokeIndices.forEach((i) => expect(i).toBeGreaterThan(boardFillIndex));
+  });
+
+  it('draws a texture whose color is derived from the active board theme, for every BOARD_THEMES entry', () => {
+    const strokeStylesByTheme = BOARD_THEMES.map((theme) => {
+      const game = new Game({ playerCount: 4, startingLife: 40, players: [], boardTheme: theme.id });
+      game.resize(400, 800);
+      const { ctx, calls } = createOrderRecordingCtx();
+      game.render(ctx, 400, 800);
+      return feltStrokesBeforeFirstGradient(calls);
+    });
+
+    // Every theme draws the same two-stroke grain, and each theme's tint differs from the others'.
+    strokeStylesByTheme.forEach((styles) => expect(styles).toHaveLength(2));
+    const unique = new Set(strokeStylesByTheme.map((styles) => styles.join('|')));
+    expect(unique.size).toBe(BOARD_THEMES.length);
+  });
+
+  it('keeps the texture subtle (low alpha) so it cannot reduce life/name legibility', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+    game.resize(400, 800);
+    const { ctx, calls } = createOrderRecordingCtx();
+
+    game.render(ctx, 400, 800);
+
+    const feltStrokes = feltStrokesBeforeFirstGradient(calls);
+    expect(feltStrokes).toHaveLength(2);
+    feltStrokes.forEach((call) => {
+      const alpha = Number(call.match(/,\s*([\d.]+)\)$/)?.[1]);
+      expect(alpha).toBeLessThanOrEqual(0.1);
+    });
+  });
+
+  it('reuses the cached texture layout across frames at the same canvas size (no per-frame regeneration cost)', () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
+    game.resize(400, 800);
+    const first = createOrderRecordingCtx();
+    game.render(first.ctx, 400, 800);
+    const second = createOrderRecordingCtx();
+    game.render(second.ctx, 400, 800);
+
+    const strokesOf = (calls: string[]) => calls.filter((call) => call.startsWith('stroke:'));
+    expect(strokesOf(first.calls)).toEqual(strokesOf(second.calls));
+  });
+});
