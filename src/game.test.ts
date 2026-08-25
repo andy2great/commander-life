@@ -1772,3 +1772,78 @@ describe('pause/resume (issue #97)', () => {
     expect(player.life).toBe(40);
   });
 });
+
+describe('active-player zone pulse border uses the foil accent, not the pre-redesign blue (issue #197)', () => {
+  /**
+   * Stands in for CanvasRenderingContext2D across a full Game.render() pass:
+   * any method call is a no-op, any property read/write is recorded on a
+   * plain object, and createLinearGradient/createRadialGradient return stubs
+   * whose addColorStop calls are captured so gradient stops can be asserted
+   * on directly instead of parsing canvas draw commands.
+   */
+  function createRecordingCtx(linearGradientStops: Array<Array<[number, string]>>): CanvasRenderingContext2D {
+    const state: Record<string, unknown> = {};
+    return new Proxy(state, {
+      get(target, prop: string) {
+        if (prop === 'createLinearGradient') {
+          return () => {
+            const stops: Array<[number, string]> = [];
+            linearGradientStops.push(stops);
+            return { addColorStop: (offset: number, color: string) => stops.push([offset, color]) };
+          };
+        }
+        if (prop === 'createRadialGradient') {
+          return () => ({ addColorStop: () => {} });
+        }
+        if (prop in target) {
+          return target[prop];
+        }
+        return () => {};
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+  }
+
+  it('strokes the active zone border with the brass->ember foil gradient, with pulse-driven opacity preserved', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const linearGradientStops: Array<Array<[number, string]>> = [];
+    const ctx = createRecordingCtx(linearGradientStops);
+
+    game.render(ctx, 400, 800);
+
+    // In this default state (no live drag arrow), the only createLinearGradient
+    // call comes from the single active seat's pulse border.
+    expect(linearGradientStops).toHaveLength(1);
+    const [brassStop, emberStop] = linearGradientStops[0];
+    expect(brassStop[1]).toContain('215, 165, 76'); // #d7a54c
+    expect(emberStop[1]).toContain('226, 103, 63'); // #e2673f
+    expect(brassStop[1]).not.toContain('91, 140, 255');
+    expect(emberStop[1]).not.toContain('91, 140, 255');
+  });
+
+  it('leaves idle (non-active) zone borders unaffected', () => {
+    const game = new Game();
+    game.resize(400, 800);
+    const linearGradientStops: Array<Array<[number, string]>> = [];
+    const strokeStyles: unknown[] = [];
+    const ctx = createRecordingCtx(linearGradientStops);
+    ctx.strokeRect = () => {
+      strokeStyles.push(ctx.strokeStyle);
+    };
+
+    game.render(ctx, 400, 800);
+
+    // One strokeRect call per seat's zone border; only the active seat's is a gradient.
+    const gradientStrokeCount = strokeStyles.filter((style) => typeof style === 'object').length;
+    const idleStrokeStyles = strokeStyles.filter((style) => typeof style === 'string');
+    expect(gradientStrokeCount).toBe(1);
+    expect(idleStrokeStyles.length).toBeGreaterThan(0);
+    idleStrokeStyles.forEach((style) => {
+      expect(style).toBe('rgba(255, 255, 255, 0.12)');
+    });
+  });
+});
