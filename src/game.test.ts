@@ -1816,10 +1816,18 @@ describe('active-player zone pulse border uses the foil accent, not the pre-rede
 
     game.render(ctx, 400, 800);
 
-    // In this default state (no live drag arrow), the only createLinearGradient
-    // call comes from the single active seat's pulse border.
-    expect(linearGradientStops).toHaveLength(1);
-    const [brassStop, emberStop] = linearGradientStops[0];
+    // The shared control disc (issue #198) also calls createLinearGradient
+    // for its own bevel fill and rim highlight; isolate the zone pulse
+    // border's gradient by its distinguishing shape — both of its stops
+    // share one pulse-driven alpha, unlike the disc's gradients whose stops
+    // use fixed, differing alphas.
+    const stopAlpha = (stop: [number, string]): string | undefined => stop[1].match(/,\s*([\d.]+)\)/)?.[1];
+    const pulseGradients = linearGradientStops.filter(([first, second]) => {
+      const firstAlpha = stopAlpha(first);
+      return firstAlpha !== undefined && firstAlpha === stopAlpha(second);
+    });
+    expect(pulseGradients).toHaveLength(1);
+    const [brassStop, emberStop] = pulseGradients[0];
     expect(brassStop[1]).toContain('215, 165, 76'); // #d7a54c
     expect(emberStop[1]).toContain('226, 103, 63'); // #e2673f
     expect(brassStop[1]).not.toContain('91, 140, 255');
