@@ -68,3 +68,8 @@ R12. When a life, commander-damage, poison, or other tracked counter changes,
      (e.g. "-3", "+2") at the affected zone, animating with a rise-and-fade
      motion and oriented upright for that player's seat, in addition to the
      zone's existing color-wash feedback.
+
+R13. The board's background, beneath the player zones, shall render a
+     subtle code-drawn felt-like texture layered over its gradient fill, for
+     every board theme, using canvas drawing code only (no external image or
+     texture assets), without reducing life-total or player-name legibility.
