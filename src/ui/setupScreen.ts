@@ -29,6 +29,7 @@ import {
   resolveDisplayValue,
   resolveSubmittedName,
 } from '../game/playerRoster';
+import { defaultIconForSeat, PLAYER_ICON_IDS, type PlayerIconId } from '../game/playerIcons';
 import { rollForStartingSeat } from '../game/diceRoller';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
@@ -54,6 +55,18 @@ const REMOVE_PLAYER_ICON =
 const DIE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/></svg>';
 
+// Player icon picker (issue #167): SVG previews of the same small glyph set
+// game.ts draws on-canvas (drawPlayerIconGlyph et al.) — code-drawn vector
+// paths, no external assets, per docs/concept.md.
+const PLAYER_ICON_SVGS: Record<PlayerIconId, string> = {
+  star: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87L18.2 21 12 17.77 5.8 21 7 14.14l-5-4.87 7.1-1.01z"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l7 3v6c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V5l7-3z"/></svg>',
+  bolt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 1 0 10.5 10.5z"/></svg>',
+  flame: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-3 4-3 8a3 3 0 0 0 6 0c1 1 2 2.5 2 4.5A5 5 0 0 1 7 14.5C7 9 12 7 12 2z"/></svg>',
+  leaf: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6 2 2 6 2 12c0 5 4 9 9 9 1-6 4-10 9-11C19 5 16 2 12 2z"/></svg>',
+};
+
 export interface SetupScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
   root: HTMLElement;
@@ -77,6 +90,11 @@ function injectStylesOnce(): void {
     .setup-zone-swatches { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
     .setup-zone-mini-swatch { width: 20px; height: 20px; border-radius: 50%; border: none; padding: 0; flex: 0 0 auto; transition: transform 100ms ease, box-shadow 150ms ease; }
     .setup-zone-mini-swatch:active { transform: scale(0.85); }
+    .setup-zone-icons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .setup-zone-icon-btn { box-sizing: border-box; width: 26px; height: 26px; border-radius: 50%; border: none; padding: 5px; flex: 0 0 auto; background: rgba(0, 0, 0, 0.25); color: rgba(245, 243, 247, 0.65); transition: transform 100ms ease, box-shadow 150ms ease; }
+    .setup-zone-icon-btn svg { width: 100%; height: 100%; }
+    .setup-zone-icon-btn:active { transform: scale(0.85); }
+    .setup-zone-icon-btn-active { background: rgba(255, 255, 255, 0.25); color: #f5f3f7; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65); }
     .setup-zone-name-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; max-width: 100%; }
     .setup-zone-name { min-width: 0; flex: 1 1 70px; max-width: 160px; color: #f5f3f7; font-size: 15px; font-weight: 700; text-align: center; background: rgba(0, 0, 0, 0.25); border: none; border-radius: 8px; padding: 6px 8px; outline: none; font-family: system-ui, sans-serif; }
     .setup-zone-name::placeholder { color: rgba(245, 243, 247, 0.55); font-weight: 400; }
@@ -146,7 +164,9 @@ export class SetupScreen {
     if (source) {
       this.playerCount = clampPlayerCount(source.playerCount);
       this.startingLife = clampStartingLife(source.startingLife);
-      this.players = source.players.slice(0, this.playerCount).map((player) => ({ ...player }));
+      this.players = source.players
+        .slice(0, this.playerCount)
+        .map((player, index) => ({ icon: defaultIconForSeat(index), ...player }));
       this.players.forEach((player, index) => {
         if (player.name === defaultNameForSeat(index)) {
           this.untouchedPlayers.add(player);
@@ -364,6 +384,33 @@ export class SetupScreen {
       swatchRow.appendChild(mini);
     }
 
+    // Icon picker (issue #167): lets each player independently choose a
+    // code-drawn glyph to identify their seat, beyond accent color alone —
+    // two players may pick the same icon without error. The chosen icon is
+    // rendered on the live board in game.ts's drawPlayerIconBadge.
+    const iconRow = document.createElement('div');
+    iconRow.className = 'setup-zone-icons';
+    const currentIcon = player.icon ?? defaultIconForSeat(index);
+    for (const icon of PLAYER_ICON_IDS) {
+      const iconBtn = document.createElement('button');
+      iconBtn.type = 'button';
+      iconBtn.className = 'setup-zone-icon-btn';
+      iconBtn.innerHTML = PLAYER_ICON_SVGS[icon];
+      iconBtn.title = icon;
+      iconBtn.classList.toggle('setup-zone-icon-btn-active', icon === currentIcon);
+      iconBtn.setAttribute('aria-pressed', String(icon === currentIcon));
+      iconBtn.addEventListener('pointerdown', () => {
+        player.icon = icon;
+        for (const sibling of Array.from(iconRow.children)) {
+          (sibling as HTMLElement).classList.remove('setup-zone-icon-btn-active');
+          sibling.setAttribute('aria-pressed', 'false');
+        }
+        iconBtn.classList.add('setup-zone-icon-btn-active');
+        iconBtn.setAttribute('aria-pressed', 'true');
+      });
+      iconRow.appendChild(iconBtn);
+    }
+
     // "Two commanders" toggle (issue #165): marks this player as running a
     // Partner pair or a Commander + Background instead of a single
     // commander, so commander damage dealt to opponents is tracked as two
@@ -383,6 +430,7 @@ export class SetupScreen {
 
     content.appendChild(nameRow);
     content.appendChild(swatchRow);
+    content.appendChild(iconRow);
     content.appendChild(commanderToggle);
     zone.appendChild(content);
     return zone;
@@ -552,7 +600,7 @@ export class SetupScreen {
 }
 
 function defaultPlayer(seat: number): PlayerConfig {
-  return { name: `Player ${seat + 1}`, color: PLAYER_COLORS[seat % PLAYER_COLORS.length] };
+  return { name: `Player ${seat + 1}`, color: PLAYER_COLORS[seat % PLAYER_COLORS.length], icon: defaultIconForSeat(seat) };
 }
 
 function clampPlayerCount(count: number): number {

@@ -75,4 +75,36 @@ describe('saveLastRoster / loadLastRoster', () => {
     };
     expect(() => saveLastRoster(throwingStorage, { playerCount: 3, startingLife: 40, players: makePlayers(3) })).not.toThrow();
   });
+
+  it('round-trips a saved icon choice per player, including duplicate icons across players', () => {
+    const storage = new MemoryStorage();
+    const players: PlayerConfig[] = [
+      { name: 'Alice', color: '#e11d48', icon: 'star' },
+      { name: 'Bob', color: '#14b8a6', icon: 'star' },
+      { name: 'Cara', color: '#f59e0b', icon: 'bolt' },
+    ];
+    const config = { playerCount: 3, startingLife: 40, players };
+    saveLastRoster(storage, config);
+    expect(loadLastRoster(storage)).toEqual(config);
+  });
+
+  it('returns null when a player icon is not one of the known ids', () => {
+    const storage = new MemoryStorage();
+    const players = [
+      { name: 'Alice', color: '#e11d48', icon: 'not-a-real-icon' },
+      { name: 'Bob', color: '#14b8a6' },
+      { name: 'Cara', color: '#f59e0b' },
+    ];
+    storage.setItem('commander-life:last-roster', JSON.stringify({ playerCount: 3, startingLife: 40, players }));
+    expect(loadLastRoster(storage)).toBeNull();
+  });
+
+  it('loads a roster saved before icons existed (icon field absent)', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      'commander-life:last-roster',
+      JSON.stringify({ playerCount: 3, startingLife: 40, players: makePlayers(3) }),
+    );
+    expect(loadLastRoster(storage)).toEqual({ playerCount: 3, startingLife: 40, players: makePlayers(3) });
+  });
 });
