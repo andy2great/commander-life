@@ -4,6 +4,7 @@ import { createCommanderDamageState, type Player, type UndoAction } from '../gam
 import { createPoisonState } from '../game/poison';
 import { createEnergyState } from '../game/energy';
 import { createExperienceState } from '../game/experience';
+import { addCustomCounter, createCustomCountersState } from '../game/customCounters';
 import type { ScreenShakeTrigger } from '../game/screenShake';
 import type { ZoneEffectTrigger, ZoneEffectType } from '../game/zoneEffect';
 import { createStatsState, createStatsTrigger } from '../game/stats';
@@ -190,6 +191,115 @@ describe('buildDamageTypeDefs', () => {
     experience.apply(-1);
     expect(experience.getValue()).toBe(0);
     expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('offers one toggle per custom counter for a self-target pair, none for an attacker->target pair (issue #171)', () => {
+    const [attacker, target] = makePlayers();
+    const customCountersState = createCustomCountersState(['a', 'b']);
+    addCustomCounter(customCountersState, attacker.id, 'Storm Count', makeUndoStack());
+
+    const selfTypes = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState([attacker]),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      createExperienceState(['a']),
+      [attacker],
+      makeUndoStack(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      customCountersState,
+    );
+    expect(selfTypes.map((type) => type.label)).toContain('Storm Count');
+
+    const crossTypes = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState([attacker, target]),
+      createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      customCountersState,
+    );
+    expect(crossTypes.map((type) => type.label)).not.toContain('Storm Count');
+  });
+
+  it('reads/writes a custom counter with no clamp, and marks it removable', () => {
+    const [attacker] = makePlayers();
+    const customCountersState = createCustomCountersState(['a']);
+    const counter = addCustomCounter(customCountersState, attacker.id, 'Storm Count', makeUndoStack());
+    const undoStack = makeUndoStack();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState([attacker]),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      createExperienceState(['a']),
+      [attacker],
+      undoStack,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      customCountersState,
+    );
+    const custom = types.find((type) => type.key === `custom:${counter.id}`)!;
+
+    expect(custom.removable).toBe(true);
+    expect(custom.getValue()).toBe(0);
+
+    custom.apply(-1);
+    expect(custom.getValue()).toBe(-1);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.actions[0].undo();
+    expect(custom.getValue()).toBe(0);
+  });
+
+  it('removes a custom counter via onRemove, undoably', () => {
+    const [attacker] = makePlayers();
+    const customCountersState = createCustomCountersState(['a']);
+    const counter = addCustomCounter(customCountersState, attacker.id, 'Storm Count', makeUndoStack());
+    const undoStack = makeUndoStack();
+
+    const types = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState([attacker]),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      createExperienceState(['a']),
+      [attacker],
+      undoStack,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      customCountersState,
+    );
+    const custom = types.find((type) => type.key === `custom:${counter.id}`)!;
+
+    custom.onRemove!();
+    expect(customCountersState[attacker.id]).toHaveLength(0);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.actions[0].undo();
+    expect(customCountersState[attacker.id]).toEqual([counter]);
   });
 
   it('omits commander damage and lifelink for a self-target pair', () => {
