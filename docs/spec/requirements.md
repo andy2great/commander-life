@@ -29,10 +29,9 @@ R5. On the pre-game setup screen, the shared center hub shall never visually
 R6. The pre-game setup hub shall show only the essential table-wide controls
     (player count, starting life, and Start Game) by default; roll-for-start,
     board theme, and match history shall be reachable from a secondary
-    control that opens using the same dimmed bottom-sheet pattern as the
-    in-game attack/shortcut/history menus, so the default hub's footprint
-    stays small enough to fit the shared center area without competing with
-    player zone controls for space.
+    control that opens the docked settings panel described in R17, so the
+    default hub's footprint stays small enough to fit the shared center area
+    without competing with player zone controls for space.
 
 R7. The active player's zone shall render its pulsing highlight border using the
     app's foil accent color (the brass `#d7a54c` → ember `#e2673f` gradient
@@ -93,3 +92,12 @@ R16. Every interactive control's rendered visual bounds — including any
      beyond its tappable/hit-tested area, on both canvas-drawn controls and
      DOM controls; a player shall never see a control that looks larger than
      the region that actually responds to their tap.
+
+R17. On the pre-game setup screen, secondary table-wide settings
+     (roll-for-start, board theme, match history) shall be presented in a
+     side panel docked to a screen edge, openable and closable from the
+     setup hub, that never dims, obscures, or blocks pointer interaction
+     with the seat zones or the center hub, so that table-wide settings
+     and per-seat player configuration can be adjusted at the same time.
+     While the panel is open, the seat-zone grid shall reflow to the
+     remaining space rather than being covered.
