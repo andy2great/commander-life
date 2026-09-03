@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Game, clamp, computeOverlaySafeArea, computeZoneRects, resolveOverlayViewportSize } from './game';
 import { DISPLAY_FONT_STACK } from './ui/displayFont';
-import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS } from './ui/damagePanel';
+import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS, TURN_HOLD_CONFIRM_WINDOW_MS } from './ui/damagePanel';
 import { UNDO_RADIUS_RATIO } from './ui/controls';
 import { clockwiseSeatOrder } from './game/turn';
 import { BOARD_THEMES } from './game/boardTheme';
@@ -282,11 +282,12 @@ describe('Game', () => {
 
       game.beginTurnHold(50, zoneHeight - 10); // seat 0's zone, the active seat
 
-      expect(game.turnHoldRing).toEqual({ x: 50, y: zoneHeight - 10, progress: 0 });
+      expect(game.turnHoldRing).toEqual({ x: 50, y: zoneHeight - 10, progress: 0, armed: false });
 
       game.update(LONG_PRESS_MS / 1000 / 2);
 
       expect(game.turnHoldRing?.progress).toBeCloseTo(0.5);
+      expect(game.turnHoldRing?.armed).toBe(false);
     });
 
     it('shows no ring when pressing a non-active zone', () => {
@@ -373,6 +374,76 @@ describe('Game', () => {
       expect(game.turnHoldRing).toBeNull();
       expect(game.activeIndex).toBe(1);
       expect(game.passTurnFlashSeat).toBe(0);
+    });
+
+    describe('arm/confirm window (issue #229)', () => {
+      it('arming at LONG_PRESS_MS marks the ring armed without passing the turn yet', () => {
+        const game = new Game();
+        game.resize(400, 800);
+        const zoneHeight = 800 / game.playerCount;
+
+        game.beginTurnHold(50, zoneHeight - 10);
+        game.update(LONG_PRESS_MS / 1000);
+        game.armTurnHold();
+
+        expect(game.turnHoldRing?.armed).toBe(true);
+        expect(game.activeIndex).toBe(0);
+      });
+
+      it('armed-and-released-in-window: releasing shortly after arming passes the turn', () => {
+        const game = new Game();
+        game.resize(400, 800);
+        const zoneHeight = 800 / game.playerCount;
+
+        game.beginTurnHold(50, zoneHeight - 10);
+        game.update(LONG_PRESS_MS / 1000);
+        game.armTurnHold();
+        game.update(TURN_HOLD_CONFIRM_WINDOW_MS / 1000 / 2); // still within the confirmation window
+
+        game.endTurnHold();
+
+        expect(game.activeIndex).toBe(1);
+        expect(game.turnHoldRing).toBeNull();
+      });
+
+      it('armed-but-held-past-the-window: staying pressed past the confirmation window resets to idle without passing the turn', () => {
+        const game = new Game();
+        game.resize(400, 800);
+        const zoneHeight = 800 / game.playerCount;
+
+        game.beginTurnHold(50, zoneHeight - 10);
+        game.update(LONG_PRESS_MS / 1000);
+        game.armTurnHold();
+        game.update(TURN_HOLD_CONFIRM_WINDOW_MS / 1000 + 0.05); // past the confirmation window, still held
+
+        expect(game.turnHoldRing).toBeNull(); // reset to idle while still pressed
+        expect(game.activeIndex).toBe(0);
+
+        // Eventually lifting the still-idle hold must not retroactively pass the turn.
+        game.endTurnHold();
+
+        expect(game.activeIndex).toBe(0);
+      });
+
+      it('a fresh press-and-hold after an armed-and-reset hold can still pass the turn normally', () => {
+        const game = new Game();
+        game.resize(400, 800);
+        const zoneHeight = 800 / game.playerCount;
+
+        game.beginTurnHold(50, zoneHeight - 10);
+        game.update(LONG_PRESS_MS / 1000);
+        game.armTurnHold();
+        game.update(TURN_HOLD_CONFIRM_WINDOW_MS / 1000 + 0.05); // resets to idle
+        game.endTurnHold(); // lift, no-op
+
+        // Re-press and hold through to a release inside the confirmation window.
+        game.beginTurnHold(50, zoneHeight - 10);
+        game.update(LONG_PRESS_MS / 1000);
+        game.armTurnHold();
+        game.endTurnHold();
+
+        expect(game.activeIndex).toBe(1);
+      });
     });
   });
 

@@ -8,7 +8,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Game, computeZoneRects } from './game';
 import { CONTROL_GAP_RATIO, PAUSE_RADIUS_RATIO, SHORTCUT_RADIUS_RATIO, UNDO_RADIUS_RATIO, UndoControl } from './ui/controls';
-import { attachTapAndLongPress, LONG_PRESS_MS, type TapGestureHandlers } from './ui/damagePanel';
+import {
+  attachTapAndLongPress,
+  LONG_PRESS_MS,
+  TURN_HOLD_CONFIRM_WINDOW_MS,
+  type TapGestureHandlers,
+} from './ui/damagePanel';
 
 // Minimal addEventListener/removeEventListener stand-in so attachTapAndLongPress
 // can be exercised without a DOM (vitest here runs with environment: 'node'),
@@ -265,6 +270,64 @@ describe("a long-press starting on a shared control never passes the turn, even 
     element.dispatch('pointerup', { clientX: centerX, clientY: centerY });
 
     expect(game.activeIndex).toBe(3);
+    vi.useRealTimers();
+  });
+});
+
+describe('resting a finger on the active zone past the confirm window no longer silently passes the turn (issue #229)', () => {
+  // Mirrors main.ts's real wiring: onLongPress only arms the hold,
+  // onPressEnd's endTurnHold() is what actually commits (or cancels) it —
+  // as opposed to the older describe blocks above, which call
+  // passTurnFromZoneLongPress directly from onLongPress to pin the
+  // now-superseded single-shot commit behavior of that method in isolation.
+  function wireLikeMain(element: FakeElement, game: Game): void {
+    attachTapAndLongPress(element as unknown as HTMLElement, {
+      onPressStart: () => {
+        game.beginTurnHold(50, 10);
+      },
+      onTap: () => {},
+      onLongPress: () => game.armTurnHold(),
+      onPressEnd: () => game.endTurnHold(),
+    });
+  }
+
+  it('armed-and-released-in-window: releasing shortly after the 500ms hold passes the turn', () => {
+    vi.useFakeTimers();
+    const element = new FakeElement();
+    const game = new Game();
+    game.resize(400, 800); // seat 0's zone covers (50, 10), seat 0 is the active seat
+
+    wireLikeMain(element, game);
+
+    element.dispatch('pointerdown', { clientX: 50, clientY: 10 });
+    vi.advanceTimersByTime(LONG_PRESS_MS); // fires onLongPress -> game.armTurnHold()
+    // Mirrors main.ts's rAF loop calling game.update(dt) every frame while
+    // the pointer is still down — here, a frame or two still comfortably
+    // inside the confirmation window.
+    game.update(TURN_HOLD_CONFIRM_WINDOW_MS / 1000 / 2);
+    element.dispatch('pointerup', { clientX: 50, clientY: 10 });
+
+    expect(game.activeIndex).toBe(1);
+    vi.useRealTimers();
+  });
+
+  it('armed-but-held-past-the-window: resting a finger past the confirmation window never passes the turn, even on eventual release', () => {
+    vi.useFakeTimers();
+    const element = new FakeElement();
+    const game = new Game();
+    game.resize(400, 800);
+
+    wireLikeMain(element, game);
+
+    element.dispatch('pointerdown', { clientX: 50, clientY: 10 });
+    vi.advanceTimersByTime(LONG_PRESS_MS); // fires onLongPress -> game.armTurnHold()
+    // Finger rests on the zone well past the confirmation window without
+    // lifting — main.ts's rAF loop keeps calling game.update(dt), which is
+    // what actually resets an armed-but-unreleased hold back to idle.
+    game.update(TURN_HOLD_CONFIRM_WINDOW_MS / 1000 + 1);
+    element.dispatch('pointerup', { clientX: 50, clientY: 10 });
+
+    expect(game.activeIndex).toBe(0);
     vi.useRealTimers();
   });
 });

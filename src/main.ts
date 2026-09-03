@@ -185,11 +185,16 @@ function startGame(config: GameConfig): void {
         attackMenu.open(drag.fromPlayerId, drag.toPlayerId);
       }
     },
-    onLongPress: (event) => {
-      // Long-pressing the currently active player's zone passes the turn
-      // (issue #64, replacing the removed center PassTurnControl); any other
-      // zone, or a shared control, is a no-op inside passTurnFromZoneLongPress.
-      game.passTurnFromZoneLongPress(event.clientX, event.clientY);
+    onLongPress: () => {
+      // Long-pressing the currently active player's zone arms the pass-turn
+      // hold (issue #64, replacing the removed center PassTurnControl); any
+      // other zone, or a shared control, never had a hold to arm in the
+      // first place (beginTurnHold left it null). Arming alone doesn't pass
+      // the turn — onPressEnd's endTurnHold() below only commits if the
+      // pointer releases within the confirmation window, so resting a
+      // finger on the zone past that window resets to idle instead of
+      // silently passing the turn (issue #229).
+      game.armTurnHold();
     },
     onPressEnd: () => {
       game.endDrag();
