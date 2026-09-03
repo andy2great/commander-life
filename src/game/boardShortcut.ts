@@ -87,3 +87,64 @@ export function applyBoardShortcutDelta(
     },
   });
 }
+
+export interface BoardShortcutSession {
+  /** Selects which option the shared stepper currently targets, resetting the pending amount to 0 (matches the pre-#230 "switching toggles resets the counter" behavior). */
+  select(option: BoardShortcutOption): void;
+  /** Clears the pending selection (e.g. switching to the "End game" toggle), so a later `commit()` no-ops until an option is selected again. */
+  deselect(): void;
+  /** Adjusts the pending amount by one stepper tap. No-op if no option is selected. */
+  step(delta: 1 | -1): void;
+  /** Current pending amount for the selected option (0 if none selected). */
+  getAmount(): number;
+  /** True once an option is selected, so callers can reveal/hide the stepper+Apply row. */
+  hasSelection(): boolean;
+}
+
+/**
+ * Batches the board shortcut menu's toggle selection and shared +/- counter
+ * into a single commit, applied via `applyBoardShortcutDelta` regardless of
+ * how the menu closes (issue #230: backdrop tap, X, or an explicit Apply tap
+ * must all commit the pending value, matching AttackMenu's
+ * commit-on-any-dismissal model instead of discarding it unless Apply was
+ * tapped). No-op if no option was ever selected, or the pending amount is
+ * still 0 (nothing was stepped).
+ */
+export function createBoardShortcutSession(
+  players: Player[],
+  getActiveIndex: () => number,
+  undoStack: UndoStack,
+  sound?: SoundPlayer,
+  shake?: ScreenShakeTrigger,
+  zoneEffects?: ZoneEffectTrigger,
+  stats?: StatsTrigger,
+): BoardShortcutSession & { commit(): void } {
+  let selected: BoardShortcutOption | null = null;
+  let amount = 0;
+  return {
+    select(option: BoardShortcutOption): void {
+      selected = option;
+      amount = 0;
+    },
+    deselect(): void {
+      selected = null;
+      amount = 0;
+    },
+    step(delta: 1 | -1): void {
+      if (!selected) {
+        return;
+      }
+      amount += delta;
+    },
+    getAmount: () => amount,
+    hasSelection: () => selected !== null,
+    commit(): void {
+      if (!selected) {
+        return;
+      }
+      applyBoardShortcutDelta(players, getActiveIndex(), selected.scope, amount, undoStack, sound, shake, zoneEffects, stats);
+      selected = null;
+      amount = 0;
+    },
+  };
+}

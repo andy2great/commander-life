@@ -148,3 +148,11 @@ R22. The active player's pass-turn long-press gesture shall arm once the
      idle without passing the turn, requiring the player to release and
      re-press to try again. Existing cancel-by-lift-before-arming and
      cancel-by-move-beyond-tolerance behavior shall be unchanged.
+
+R23. The board-wide shortcut menu shall commit its currently selected
+     toggle and stepped counter value when dismissed by any means (backdrop
+     tap, X/close control, or hardware back), consistent with the
+     attacker/target damage menu's commit-on-close behavior, instead of
+     discarding the stepped value unless an explicit "Apply" control was
+     tapped. An explicit "Apply" affordance may remain as an alternate way
+     to close-and-commit but shall no longer be the only path that commits.

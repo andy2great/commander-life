@@ -16,7 +16,7 @@
 // above), consistent with the #56 precedent that manually ending the game
 // must never happen on a single tap.
 
-import { BOARD_SHORTCUT_OPTIONS, applyBoardShortcutDelta, type BoardShortcutOption } from '../game/boardShortcut';
+import { BOARD_SHORTCUT_OPTIONS, createBoardShortcutSession, type BoardShortcutOption } from '../game/boardShortcut';
 import type { Player, UndoStack } from '../game/commanderDamage';
 import type { SoundPlayer } from '../audio/soundPlayer';
 import type { ScreenShakeTrigger } from '../game/screenShake';
@@ -111,6 +111,7 @@ export class BoardShortcutMenu {
   private readonly onOpenChange?: (open: boolean) => void;
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
+  private session: ReturnType<typeof createBoardShortcutSession> | null = null;
 
   constructor(options: BoardShortcutMenuOptions) {
     this.root = options.root;
@@ -171,6 +172,11 @@ export class BoardShortcutMenu {
     this.onOpenChange?.(true);
   }
 
+  /**
+   * Closing by any means — backdrop tap, the X control, or opening over an
+   * already-open menu — commits whatever the shared stepper is currently set
+   * to (issue #230), the same way AttackMenu.close() commits its session.
+   */
   close(): void {
     if (this.overlay) {
       this.overlay.remove();
@@ -181,6 +187,10 @@ export class BoardShortcutMenu {
       detach();
     }
     this.holdToRepeatDetachFns = [];
+    if (this.session) {
+      this.session.commit();
+      this.session = null;
+    }
   }
 
   /**
@@ -209,8 +219,16 @@ export class BoardShortcutMenu {
     endGamePanel.style.display = 'none';
 
     const toggleButtons = new Map<BoardShortcutOption['scope'] | 'endGame', HTMLButtonElement>();
-    let selected: BoardShortcutOption | null = null;
-    let amount = 0;
+    const session = createBoardShortcutSession(
+      this.players,
+      this.getActiveIndex,
+      this.undoStack,
+      this.sound,
+      this.shake,
+      this.zoneEffects,
+      this.stats,
+    );
+    this.session = session;
 
     const activateToggle = (key: BoardShortcutOption['scope'] | 'endGame'): void => {
       for (const [scope, button] of toggleButtons) {
@@ -219,8 +237,7 @@ export class BoardShortcutMenu {
     };
 
     const selectOption = (option: BoardShortcutOption): void => {
-      selected = option;
-      amount = 0;
+      session.select(option);
       valueEl.textContent = '0';
       counterRow.style.display = 'flex';
       endGamePanel.style.display = 'none';
@@ -228,7 +245,7 @@ export class BoardShortcutMenu {
     };
 
     const selectEndGame = (): void => {
-      selected = null;
+      session.deselect();
       counterRow.style.display = 'none';
       endGamePanel.style.display = 'flex';
       resetEndGamePanel();
@@ -265,8 +282,8 @@ export class BoardShortcutMenu {
     minusButton.textContent = '−';
     this.holdToRepeatDetachFns.push(
       attachHoldToRepeat(minusButton, () => {
-        amount -= 1;
-        valueEl.textContent = String(amount);
+        session.step(-1);
+        valueEl.textContent = String(session.getAmount());
       }),
     );
 
@@ -276,8 +293,8 @@ export class BoardShortcutMenu {
     plusButton.textContent = '+';
     this.holdToRepeatDetachFns.push(
       attachHoldToRepeat(plusButton, () => {
-        amount += 1;
-        valueEl.textContent = String(amount);
+        session.step(1);
+        valueEl.textContent = String(session.getAmount());
       }),
     );
 
@@ -293,20 +310,8 @@ export class BoardShortcutMenu {
     applyButton.textContent = 'Apply';
     applyButton.addEventListener('pointerdown', (event) => {
       event.stopPropagation();
-      if (!selected) {
-        return;
-      }
-      applyBoardShortcutDelta(
-        this.players,
-        this.getActiveIndex(),
-        selected.scope,
-        amount,
-        this.undoStack,
-        this.sound,
-        this.shake,
-        this.zoneEffects,
-        this.stats,
-      );
+      // Apply is now just one more way to close-and-commit (issue #230);
+      // close() commits whatever the session's pending selection/amount is.
       this.close();
     });
 
