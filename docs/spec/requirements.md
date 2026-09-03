@@ -165,3 +165,8 @@ R24. Zone-to-zone and self-target drag gestures shall apply a small hit-test
      momentary few-pixel crossing. This shall apply at all supported player
      counts (2-8), where the effect is most pronounced at 6-8 players due to
      smaller zone size.
+
+R25. The pre-game setup hub's player-count and starting-life steppers shall
+     support the same hold-to-repeat acceleration already used by in-game
+     +/- steppers, instead of requiring one discrete tap per increment,
+     without introducing visible rendering jank during a repeat burst.
