@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyBoardShortcutDelta, BOARD_SHORTCUT_OPTIONS, boardShortcutTargets } from './boardShortcut';
+import { applyBoardShortcutDelta, BOARD_SHORTCUT_OPTIONS, boardShortcutTargets, createBoardShortcutSession } from './boardShortcut';
 import type { Player, UndoAction } from './commanderDamage';
 import type { ScreenShakeTrigger } from './screenShake';
 import { DAMAGE_EFFECT_COLOR, HEAL_EFFECT_COLOR, type ZoneEffectTrigger, type ZoneEffectType } from './zoneEffect';
@@ -192,5 +192,91 @@ describe('applyBoardShortcutDelta', () => {
     expect(statsState.lifeGained[players[1].id]).toBe(2);
     expect(statsState.lifeGained[players[2].id]).toBe(2);
     expect(statsState.biggestHit).toBeNull();
+  });
+});
+
+describe('createBoardShortcutSession', () => {
+  it('commits the selected option and stepped amount on commit(), without a separate explicit Apply (issue #230)', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const session = createBoardShortcutSession(players, () => 0, undoStack);
+
+    session.select(BOARD_SHORTCUT_OPTIONS[0]); // opponents
+    session.step(1);
+    session.step(1);
+    session.step(1);
+    session.commit();
+
+    expect(players.map((player) => player.life)).toEqual([40, 37, 37]);
+    expect(undoStack.actions).toHaveLength(1);
+
+    undoStack.undoLast();
+
+    expect(players.map((player) => player.life)).toEqual([40, 40, 40]);
+  });
+
+  it('is a no-op commit when dismissed without ever selecting an option', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const session = createBoardShortcutSession(players, () => 0, undoStack);
+
+    session.commit();
+
+    expect(players.map((player) => player.life)).toEqual([40, 40, 40]);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('is a no-op commit when an option is selected but the stepper is left at its default (no-op) value', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const session = createBoardShortcutSession(players, () => 0, undoStack);
+
+    session.select(BOARD_SHORTCUT_OPTIONS[1]); // all
+    session.commit();
+
+    expect(players.map((player) => player.life)).toEqual([40, 40, 40]);
+    expect(undoStack.actions).toHaveLength(0);
+  });
+
+  it('resets the pending amount to 0 when switching which option is selected', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const session = createBoardShortcutSession(players, () => 0, undoStack);
+
+    session.select(BOARD_SHORTCUT_OPTIONS[0]);
+    session.step(1);
+    session.step(1);
+    session.select(BOARD_SHORTCUT_OPTIONS[1]);
+
+    expect(session.getAmount()).toBe(0);
+  });
+
+  it('deselect() clears the pending selection so a later commit() no-ops', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const session = createBoardShortcutSession(players, () => 0, undoStack);
+
+    session.select(BOARD_SHORTCUT_OPTIONS[0]);
+    session.step(1);
+    session.deselect();
+    session.commit();
+
+    expect(players.map((player) => player.life)).toEqual([40, 40, 40]);
+    expect(undoStack.actions).toHaveLength(0);
+    expect(session.hasSelection()).toBe(false);
+  });
+
+  it('only commits once per selection: a second commit() call after one is a no-op', () => {
+    const players = makePlayers(3);
+    const undoStack = new FakeUndoStack();
+    const session = createBoardShortcutSession(players, () => 0, undoStack);
+
+    session.select(BOARD_SHORTCUT_OPTIONS[0]);
+    session.step(1);
+    session.step(1);
+    session.commit();
+    session.commit();
+
+    expect(undoStack.actions).toHaveLength(1);
   });
 });
