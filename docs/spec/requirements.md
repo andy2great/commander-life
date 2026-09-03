@@ -109,3 +109,12 @@ R18. The pre-game setup hub's unconstrained preferred width shall be no
      `computeSetupHubMaxSize` (or its equivalent) shall continue to shrink
      the hub below this preferred width, on a per-zone basis, whenever a
      seat zone's control-cluster footprint would otherwise be covered.
+
+R19. Any press that starts within an interactive control's hit-tested
+     region — the shared center disc's Undo/Shortcut/Pause controls, and
+     every DOM button rendered over the board or its overlays — shall
+     resolve exclusively to that control's own tap action. It shall never
+     also arm, accumulate progress toward, or commit the active player's
+     zone long-press-to-pass-turn gesture, nor a zone-to-zone damage drag,
+     regardless of how long the press is held or how far it moves before
+     release.
