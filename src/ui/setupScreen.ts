@@ -48,10 +48,11 @@ import { loadLastBoardTheme, saveLastBoardTheme } from '../game/boardThemeStorag
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 import { HistoryScreen } from './historyScreen';
 import { mountCosmicBackdrop, type CosmicBackdrop } from './cosmicBackdrop';
+import { attachHoldToRepeat } from './holdToRepeat';
 
-const STARTING_LIFE_STEP = 5;
-const MIN_STARTING_LIFE = 5;
-const MAX_STARTING_LIFE = 999;
+export const STARTING_LIFE_STEP = 5;
+export const MIN_STARTING_LIFE = 5;
+export const MAX_STARTING_LIFE = 999;
 
 // Roll-animation timing (issue #164): a short, decelerating flicker through
 // random seats before landing on the real roll, long enough to read as an
@@ -176,6 +177,8 @@ export class SetupScreen {
   private panelOpen = false;
   /** Dynamic cosmic backdrop (issue #223/R21), mounted once in show() and re-tinted per render() rather than rebuilt, so its animation survives frequent re-renders (roll ticks, field edits). */
   private backdrop: CosmicBackdrop | null = null;
+  /** Detach functions for the hub steppers' hold-to-repeat gestures (issue #232), re-created each full render() — see buildHubStepper. */
+  private holdToRepeatDetachFns: Array<() => void> = [];
 
   constructor(options: SetupScreenOptions) {
     this.root = options.root;
@@ -263,6 +266,10 @@ export class SetupScreen {
     this.cancelRoll();
     this.backdrop?.destroy();
     this.backdrop = null;
+    for (const detach of this.holdToRepeatDetachFns) {
+      detach();
+    }
+    this.holdToRepeatDetachFns = [];
   }
 
   /** Stops an in-progress roll animation, if any, without changing any already-landed startingPlayer pick. */
@@ -318,6 +325,16 @@ export class SetupScreen {
     // overlay stacked on top like the old dimmed bottom sheet.
     const { panelWidth, zoneAreaWidth } = computeSetupPanelLayout(viewportWidth, this.panelOpen);
     overlay.style.width = `${zoneAreaWidth}px`;
+    // Rebuilding the hub below re-creates its stepper buttons, so any
+    // in-flight hold-to-repeat gesture on the old buttons must be torn down
+    // first — otherwise its repeat timer would keep firing against detached
+    // DOM (see buildHubStepper/refreshZoneGrid for why a hold on the
+    // player-count stepper avoids reaching this full rebuild in the first
+    // place).
+    for (const detach of this.holdToRepeatDetachFns) {
+      detach();
+    }
+    this.holdToRepeatDetachFns = [];
     overlay.replaceChildren();
     // The dynamic cosmic backdrop (issue #223/R21) shows through .setup-board
     // itself (transparent, see injectStylesOnce) and the gaps between zones,
@@ -524,14 +541,20 @@ export class SetupScreen {
           }
         }
         this.playerCount = nextCount;
-        this.render();
+        // A full render() would rebuild the hub itself, destroying the very
+        // button an in-progress hold-to-repeat gesture is pressing — see
+        // refreshZoneGrid for why only the seat-zone grid needs to change
+        // here, not the hub.
+        this.refreshZoneGrid();
       }),
     );
 
     hub.appendChild(
       this.buildHubStepper('Starting life', () => String(this.startingLife), (delta) => {
+        // Starting life has no effect on the seat-zone grid at all, so a
+        // repeat burst here only needs to update this row's own value text
+        // (handled by buildHubStepper) — never a render() of any kind.
         this.startingLife = clampStartingLife(this.startingLife + delta * STARTING_LIFE_STEP);
-        this.render();
       }),
     );
 
@@ -737,6 +760,19 @@ export class SetupScreen {
     return row;
   }
 
+  /**
+   * Builds a labeled +/- stepper row (Players, Starting life) with
+   * hold-to-repeat acceleration (issue #232), matching the curve the
+   * attack-menu/board-shortcut-menu steppers already use via
+   * `attachHoldToRepeat`: a tap always applies one immediate step, and
+   * holding keeps applying steps on an accelerating schedule. Each step
+   * calls `onChange` to mutate state, then updates this row's own value
+   * text directly — `onChange` must NOT trigger a full `render()` (that
+   * would replace this stepper's own button mid-hold, dropping the
+   * browser's implicit pointer capture for the finger still holding it and
+   * cutting the repeat short); see the "Players" stepper's onChange in
+   * buildHub, which calls the lighter refreshZoneGrid() instead.
+   */
   private buildHubStepper(label: string, getValue: () => string, onChange: (delta: 1 | -1) => void): HTMLElement {
     const row = document.createElement('div');
     row.className = 'setup-hub-stepper-row';
@@ -748,21 +784,26 @@ export class SetupScreen {
     const stepper = document.createElement('div');
     stepper.className = 'setup-hub-stepper';
 
+    const valueEl = document.createElement('div');
+    valueEl.className = 'setup-hub-stepper-val';
+    valueEl.textContent = getValue();
+
+    const applyStep = (delta: 1 | -1): void => {
+      onChange(delta);
+      valueEl.textContent = getValue();
+    };
+
     const minusButton = document.createElement('button');
     minusButton.type = 'button';
     minusButton.className = 'setup-hub-minus';
     minusButton.textContent = '−';
-    minusButton.addEventListener('pointerdown', () => onChange(-1));
-
-    const valueEl = document.createElement('div');
-    valueEl.className = 'setup-hub-stepper-val';
-    valueEl.textContent = getValue();
+    this.holdToRepeatDetachFns.push(attachHoldToRepeat(minusButton, () => applyStep(-1)));
 
     const plusButton = document.createElement('button');
     plusButton.type = 'button';
     plusButton.className = 'setup-hub-plus';
     plusButton.textContent = '+';
-    plusButton.addEventListener('pointerdown', () => onChange(1));
+    this.holdToRepeatDetachFns.push(attachHoldToRepeat(plusButton, () => applyStep(1)));
 
     stepper.appendChild(minusButton);
     stepper.appendChild(valueEl);
@@ -770,6 +811,49 @@ export class SetupScreen {
     row.appendChild(labelEl);
     row.appendChild(stepper);
     return row;
+  }
+
+  /**
+   * Rebuilds just the seat-zone grid and the hub's own max-size (issue
+   * #232) — used by the "Players" stepper so an accelerating hold-to-repeat
+   * burst reflects the new player count on every step without a full
+   * render(): that would tear down and recreate the hub, including the
+   * stepper button the hold is still pressing (see buildHubStepper), and
+   * would additionally rebuild the backdrop tint and docked panel for no
+   * reason, causing exactly the kind of visible jank the ticket calls out.
+   */
+  private refreshZoneGrid(): void {
+    const overlay = this.overlay;
+    if (!overlay) {
+      return;
+    }
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const { panelWidth, zoneAreaWidth } = computeSetupPanelLayout(viewportWidth, this.panelOpen);
+    const rects = computeZoneRects(this.playerCount, zoneAreaWidth, viewportHeight);
+    const hubEl = overlay.querySelector<HTMLElement>('.setup-hub');
+
+    for (const oldZone of Array.from(overlay.querySelectorAll('.setup-zone'))) {
+      oldZone.remove();
+    }
+    this.players.forEach((player, index) => {
+      const zoneEl = this.buildZone(player, index, rects[index]);
+      if (hubEl) {
+        overlay.insertBefore(zoneEl, hubEl);
+      } else {
+        overlay.appendChild(zoneEl);
+      }
+    });
+
+    if (hubEl) {
+      const hubMaxSize = computeSetupHubMaxSize(this.playerCount, zoneAreaWidth, viewportHeight);
+      hubEl.style.maxWidth = `${hubMaxSize.maxWidth}px`;
+      hubEl.style.maxHeight = `${hubMaxSize.maxHeight}px`;
+    }
+
+    if (this.panelOpen) {
+      this.renderPanel(panelWidth, viewportHeight);
+    }
   }
 
   private start(): void {
@@ -798,10 +882,10 @@ function defaultPlayer(seat: number): PlayerConfig {
   return { name: `Player ${seat + 1}`, color: PLAYER_COLORS[seat % PLAYER_COLORS.length] };
 }
 
-function clampPlayerCount(count: number): number {
+export function clampPlayerCount(count: number): number {
   return Math.min(MAX_PLAYER_COUNT, Math.max(MIN_PLAYER_COUNT, count));
 }
 
-function clampStartingLife(life: number): number {
+export function clampStartingLife(life: number): number {
   return Math.min(MAX_STARTING_LIFE, Math.max(MIN_STARTING_LIFE, life));
 }
