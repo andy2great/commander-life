@@ -1,12 +1,24 @@
 // End-game stats screen: a DOM overlay (same pattern as setupScreen.ts and
 // damagePanel.ts) shown when the game ends, per docs/mockups/04-gameover.html
-// and docs/concept.md step 6. Only the canvas element itself is off-limits
-// outside main.ts — this overlay is plain DOM, like the other screens.
+// and docs/concept.md step 6. The shared `#game` board canvas main.ts owns is
+// off-limits here — this overlay is plain DOM, like the other screens — but
+// it mounts its own decorative canvas behind its content for the dynamic
+// cosmic backdrop (issue #223/R21); see cosmicBackdrop.ts.
 
 import type { GameStats } from '../game';
 import type { Player } from '../game/commanderDamage';
 import { saveMatchResult } from '../game/matchHistory';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
+import { mountCosmicBackdrop, type CosmicBackdrop } from './cosmicBackdrop';
+
+// Fixed backdrop tint (issue #223/R21), independent of the board theme the
+// just-finished game used, so the stats screen keeps its own "victory"
+// identity — same intent as the static gold/ember gradient it replaces
+// (#134) — rather than blending into whichever theme the setup screen
+// shows. A warm amber hue, matching the winner card/CTA's existing gold
+// accent, keeps the recap visually distinct from the setup screen's
+// neutral-to-cool default board themes (`../game/boardTheme.ts`).
+const STATS_BACKDROP_BASE_COLOR = '#241a0c';
 
 export interface StatsScreenOptions {
   /** Element the overlay is appended to (e.g. document.body). */
@@ -25,7 +37,8 @@ function injectStylesOnce(): void {
   injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
-    .stats-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); background: radial-gradient(circle at 50% -8%, rgba(215, 165, 76, 0.18) 0%, rgba(18, 16, 22, 0) 45%), radial-gradient(ellipse 160% 65% at 50% 118%, #2a1a1a 0%, rgba(18, 16, 22, 0) 62%); background-color: #121016; z-index: 40; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 14px; overflow-y: auto; font-family: system-ui, sans-serif; }
+    .stats-screen { position: fixed; inset: 0; max-height: var(--overlay-max-h, 100vh); z-index: 40; display: flex; flex-direction: column; padding: 32px 20px 24px; gap: 14px; overflow-y: auto; font-family: system-ui, sans-serif; }
+    .stats-cosmic-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 39; pointer-events: none; }
     .stats-winner-card { position: relative; background: linear-gradient(135deg, rgba(215,165,76,.18), rgba(226,103,63,.14)); border: 1px solid rgba(215,165,76,.4); clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); padding: 16px; text-align: center; }
     .stats-winner-tag { color: #d7a54c; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
     .stats-winner-name { background: linear-gradient(135deg, #d7a54c, #e2673f); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 32px; font-weight: 400; margin-top: 4px; font-family: ${DISPLAY_FONT_STACK}; }
@@ -69,6 +82,8 @@ export class StatsScreen {
   private readonly stats: GameStats;
   private readonly onNewGameCallback: () => void;
   private overlay: HTMLElement | null = null;
+  /** Dynamic cosmic backdrop (issue #223/R21), mounted once in show() and torn down in close(). */
+  private backdrop: CosmicBackdrop | null = null;
 
   constructor(options: StatsScreenOptions) {
     this.root = options.root;
@@ -81,6 +96,8 @@ export class StatsScreen {
     injectStylesOnce();
     this.close();
     this.saveToHistory();
+
+    this.backdrop = mountCosmicBackdrop(this.root, 'stats-cosmic-backdrop', STATS_BACKDROP_BASE_COLOR);
 
     const overlay = document.createElement('div');
     overlay.className = 'stats-screen';
@@ -120,6 +137,8 @@ export class StatsScreen {
       this.overlay.remove();
       this.overlay = null;
     }
+    this.backdrop?.destroy();
+    this.backdrop = null;
   }
 
   private findPlayer(playerId: string): Player | undefined {

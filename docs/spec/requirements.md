@@ -130,3 +130,12 @@ R20. The board's background, beneath the player zones, shall render a
      harmonious with that theme's base color, without reducing life-total
      or player-name legibility or introducing a noticeable frame-rate drop
      on a mid-range phone.
+
+R21. The pre-game setup screen and the post-game stats screen shall render
+     their backdrop using the same dynamic, code-drawn cosmic visual
+     language established by R20 (starfield with subtly twinkling and/or
+     drifting stars plus soft nebula-colored gradient clouds), in place of
+     each screen's current static CSS gradient, using CSS/canvas code only
+     (no external image assets), while remaining visually distinct from
+     each other and not degrading legibility or layout of either screen's
+     DOM content.
