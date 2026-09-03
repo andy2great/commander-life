@@ -12,6 +12,11 @@
 // what each toggle's counter should currently read, and what tapping +/-
 // does) free of DOM globals so it stays unit-testable; `AttackMenu` is the
 // thin DOM layer on top of it.
+//
+// Issue #233 (R26): `AttackMenuTypeMemory` remembers the last type explicitly
+// selected per attacker/target (or self-target) pair, so reopening the menu
+// for the same pair pre-selects it instead of resetting to the default
+// order — also DOM-free so its remember/resolve logic is unit-testable.
 
 import {
   applyCommanderDamageDelta,
@@ -218,6 +223,44 @@ export function buildDamageTypeDefs(
   return types;
 }
 
+/**
+ * Key identifying one damage-type "memory" slot (issue #233, R26). Cross-zone
+ * attacker/target pairs are keyed by both ids, so a different pair (e.g.
+ * A → C) never shares memory with A → B. Self-target menus are keyed by
+ * player id under a distinct prefix, so a player's self-target memory is
+ * tracked independently of any cross-zone pair involving that same player.
+ */
+export function attackMenuMemoryKey(fromId: string, toId: string, isSelfTarget: boolean): string {
+  return isSelfTarget ? `self:${toId}` : `pair:${fromId}:${toId}`;
+}
+
+/**
+ * Remembers which damage type was last explicitly selected for each
+ * attacker/target (or self-target) pair (R26), so reopening the menu for the
+ * same pair pre-selects that type instead of resetting to the default order.
+ * `AttackMenu` owns one instance of this, and `main.ts` recreates the whole
+ * `AttackMenu` on every "New Game" (see `startGame`), so this memory resets
+ * along with it without needing any explicit clearing.
+ */
+export class AttackMenuTypeMemory {
+  private readonly selections = new Map<string, DamageTypeKey>();
+
+  /**
+   * The type to pre-select for `key`: the remembered type if one exists and
+   * is still among `types` (it may not be, e.g. a since-removed custom
+   * counter), otherwise `types[0]` — `buildDamageTypeDefs`'s existing
+   * default order.
+   */
+  resolveInitial(key: string, types: DamageTypeDef[]): DamageTypeDef {
+    const remembered = this.selections.get(key);
+    return types.find((type) => type.key === remembered) ?? types[0];
+  }
+
+  remember(key: string, type: DamageTypeDef): void {
+    this.selections.set(key, type.key);
+  }
+}
+
 export interface AttackMenuSession {
   /** Pass as the `undoStack` for `buildDamageTypeDefs` so every stepper tap made during this session is collected here instead of pushed straight onto the shared stack. */
   undoStack: UndoStack;
@@ -328,6 +371,8 @@ export class AttackMenu {
   private overlay: HTMLElement | null = null;
   private holdToRepeatDetachFns: Array<() => void> = [];
   private session: AttackMenuSession | null = null;
+  private readonly typeMemory = new AttackMenuTypeMemory();
+  private currentMemoryKey = '';
 
   constructor(options: AttackMenuOptions) {
     this.root = options.root;
@@ -366,6 +411,7 @@ export class AttackMenu {
       return;
     }
     const isSelfTarget = fromId === toId;
+    this.currentMemoryKey = attackMenuMemoryKey(fromId, toId, isSelfTarget);
 
     const overlay = document.createElement('div');
     overlay.className = 'cmdr-atk-overlay';
@@ -495,19 +541,22 @@ export class AttackMenu {
     valueEl.className = 'cmdr-atk-val';
 
     const toggleButtons = new Map<DamageTypeKey, HTMLButtonElement>();
-    let active = types[0];
+    let active = this.typeMemory.resolveInitial(this.currentMemoryKey, types);
 
     const refreshValue = (): void => {
       valueEl.textContent = String(active.getValue());
     };
 
-    const selectType = (type: DamageTypeDef): void => {
+    const selectType = (type: DamageTypeDef, remember: boolean): void => {
       active = type;
       counterRow.style.borderLeftColor = type.color;
       for (const [key, button] of toggleButtons) {
         button.classList.toggle('active', key === type.key);
       }
       refreshValue();
+      if (remember) {
+        this.typeMemory.remember(this.currentMemoryKey, type);
+      }
     };
 
     for (const type of types) {
@@ -517,7 +566,7 @@ export class AttackMenu {
       button.style.setProperty('--toggle-color', type.color);
       button.addEventListener('pointerdown', (event) => {
         event.stopPropagation();
-        selectType(type);
+        selectType(type, true);
       });
 
       const labelEl = document.createElement('span');
@@ -569,7 +618,7 @@ export class AttackMenu {
     stepper.appendChild(plusButton);
     counterRow.appendChild(stepper);
 
-    selectType(types[0]);
+    selectType(active, false);
 
     wrap.appendChild(toggleRow);
     wrap.appendChild(counterRow);

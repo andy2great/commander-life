@@ -170,3 +170,11 @@ R25. The pre-game setup hub's player-count and starting-life steppers shall
      support the same hold-to-repeat acceleration already used by in-game
      +/- steppers, instead of requiring one discrete tap per increment,
      without introducing visible rendering jank during a repeat burst.
+
+R26. The attacker/target damage menu shall pre-select the damage type most
+     recently used for that specific attacker → target pair, falling back to
+     the existing default order when no prior selection exists for that
+     pair, so that repeating the same non-default type (most commonly
+     commander damage) across turns between the same two players does not
+     require re-selecting it each time. This remembered per-pair selection
+     shall reset with a new game.
