@@ -1978,8 +1978,12 @@ describe('zone background fill stays within the player accent hue edge-to-edge (
     game.render(ctx, 400, 800);
 
     const boardBackgroundColor = getBoardTheme(undefined).backgroundColor;
-    expect(radialGradientStops.length).toBe(game.players.length);
-    radialGradientStops.forEach((stops) => {
+    // The cosmic scene's nebula clouds (issue #222) also call
+    // createRadialGradient, drawn before the zones, so isolate the zones'
+    // own gradients (one per player) as the trailing slice.
+    const zoneGradientStops = radialGradientStops.slice(-game.players.length);
+    expect(zoneGradientStops.length).toBe(game.players.length);
+    zoneGradientStops.forEach((stops) => {
       expect(stops.length).toBeGreaterThanOrEqual(3);
       const outermost = stops[stops.length - 1];
       expect(outermost[0]).toBe(1);
@@ -2157,23 +2161,39 @@ describe('turn-indicator badge near the shared center control (issue #201)', () 
   });
 });
 
-describe('board felt texture (issue #203)', () => {
-  /** Records the call order of fillRect/strokeStyle-with-stroke/fillStyle(gradient) to check the felt grain layers between the board fill and the zones. */
+describe('board cosmic background (issue #222)', () => {
+  /**
+   * Records fillRect calls (tagged by whether fillStyle is a plain color
+   * string or a zone's gradient object) and arc calls (tagged with the
+   * fillStyle in effect — resolving gradient objects to their actual
+   * color-stop signature via `gradientStops`, since two distinct gradient
+   * objects would otherwise both stringify to the same "[object Object]"),
+   * in call order, to locate the cosmic scene's draws between the board
+   * fill and the zone fills (which use fillRect with a gradient object,
+   * never arc).
+   */
   function createOrderRecordingCtx(): { ctx: CanvasRenderingContext2D; calls: string[] } {
     const state: Record<string, unknown> = {};
     const calls: string[] = [];
+    const gradientStops = new WeakMap<object, string[]>();
     const ctx = new Proxy(state, {
       get(target, prop: string) {
         if (prop === 'fillRect') {
-          return () => calls.push('fillRect');
+          return () => calls.push(`fillRect:${typeof target.fillStyle}`);
         }
-        if (prop === 'stroke') {
-          return () => calls.push(`stroke:${target.strokeStyle}`);
+        if (prop === 'arc') {
+          return () => {
+            const style = target.fillStyle;
+            const label = typeof style === 'object' && style !== null ? (gradientStops.get(style)?.join('|') ?? 'gradient') : String(style);
+            calls.push(`arc:${label}`);
+          };
         }
         if (prop === 'createRadialGradient' || prop === 'createLinearGradient') {
           return () => {
-            calls.push('createGradient');
-            return { addColorStop: () => {} };
+            const stops: string[] = [];
+            const gradient = { addColorStop: (offset: number, color: string) => stops.push(`${offset}:${color}`) };
+            gradientStops.set(gradient, stops);
+            return gradient;
           };
         }
         if (prop in target) {
@@ -2189,59 +2209,54 @@ describe('board felt texture (issue #203)', () => {
     return { ctx, calls };
   }
 
-  /** The board draws several other strokes later (zone borders, control discs); the felt grain is the only thing that strokes before drawZones' first gradient, so isolate its two calls by that window. */
-  function feltStrokesBeforeFirstGradient(calls: string[]): string[] {
-    const firstGradientIndex = calls.indexOf('createGradient');
-    return calls.filter((call, i) => call.startsWith('stroke:') && i < firstGradientIndex);
+  /** Isolates the cosmic scene's arc() calls: everything drawn between the base board fill (fillRect with a plain color string) and the first zone fill (fillRect with a gradient object) — zones themselves never call arc(). */
+  function sceneArcs(calls: string[]): string[] {
+    const boardFillIndex = calls.indexOf('fillRect:string');
+    const firstZoneFillIndex = calls.indexOf('fillRect:object');
+    return calls.filter((call, i) => call.startsWith('arc:') && i > boardFillIndex && (firstZoneFillIndex === -1 || i < firstZoneFillIndex));
   }
 
-  it('draws the felt grain (two subtle strokes) after the board fill and before the zone gradients', () => {
+  it('draws the cosmic scene (nebula clouds + starfield) after the board fill and before the zone fills', () => {
     const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
     game.resize(400, 800);
     const { ctx, calls } = createOrderRecordingCtx();
 
     game.render(ctx, 400, 800);
 
-    const boardFillIndex = calls.indexOf('fillRect');
-    const feltStrokes = feltStrokesBeforeFirstGradient(calls);
-    const feltStrokeIndices = feltStrokes.map((call) => calls.indexOf(call));
-
-    expect(boardFillIndex).toBeGreaterThanOrEqual(0);
-    expect(feltStrokes).toHaveLength(2);
-    feltStrokeIndices.forEach((i) => expect(i).toBeGreaterThan(boardFillIndex));
+    expect(calls.indexOf('fillRect:string')).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf('fillRect:object')).toBeGreaterThan(calls.indexOf('fillRect:string'));
+    expect(sceneArcs(calls).length).toBeGreaterThan(0);
   });
 
-  it('draws a texture whose color is derived from the active board theme, for every BOARD_THEMES entry', () => {
-    const strokeStylesByTheme = BOARD_THEMES.map((theme) => {
+  it('draws a scene whose nebula/star tint is derived from the active board theme, for every BOARD_THEMES entry', () => {
+    const arcsByTheme = BOARD_THEMES.map((theme) => {
       const game = new Game({ playerCount: 4, startingLife: 40, players: [], boardTheme: theme.id });
       game.resize(400, 800);
       const { ctx, calls } = createOrderRecordingCtx();
       game.render(ctx, 400, 800);
-      return feltStrokesBeforeFirstGradient(calls);
+      return sceneArcs(calls);
     });
 
-    // Every theme draws the same two-stroke grain, and each theme's tint differs from the others'.
-    strokeStylesByTheme.forEach((styles) => expect(styles).toHaveLength(2));
-    const unique = new Set(strokeStylesByTheme.map((styles) => styles.join('|')));
+    arcsByTheme.forEach((arcs) => expect(arcs.length).toBeGreaterThan(0));
+    const unique = new Set(arcsByTheme.map((arcs) => arcs.join('|')));
     expect(unique.size).toBe(BOARD_THEMES.length);
   });
 
-  it('keeps the texture subtle (low alpha) so it cannot reduce life/name legibility', () => {
-    const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
-    game.resize(400, 800);
-    const { ctx, calls } = createOrderRecordingCtx();
+  it('stays dynamic across frames (twinkle/drift) rather than rendering a static image, for every player-count layout', () => {
+    for (const playerCount of [2, 3, 4, 5, 6, 7, 8]) {
+      const game = new Game({ playerCount, startingLife: 40, players: [] });
+      game.resize(400, 800);
+      const first = createOrderRecordingCtx();
+      game.render(first.ctx, 400, 800);
+      game.update(2);
+      const second = createOrderRecordingCtx();
+      game.render(second.ctx, 400, 800);
 
-    game.render(ctx, 400, 800);
-
-    const feltStrokes = feltStrokesBeforeFirstGradient(calls);
-    expect(feltStrokes).toHaveLength(2);
-    feltStrokes.forEach((call) => {
-      const alpha = Number(call.match(/,\s*([\d.]+)\)$/)?.[1]);
-      expect(alpha).toBeLessThanOrEqual(0.1);
-    });
+      expect(sceneArcs(first.calls)).not.toEqual(sceneArcs(second.calls));
+    }
   });
 
-  it('reuses the cached texture layout across frames at the same canvas size (no per-frame regeneration cost)', () => {
+  it('reuses the cached scene layout across frames at the same canvas size (no per-frame regeneration cost)', () => {
     const game = new Game({ playerCount: 4, startingLife: 40, players: [] });
     game.resize(400, 800);
     const first = createOrderRecordingCtx();
@@ -2249,7 +2264,8 @@ describe('board felt texture (issue #203)', () => {
     const second = createOrderRecordingCtx();
     game.render(second.ctx, 400, 800);
 
-    const strokesOf = (calls: string[]) => calls.filter((call) => call.startsWith('stroke:'));
-    expect(strokesOf(first.calls)).toEqual(strokesOf(second.calls));
+    // No update() (and therefore no animTime change) between renders, so the
+    // twinkle/drift-animated draw calls come out identical.
+    expect(sceneArcs(first.calls)).toEqual(sceneArcs(second.calls));
   });
 });

@@ -49,7 +49,7 @@ import {
 } from './game/zoneEffect';
 import { DISPLAY_FONT_STACK } from './ui/displayFont';
 import { getBoardTheme } from './game/boardTheme';
-import { drawFeltTexture, generateFeltTexture, type FeltTexture } from './game/feltTexture';
+import { drawSpaceScene, generateSpaceScene, type SpaceScene } from './game/spaceScene';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {
@@ -403,13 +403,14 @@ export class Game {
   private pausedFlag = false;
   private turnTimerElapsedS = 0;
   private readonly boardBackgroundColor: string;
-  // Cached felt grain (issue #203): regenerated only when the canvas size
+  // Cached space scene (issue #222): regenerated only when the canvas size
   // changes (see resize()) rather than every render() call, so redrawing it
-  // each frame costs two stroke() calls instead of recomputing fiber
-  // positions every frame.
-  private feltTexture: FeltTexture | null = null;
-  private feltTextureWidth = 0;
-  private feltTextureHeight = 0;
+  // each frame reuses the same star/cloud layout and only recomputes the
+  // animated twinkle/drift from the current animTime instead of
+  // regenerating positions every frame.
+  private spaceScene: SpaceScene | null = null;
+  private spaceSceneWidth = 0;
+  private spaceSceneHeight = 0;
 
   constructor(config?: GameConfig, sound: SoundPlayer = new NoopSoundPlayer()) {
     this.sound = sound;
@@ -632,10 +633,10 @@ export class Game {
   resize(width: number, height: number): void {
     this.canvasWidth = width;
     this.canvasHeight = height;
-    if (width !== this.feltTextureWidth || height !== this.feltTextureHeight) {
-      this.feltTexture = generateFeltTexture(width, height);
-      this.feltTextureWidth = width;
-      this.feltTextureHeight = height;
+    if (width !== this.spaceSceneWidth || height !== this.spaceSceneHeight) {
+      this.spaceScene = generateSpaceScene(width, height);
+      this.spaceSceneWidth = width;
+      this.spaceSceneHeight = height;
     }
     this.zoneRects = computeZoneRects(this.playerCount, width, height);
     // The top/bottom rows always fill half the canvas height each, so
@@ -1002,12 +1003,13 @@ export class Game {
     // setup screen's preview.
     ctx.fillStyle = this.boardBackgroundColor;
     ctx.fillRect(0, 0, width, height);
-    // Felt grain (issue #203/R13): layered over the base fill, beneath the
+    // Cosmic scene (issue #222/R20): layered over the base fill, beneath the
     // zones' own opaque fills, so it only shows through the thin gutter
     // between/around zones (see ZONE_GRADIENT_GUTTER_PX) and never competes
-    // with life-total/name legibility.
-    if (this.feltTexture) {
-      drawFeltTexture(ctx, this.feltTexture, this.boardBackgroundColor);
+    // with life-total/name legibility. Replaces the felt-fiber grain
+    // previously required by R13 (#203).
+    if (this.spaceScene) {
+      drawSpaceScene(ctx, this.spaceScene, this.boardBackgroundColor, this.animTime);
     }
 
     // Screen-shake (issue #88) only offsets what's drawn below, via ctx
