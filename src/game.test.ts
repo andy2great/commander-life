@@ -1203,6 +1203,73 @@ describe('Game', () => {
       expect(game.stats?.winnerId).toBe(p0.id);
       expect(game.stats?.eliminationOrder).toHaveLength(rest.length);
     });
+
+    describe('zone-boundary hit-test hysteresis at 7 and 8 players (issue #231/R24)', () => {
+      it.each([7, 8])(
+        'a %i-player drag released just past a zone boundary resolves as a self-target on the starting zone, not the neighbor',
+        (playerCount) => {
+          const game = new Game({ playerCount, startingLife: 40, players: [] });
+          const width = 400;
+          const height = 900;
+          game.resize(width, height);
+          const rects = computeZoneRects(playerCount, width, height);
+          const from = rects[0];
+          const to = rects[1]; // adjacent zone sharing from's right edge
+
+          const fromPoint = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+          // 3px past the shared boundary into the neighboring zone — well
+          // under ZONE_HIT_HYSTERESIS_PX, so this must still resolve to the
+          // zone the drag started in rather than flipping to the neighbor.
+          const toPoint = { x: to.x + 3, y: fromPoint.y };
+
+          const drag = game.resolveZoneDrag(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y);
+
+          expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[0].id });
+        },
+      );
+
+      it.each([7, 8])(
+        'a %i-player drag released well past a zone boundary still resolves to the neighboring zone',
+        (playerCount) => {
+          const game = new Game({ playerCount, startingLife: 40, players: [] });
+          const width = 400;
+          const height = 900;
+          game.resize(width, height);
+          const rects = computeZoneRects(playerCount, width, height);
+          const from = rects[0];
+          const to = rects[1];
+
+          const fromPoint = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+          // Deep inside the neighboring zone, well past the hysteresis
+          // margin — an intentional cross-zone drag, not a boundary jitter.
+          const toPoint = { x: to.x + to.width - 5, y: to.y + to.height / 2 };
+
+          const drag = game.resolveZoneDrag(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y);
+
+          expect(drag).toEqual({ fromPlayerId: game.players[0].id, toPlayerId: game.players[1].id });
+        },
+      );
+
+      it('applies the same hysteresis to the live dragArrow target preview, so the preview matches what release would resolve to', () => {
+        const game = new Game({ playerCount: 8, startingLife: 40, players: [] });
+        const width = 400;
+        const height = 900;
+        game.resize(width, height);
+        const rects = computeZoneRects(8, width, height);
+        const from = rects[0];
+        const to = rects[1];
+        const fromPoint = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+
+        game.beginDrag(fromPoint.x, fromPoint.y);
+        game.updateDragPointer(to.x + 3, fromPoint.y); // just past the boundary, within the margin
+
+        expect(game.dragArrow?.targetPlayerId).toBeNull(); // no neighbor target — still reads as the origin zone
+
+        game.updateDragPointer(to.x + to.width - 5, to.y + to.height / 2); // deep in the neighbor zone
+
+        expect(game.dragArrow?.targetPlayerId).toBe(game.players[1].id);
+      });
+    });
   });
 });
 

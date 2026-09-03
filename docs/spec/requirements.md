@@ -156,3 +156,12 @@ R23. The board-wide shortcut menu shall commit its currently selected
      discarding the stepped value unless an explicit "Apply" control was
      tapped. An explicit "Apply" affordance may remain as an alternate way
      to close-and-commit but shall no longer be the only path that commits.
+
+R24. Zone-to-zone and self-target drag gestures shall apply a small hit-test
+     hysteresis at seat-zone boundaries, independent of any purely cosmetic
+     gradient gutter, so that a drag released within that margin of a
+     boundary resolves to whichever zone the drag most recently and clearly
+     occupied rather than flipping to the immediately adjacent zone on a
+     momentary few-pixel crossing. This shall apply at all supported player
+     counts (2-8), where the effect is most pronounced at 6-8 players due to
+     smaller zone size.
