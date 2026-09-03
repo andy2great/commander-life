@@ -5,10 +5,37 @@
 // touched by later tickets — this file exists so a change to any of these
 // values is a deliberate, visible edit here rather than an incidental side
 // effect elsewhere.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Game, computeZoneRects } from './game';
-import { UndoControl } from './ui/controls';
-import { LONG_PRESS_MS } from './ui/damagePanel';
+import { CONTROL_GAP_RATIO, PAUSE_RADIUS_RATIO, SHORTCUT_RADIUS_RATIO, UNDO_RADIUS_RATIO, UndoControl } from './ui/controls';
+import { attachTapAndLongPress, LONG_PRESS_MS, type TapGestureHandlers } from './ui/damagePanel';
+
+// Minimal addEventListener/removeEventListener stand-in so attachTapAndLongPress
+// can be exercised without a DOM (vitest here runs with environment: 'node'),
+// mirroring the same pattern ui/damagePanel.test.ts uses for the gesture
+// engine itself. Doubles as a stand-in for a DOM button layered over the
+// board (issue #221's third acceptance criterion), since from the gesture
+// engine's point of view a canvas and a DOM element are both just an
+// addEventListener/removeEventListener target.
+class FakeElement {
+  private readonly listeners = new Map<string, Set<(event: PointerEvent) => void>>();
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(listener as (event: PointerEvent) => void);
+    this.listeners.set(type, set);
+  }
+
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
+    this.listeners.get(type)?.delete(listener as (event: PointerEvent) => void);
+  }
+
+  dispatch(type: string, event: Partial<PointerEvent>): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event as PointerEvent);
+    }
+  }
+}
 
 /** Minimal stand-in for CanvasRenderingContext2D covering only what UndoControl.draw() calls. */
 function createFakeCtx(): CanvasRenderingContext2D {
@@ -130,5 +157,154 @@ describe('docs/concept.md touch-control spec (#40)', () => {
 
     control.draw(ctx, true);
     expect(ctx.globalAlpha).toBe(1);
+  });
+});
+
+describe('shared control disc hit-circle boundary: no ambiguous gap to zone handling (issue #221)', () => {
+  const width = 400;
+  const height = 800;
+  const shortSide = Math.min(width, height);
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const undoRadius = shortSide * UNDO_RADIUS_RATIO;
+  const shortcutRadius = shortSide * SHORTCUT_RADIUS_RATIO;
+  const pauseRadius = shortSide * PAUSE_RADIUS_RATIO;
+  const gap = shortSide * CONTROL_GAP_RATIO;
+  // Mirrors Game.resize()'s placement of ShortcutControl/PauseControl beside UndoControl.
+  const shortcutCenterX = centerX + undoRadius + gap + shortcutRadius;
+  const pauseCenterX = centerX - undoRadius - gap - pauseRadius;
+
+  it('Undo: a tap just inside the hit-circle registers on the control; a tap just outside falls through to the zone beneath it', () => {
+    const game = new Game();
+    game.resize(width, height);
+
+    expect(game.isOverUndoControl(centerX, centerY + undoRadius - 1)).toBe(true);
+    expect(game.onLongPress(centerX, centerY + undoRadius - 1)).toBeNull();
+
+    expect(game.isOverUndoControl(centerX, centerY + undoRadius + 1)).toBe(false);
+    expect(game.onLongPress(centerX, centerY + undoRadius + 1)).not.toBeNull();
+  });
+
+  it('Shortcut: a tap just inside the hit-circle registers on the control; a tap just outside falls through to the zone beneath it', () => {
+    const game = new Game();
+    game.resize(width, height);
+
+    expect(game.isOverShortcutControl(shortcutCenterX, centerY + shortcutRadius - 1)).toBe(true);
+    expect(game.onLongPress(shortcutCenterX, centerY + shortcutRadius - 1)).toBeNull();
+
+    expect(game.isOverShortcutControl(shortcutCenterX, centerY + shortcutRadius + 1)).toBe(false);
+    expect(game.onLongPress(shortcutCenterX, centerY + shortcutRadius + 1)).not.toBeNull();
+  });
+
+  it('Pause: a tap just inside the hit-circle registers on the control; a tap just outside falls through to the zone beneath it', () => {
+    const game = new Game();
+    game.resize(width, height);
+
+    expect(game.isOverPauseControl(pauseCenterX, centerY + pauseRadius - 1)).toBe(true);
+    expect(game.onLongPress(pauseCenterX, centerY + pauseRadius - 1)).toBeNull();
+
+    expect(game.isOverPauseControl(pauseCenterX, centerY + pauseRadius + 1)).toBe(false);
+    expect(game.onLongPress(pauseCenterX, centerY + pauseRadius + 1)).not.toBeNull();
+  });
+});
+
+describe("a long-press starting on a shared control never passes the turn, even when the control sits over the active player's own zone (issue #221, stakeholder report)", () => {
+  const width = 400;
+  const height = 800;
+  const shortSide = Math.min(width, height);
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const undoRadius = shortSide * UNDO_RADIUS_RATIO;
+  const shortcutRadius = shortSide * SHORTCUT_RADIUS_RATIO;
+  const pauseRadius = shortSide * PAUSE_RADIUS_RATIO;
+  const gap = shortSide * CONTROL_GAP_RATIO;
+  const shortcutCenterX = centerX + undoRadius + gap + shortcutRadius;
+  const pauseCenterX = centerX - undoRadius - gap - pauseRadius;
+
+  // For the default 4-player layout the shared disc (centerX, centerY) sits
+  // exactly on the corner where all 4 zones meet: Undo and Shortcut both
+  // fall geometrically over raw seat 3 (bottom row, right column), Pause
+  // over raw seat 2 (bottom row, left column) — see ROW_COUNTS_BY_PLAYER_COUNT
+  // in src/game/turn.ts. Making that seat the active one is what makes these
+  // cases meaningful: without Game.onLongPress's control exclusion, a
+  // long-press on the disc would resolve to the active player's own zone and
+  // incorrectly pass the turn, exactly the stakeholder-reported bug.
+
+  it("Undo/Shortcut sit over seat 3's zone: long-pressing them while seat 3 is active never advances activeIndex", () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [], startingIndex: 3 });
+    game.resize(width, height);
+
+    game.passTurnFromZoneLongPress(centerX, centerY);
+    expect(game.activeIndex).toBe(3);
+
+    game.passTurnFromZoneLongPress(shortcutCenterX, centerY);
+    expect(game.activeIndex).toBe(3);
+  });
+
+  it("Pause sits over seat 2's zone: long-pressing it while seat 2 is active never advances activeIndex", () => {
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [], startingIndex: 2 });
+    game.resize(width, height);
+
+    game.passTurnFromZoneLongPress(pauseCenterX, centerY);
+    expect(game.activeIndex).toBe(2);
+  });
+
+  it('holding a press over the shared disc past LONG_PRESS_MS never passes the turn, via the same gesture engine main.ts wires to the canvas', () => {
+    vi.useFakeTimers();
+    const element = new FakeElement();
+    const game = new Game({ playerCount: 4, startingLife: 40, players: [], startingIndex: 3 });
+    game.resize(width, height);
+
+    attachTapAndLongPress(element as unknown as HTMLElement, {
+      onTap: () => {},
+      onLongPress: (event) => game.passTurnFromZoneLongPress(event.clientX, event.clientY),
+    });
+
+    element.dispatch('pointerdown', { clientX: centerX, clientY: centerY });
+    vi.advanceTimersByTime(LONG_PRESS_MS);
+    element.dispatch('pointerup', { clientX: centerX, clientY: centerY });
+
+    expect(game.activeIndex).toBe(3);
+    vi.useRealTimers();
+  });
+});
+
+describe('DOM buttons rendered over the board get the same non-interference guarantee as the canvas-drawn disc controls (issue #221)', () => {
+  it("a long-held press starting over a DOM button never passes the turn, even though the button sits directly on top of the active player's own zone", () => {
+    vi.useFakeTimers();
+    const element = new FakeElement();
+    const game = new Game(); // default 4 players, seat 0 active
+    game.resize(400, 800);
+
+    // Stand-in for a DOM button rendered over the board (e.g. an attack-menu
+    // stepper or close button) sitting directly on top of seat 0's own zone
+    // — the exact geometry that would otherwise let a stray long-press pass
+    // the turn.
+    const domButtonRect = { x: 20, y: 20, width: 56, height: 56 };
+    const isOverDomButton = (x: number, y: number): boolean =>
+      x >= domButtonRect.x &&
+      x <= domButtonRect.x + domButtonRect.width &&
+      y >= domButtonRect.y &&
+      y <= domButtonRect.y + domButtonRect.height;
+
+    // Mirrors main.ts's onPressStart wiring for the canvas disc controls
+    // (issue #123): a tap-only control reports itself via onPressStart
+    // returning false, which skips arming the long-press timer entirely —
+    // the same contract applies whether the control is canvas-drawn or a
+    // real DOM element layered on top of the board.
+    const handlers: TapGestureHandlers = {
+      onPressStart: (event) => !isOverDomButton(event.clientX, event.clientY),
+      onTap: () => {},
+      onLongPress: (event) => game.passTurnFromZoneLongPress(event.clientX, event.clientY),
+    };
+    attachTapAndLongPress(element as unknown as HTMLElement, handlers);
+
+    const point = { clientX: 40, clientY: 40 }; // inside domButtonRect, and inside seat 0's own zone
+    element.dispatch('pointerdown', point);
+    vi.advanceTimersByTime(LONG_PRESS_MS);
+    element.dispatch('pointerup', point);
+
+    expect(game.activeIndex).toBe(0);
+    vi.useRealTimers();
   });
 });
