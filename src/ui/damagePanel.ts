@@ -9,6 +9,14 @@
 export const LONG_PRESS_MS = 500;
 /** Also reused by Game.resolveZoneDrag (issue #70) to tell a same-zone tap from a same-zone self-target drag. */
 export const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+/**
+ * How long, after a turn-hold arms at LONG_PRESS_MS, the player has to
+ * release and commit the turn pass before the hold resets to idle (issue
+ * #229) — long enough to lift a finger deliberately, short enough that
+ * resting a finger on your own zone while deciding what to do next won't
+ * land inside it by accident.
+ */
+export const TURN_HOLD_CONFIRM_WINDOW_MS = 300;
 
 export interface TapGestureHandlers {
   /**

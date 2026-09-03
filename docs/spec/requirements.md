@@ -139,3 +139,12 @@ R21. The pre-game setup screen and the post-game stats screen shall render
      (no external image assets), while remaining visually distinct from
      each other and not degrading legibility or layout of either screen's
      DOM content.
+
+R22. The active player's pass-turn long-press gesture shall arm once the
+     pointer has remained within tolerance for `LONG_PRESS_MS`, but shall
+     only commit the turn pass if the pointer is released within a short,
+     bounded confirmation window after arming. If the pointer remains
+     pressed beyond that window without lifting, the hold shall reset to
+     idle without passing the turn, requiring the player to release and
+     re-press to try again. Existing cancel-by-lift-before-arming and
+     cancel-by-move-beyond-tolerance behavior shall be unchanged.

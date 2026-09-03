@@ -27,7 +27,7 @@ import {
   UNDO_RADIUS_RATIO,
   UndoControl,
 } from './ui/controls';
-import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS } from './ui/damagePanel';
+import { LONG_PRESS_MOVE_TOLERANCE_PX, LONG_PRESS_MS, TURN_HOLD_CONFIRM_WINDOW_MS } from './ui/damagePanel';
 import { NoopSoundPlayer, type SoundPlayer } from './audio/soundPlayer';
 import {
   createScreenShakeState,
@@ -339,11 +339,21 @@ interface DragOrigin {
   y: number;
 }
 
-/** An in-progress turn-hold ring (issue #109), tracked from beginTurnHold until it's cancelled or the turn commits. */
+/**
+ * An in-progress turn-hold ring (issue #109), tracked from beginTurnHold
+ * until it's cancelled or the turn commits. `armed` flips true once
+ * `elapsedS` reaches LONG_PRESS_MS (issue #229): from then on `armedElapsedS`
+ * tracks time since arming instead, and the hold auto-cancels — without
+ * passing the turn — if it isn't released within TURN_HOLD_CONFIRM_WINDOW_MS,
+ * so resting a finger on the zone past that window can't silently pass the
+ * turn the way a single 500ms threshold used to.
+ */
 interface TurnHoldState {
   originX: number;
   originY: number;
   elapsedS: number;
+  armed: boolean;
+  armedElapsedS: number;
 }
 
 /** Live preview of a zone-to-zone drag (issue #55), previewing what resolveZoneDrag would resolve if released now. */
@@ -557,8 +567,16 @@ export class Game {
     return this.passTurnFlashSeatIndex;
   }
 
-  /** The in-progress turn-hold ring's touch point and fill progress (0-1), or null when no hold is in progress (issue #109). Exposed for tests independent of canvas rendering. */
-  get turnHoldRing(): { x: number; y: number; progress: number } | null {
+  /**
+   * The in-progress turn-hold ring's touch point, fill progress (0-1), and
+   * armed state, or null when no hold is in progress (issue #109). `armed`
+   * is true once the hold has reached LONG_PRESS_MS and is waiting on a
+   * release within TURN_HOLD_CONFIRM_WINDOW_MS to actually commit (issue
+   * #229) — the renderer uses it to switch the ring to a distinct
+   * armed/confirm treatment. Exposed for tests independent of canvas
+   * rendering.
+   */
+  get turnHoldRing(): { x: number; y: number; progress: number; armed: boolean } | null {
     if (!this.turnHoldState) {
       return null;
     }
@@ -566,6 +584,7 @@ export class Game {
       x: this.turnHoldState.originX,
       y: this.turnHoldState.originY,
       progress: clamp(this.turnHoldState.elapsedS / (LONG_PRESS_MS / 1000), 0, 1),
+      armed: this.turnHoldState.armed,
     };
   }
 
@@ -625,7 +644,19 @@ export class Game {
     }
 
     if (this.turnHoldState) {
-      this.turnHoldState.elapsedS += dt;
+      if (!this.turnHoldState.armed) {
+        this.turnHoldState.elapsedS += dt;
+      } else {
+        this.turnHoldState.armedElapsedS += dt;
+        if (this.turnHoldState.armedElapsedS > TURN_HOLD_CONFIRM_WINDOW_MS / 1000) {
+          // Held past the confirmation window without releasing (issue
+          // #229): reset to idle rather than commit, so a finger merely
+          // resting on the zone can't silently pass the turn. The player
+          // must lift and re-press to try again — endTurnHold() below only
+          // commits while this.turnHoldState is still non-null and armed.
+          this.turnHoldState = null;
+        }
+      }
     }
   }
 
@@ -743,7 +774,25 @@ export class Game {
     const playerId = this.onLongPress(x, y);
     const activeSeat = this.turnState.activeIndex;
     this.turnHoldState =
-      playerId !== null && playerId === this.playersList[activeSeat].id ? { originX: x, originY: y, elapsedS: 0 } : null;
+      playerId !== null && playerId === this.playersList[activeSeat].id
+        ? { originX: x, originY: y, elapsedS: 0, armed: false, armedElapsedS: 0 }
+        : null;
+  }
+
+  /**
+   * Arms the in-progress turn-hold (issue #229), e.g. from main.ts's
+   * onLongPress once the gesture engine's own LONG_PRESS_MS timer fires.
+   * No-op if the hold was already cancelled (wrong zone, moved past
+   * tolerance, or drifted onto a shared control) — there is nothing to arm.
+   * Arming does not itself pass the turn; endTurnHold() below only commits
+   * if the pointer is released within TURN_HOLD_CONFIRM_WINDOW_MS of this
+   * call, and update() resets the hold to idle if that window passes first.
+   */
+  armTurnHold(): void {
+    if (this.turnHoldState) {
+      this.turnHoldState.armed = true;
+      this.turnHoldState.armedElapsedS = 0;
+    }
   }
 
   /**
@@ -767,12 +816,20 @@ export class Game {
   }
 
   /**
-   * Cancels the turn-hold ring, e.g. from main.ts's onPressEnd. No-op if the
-   * hold already completed — passTurnFromZoneLongPress clears it as soon as
-   * the turn commits, before the matching pointerup fires (issue #109).
+   * Ends the turn-hold ring, e.g. from main.ts's onPressEnd. Commits the
+   * turn pass only if the hold was armed (had reached LONG_PRESS_MS via
+   * armTurnHold) and is still in progress — i.e. released within
+   * TURN_HOLD_CONFIRM_WINDOW_MS of arming, since update() already resets an
+   * armed hold held past that window back to null before this ever runs
+   * (issue #229). A hold that never armed (released before LONG_PRESS_MS)
+   * simply cancels, unchanged from before.
    */
   endTurnHold(): void {
+    const state = this.turnHoldState;
     this.turnHoldState = null;
+    if (state?.armed) {
+      this.passTurnFromZoneLongPress(state.originX, state.originY);
+    }
   }
 
   /**
@@ -1201,8 +1258,11 @@ export class Game {
    * Draws the turn-hold progress ring (issue #109): a circular ring centered
    * on the touch point that fills clockwise as the hold approaches
    * LONG_PRESS_MS. Drawn only while turnHoldRing is non-null — beginTurnHold/
-   * updateTurnHold/endTurnHold/passTurnFromZoneLongPress all keep that in
-   * sync with the hold's lifecycle, so there's nothing further to gate here.
+   * updateTurnHold/endTurnHold/armTurnHold all keep that in sync with the
+   * hold's lifecycle, so there's nothing further to gate here. Once armed
+   * (issue #229), the full ring switches from white to the foil accent (R7)
+   * with a soft glow, so a player can tell releasing now will commit the
+   * pass rather than merely that the hold is still filling.
    */
   private drawTurnHoldRing(ctx: CanvasRenderingContext2D): void {
     const ring = this.turnHoldRing;
@@ -1221,7 +1281,13 @@ export class Game {
     ctx.arc(ring.x, ring.y, radius, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.strokeStyle = '#ffffff';
+    if (ring.armed) {
+      ctx.strokeStyle = `rgb(${ACTIVE_ZONE_FOIL_EMBER_RGB})`;
+      ctx.shadowColor = `rgb(${ACTIVE_ZONE_FOIL_BRASS_RGB})`;
+      ctx.shadowBlur = shortSide * 0.02;
+    } else {
+      ctx.strokeStyle = '#ffffff';
+    }
     ctx.beginPath();
     ctx.arc(ring.x, ring.y, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ring.progress);
     ctx.stroke();

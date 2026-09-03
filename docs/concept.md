@@ -18,7 +18,7 @@ Replace pen-and-paper trackers and generic counter apps with a single shared por
 ## Controls (touch-only, one-thumb per player)
 - Drag from your own zone into another player's zone (~10px movement past the zone boundary): opens a damage-type menu for that attacker/target pair, with +/- steppers for plain damage, commander damage, lifelink damage (damages the target and heals the attacker as one action), healing, and poison — the only way life totals change; a plain tap on your own zone does nothing
 - Drag from your own zone back into itself (same ~10px movement threshold): opens a self-target menu (name shown once with a "(self)" label) with +/- steppers for plain damage, healing, and poison against your own total — commander damage and lifelink are omitted since they don't apply to yourself
-- Long-press (~500ms) anywhere inside the active player's own zone = pass turn, with a brief flash animation as it commits; long-pressing a non-active zone does nothing
+- Long-press (~500ms) anywhere inside the active player's own zone arms a pass-turn hold, shown as a filling ring; releasing within a brief confirmation window commits the pass with a flash animation, but continuing to hold past that window resets the ring to idle without passing the turn (release and press again to retry) — so resting a finger on your own zone while deciding what to do next can't silently end your turn; long-pressing a non-active zone does nothing
 - Center shared control: tap = undo last action (dimmed/disabled when nothing to undo)
 - Setup screen: tap +/- steppers for player count and starting life, tap color swatches to assign player accent colors, tap a swatch to pick the board background theme, tap a name field to rename via the soft keyboard
 
