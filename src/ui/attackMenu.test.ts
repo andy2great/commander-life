@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDamageTypeDefs, createAttackMenuSession } from './attackMenu';
+import { attackMenuMemoryKey, AttackMenuTypeMemory, buildDamageTypeDefs, createAttackMenuSession } from './attackMenu';
 import { createCommanderDamageState, type Player, type UndoAction } from '../game/commanderDamage';
 import { createPoisonState } from '../game/poison';
 import { createEnergyState } from '../game/energy';
@@ -716,5 +716,159 @@ describe('createAttackMenuSession', () => {
     expect(target.life).toBe(39);
     undoStack.actions[0].undo();
     expect(target.life).toBe(40);
+  });
+});
+
+describe('attackMenuMemoryKey', () => {
+  it('keys cross-zone pairs by both attacker and target id', () => {
+    expect(attackMenuMemoryKey('a', 'b', false)).toBe(attackMenuMemoryKey('a', 'b', false));
+    expect(attackMenuMemoryKey('a', 'b', false)).not.toBe(attackMenuMemoryKey('a', 'c', false));
+    expect(attackMenuMemoryKey('a', 'b', false)).not.toBe(attackMenuMemoryKey('b', 'a', false));
+  });
+
+  it('keys a self-target pair independently of any cross-zone pair sharing that id', () => {
+    expect(attackMenuMemoryKey('a', 'a', true)).not.toBe(attackMenuMemoryKey('a', 'a', false));
+  });
+});
+
+describe('AttackMenuTypeMemory (issue #233, R26)', () => {
+  it('defaults to the first type in order for a fresh pair with no prior selection', () => {
+    const [attacker, target] = makePlayers();
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState([attacker, target]),
+      createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+    );
+    const memory = new AttackMenuTypeMemory();
+
+    const initial = memory.resolveInitial(attackMenuMemoryKey('a', 'b', false), types);
+
+    expect(initial.key).toBe('damage');
+  });
+
+  it('pre-selects commander damage after it was selected once for that attacker->target pair', () => {
+    const [attacker, target] = makePlayers();
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState([attacker, target]),
+      createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+    );
+    const memory = new AttackMenuTypeMemory();
+    const key = attackMenuMemoryKey('a', 'b', false);
+    const commander = types.find((type) => type.key === 'commander')!;
+
+    memory.remember(key, commander);
+    const reopened = memory.resolveInitial(key, types);
+
+    expect(reopened.key).toBe('commander');
+  });
+
+  it('does not carry a pair\'s sticky selection over to a different pair', () => {
+    const [attacker, target] = makePlayers();
+    const otherTarget: Player = { id: 'c', name: 'Cato', life: 40, color: '#f76b15' };
+    const types = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState([attacker, target, otherTarget]),
+      createPoisonState(['a', 'b', 'c']),
+      createEnergyState(['a', 'b', 'c']),
+      createExperienceState(['a', 'b', 'c']),
+      [attacker, target, otherTarget],
+      makeUndoStack(),
+    );
+    const memory = new AttackMenuTypeMemory();
+    const commander = types.find((type) => type.key === 'commander')!;
+
+    memory.remember(attackMenuMemoryKey('a', 'b', false), commander);
+    const otherPair = memory.resolveInitial(attackMenuMemoryKey('a', 'c', false), types);
+
+    expect(otherPair.key).toBe('damage');
+  });
+
+  it('tracks a self-target pair\'s sticky selection independently of a cross-zone pair for the same player', () => {
+    const [attacker, target] = makePlayers();
+    const selfTypes = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState([attacker]),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      createExperienceState(['a']),
+      [attacker],
+      makeUndoStack(),
+    );
+    const pairTypes = buildDamageTypeDefs(
+      attacker,
+      target,
+      false,
+      createCommanderDamageState([attacker, target]),
+      createPoisonState(['a', 'b']),
+      createEnergyState(['a', 'b']),
+      createExperienceState(['a', 'b']),
+      [attacker, target],
+      makeUndoStack(),
+    );
+    const memory = new AttackMenuTypeMemory();
+    const heal = selfTypes.find((type) => type.key === 'heal')!;
+
+    memory.remember(attackMenuMemoryKey('a', 'a', true), heal);
+
+    expect(memory.resolveInitial(attackMenuMemoryKey('a', 'a', true), selfTypes).key).toBe('heal');
+    expect(memory.resolveInitial(attackMenuMemoryKey('a', 'b', false), pairTypes).key).toBe('damage');
+  });
+
+  it('falls back to the default type if the remembered type is no longer present (e.g. a removed custom counter)', () => {
+    const [attacker] = makePlayers();
+    const customCountersState = createCustomCountersState(['a']);
+    const undoStack = makeUndoStack();
+    addCustomCounter(customCountersState, 'a', 'Poison counters', undoStack);
+    const typesWithCustom = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState([attacker]),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      createExperienceState(['a']),
+      [attacker],
+      makeUndoStack(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      customCountersState,
+    );
+    const memory = new AttackMenuTypeMemory();
+    const key = attackMenuMemoryKey('a', 'a', true);
+    const custom = typesWithCustom.find((type) => type.key.startsWith('custom:'))!;
+    memory.remember(key, custom);
+
+    const typesWithoutCustom = buildDamageTypeDefs(
+      attacker,
+      attacker,
+      true,
+      createCommanderDamageState([attacker]),
+      createPoisonState(['a']),
+      createEnergyState(['a']),
+      createExperienceState(['a']),
+      [attacker],
+      makeUndoStack(),
+    );
+
+    expect(memory.resolveInitial(key, typesWithoutCustom).key).toBe('damage');
   });
 });
