@@ -16,8 +16,10 @@
 // open; computeSetupPanelLayout (src/game/setupPanelLayout.ts) reflows the
 // zone grid into the space beside the panel instead of it covering them,
 // the way the old bottom sheet (attackMenu.ts/boardShortcutMenu.ts's
-// pattern) did. Only the canvas element itself is off-limits outside
-// main.ts — this overlay is plain DOM, like the commander-damage panel.
+// pattern) did. The shared `#game` board canvas main.ts owns is off-limits
+// here — this overlay is plain DOM, like the commander-damage panel — but it
+// mounts its own decorative canvas behind its content for the dynamic cosmic
+// backdrop (issue #223/R21); see cosmicBackdrop.ts.
 
 import {
   computeZoneRects,
@@ -41,19 +43,15 @@ import { rollForStartingSeat } from '../game/diceRoller';
 import { computeSetupHubMaxSize } from '../game/setupHubLayout';
 import { computeSetupPanelLayout } from '../game/setupPanelLayout';
 import { loadLastRoster, saveLastRoster, type PersistedRoster } from '../game/rosterStorage';
-import { BOARD_THEMES, DEFAULT_BOARD_THEME_ID, getBoardTheme } from '../game/boardTheme';
+import { BOARD_THEMES, getBoardTheme } from '../game/boardTheme';
 import { loadLastBoardTheme, saveLastBoardTheme } from '../game/boardThemeStorage';
 import { DISPLAY_FONT_STACK, injectDisplayFontFace } from './displayFont';
 import { HistoryScreen } from './historyScreen';
+import { mountCosmicBackdrop, type CosmicBackdrop } from './cosmicBackdrop';
 
 const STARTING_LIFE_STEP = 5;
 const MIN_STARTING_LIFE = 5;
 const MAX_STARTING_LIFE = 999;
-// Static default for the stylesheet injected once by injectStylesOnce (issue
-// #168) — the actual selected theme is applied per-render as an inline
-// style on the overlay/zones below, since it can change after that one-time
-// injection.
-const BOARD_BACKGROUND_COLOR = getBoardTheme(DEFAULT_BOARD_THEME_ID).backgroundColor;
 
 // Roll-animation timing (issue #164): a short, decelerating flicker through
 // random seats before landing on the real roll, long enough to read as an
@@ -92,7 +90,8 @@ function injectStylesOnce(): void {
   injectDisplayFontFace();
   const style = document.createElement('style');
   style.textContent = `
-    .setup-board { position: fixed; top: 0; left: 0; height: 100%; background: ${BOARD_BACKGROUND_COLOR}; z-index: 20; overflow: hidden; font-family: system-ui, sans-serif; }
+    .setup-board { position: fixed; top: 0; left: 0; height: 100%; z-index: 20; overflow: hidden; font-family: system-ui, sans-serif; }
+    .setup-cosmic-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 19; pointer-events: none; }
     .setup-zone { position: absolute; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, 0.12); }
     .setup-zone-content { position: absolute; top: 50%; left: 50%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px; }
     .setup-zone-swatches { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
@@ -175,6 +174,8 @@ export class SetupScreen {
   private panelElement: HTMLElement | null = null;
   /** Whether the docked settings panel is open — drives both its DOM and the zone-grid reflow via computeSetupPanelLayout. */
   private panelOpen = false;
+  /** Dynamic cosmic backdrop (issue #223/R21), mounted once in show() and re-tinted per render() rather than rebuilt, so its animation survives frequent re-renders (roll ticks, field edits). */
+  private backdrop: CosmicBackdrop | null = null;
 
   constructor(options: SetupScreenOptions) {
     this.root = options.root;
@@ -220,6 +221,8 @@ export class SetupScreen {
     injectStylesOnce();
     this.close();
 
+    this.backdrop = mountCosmicBackdrop(this.root, 'setup-cosmic-backdrop', getBoardTheme(this.boardThemeId).backgroundColor);
+
     const overlay = document.createElement('div');
     overlay.className = 'setup-board';
     this.root.appendChild(overlay);
@@ -258,6 +261,8 @@ export class SetupScreen {
       this.resizeHandler = null;
     }
     this.cancelRoll();
+    this.backdrop?.destroy();
+    this.backdrop = null;
   }
 
   /** Stops an in-progress roll animation, if any, without changing any already-landed startingPlayer pick. */
@@ -314,7 +319,11 @@ export class SetupScreen {
     const { panelWidth, zoneAreaWidth } = computeSetupPanelLayout(viewportWidth, this.panelOpen);
     overlay.style.width = `${zoneAreaWidth}px`;
     overlay.replaceChildren();
-    overlay.style.background = getBoardTheme(this.boardThemeId).backgroundColor;
+    // The dynamic cosmic backdrop (issue #223/R21) shows through .setup-board
+    // itself (transparent, see injectStylesOnce) and the gaps between zones,
+    // same as the live board's scene showing through its zone gutters — only
+    // its tint needs to follow the selected theme, not the whole canvas.
+    this.backdrop?.setBaseColor(getBoardTheme(this.boardThemeId).backgroundColor);
 
     const rects = computeZoneRects(this.playerCount, zoneAreaWidth, viewportHeight);
     this.players.forEach((player, index) => {
