@@ -68,10 +68,11 @@ R12. When a life, commander-damage, poison, or other tracked counter changes,
      motion and oriented upright for that player's seat, in addition to the
      zone's existing color-wash feedback.
 
-R13. The board's background, beneath the player zones, shall render a
-     subtle code-drawn felt-like texture layered over its gradient fill, for
-     every board theme, using canvas drawing code only (no external image or
-     texture assets), without reducing life-total or player-name legibility.
+R13. (Superseded by R20.) The board's background, beneath the player zones,
+     shall render a subtle code-drawn felt-like texture layered over its
+     gradient fill, for every board theme, using canvas drawing code only
+     (no external image or texture assets), without reducing life-total or
+     player-name legibility.
 
 R14. While the attack menu, board-wide shortcut menu, or any other full-board
      overlay is open, the canvas board behind it shall render with a
@@ -118,3 +119,14 @@ R19. Any press that starts within an interactive control's hit-tested
      zone long-press-to-pass-turn gesture, nor a zone-to-zone damage drag,
      regardless of how long the press is held or how far it moves before
      release.
+
+R20. The board's background, beneath the player zones, shall render a
+     dynamic, animated, code-drawn deep-space scene — a starfield with
+     subtly twinkling and/or drifting stars plus soft nebula-colored
+     gradient clouds, evoking the Outer Wilds visual style — in place of
+     the static felt-fiber texture previously required by R13, using
+     canvas drawing code only (no external image or texture assets). The
+     scene shall render for every board theme, tinting its palette to stay
+     harmonious with that theme's base color, without reducing life-total
+     or player-name legibility or introducing a noticeable frame-rate drop
+     on a mid-range phone.
