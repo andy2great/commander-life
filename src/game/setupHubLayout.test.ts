@@ -75,6 +75,32 @@ describe('computeSetupHubMaxSize', () => {
       }
     }
   });
+
+  // Issue #219: stakeholder playtesting found the 240px/78vw preferred width
+  // too cramped for the hub's own controls (steppers, Start Game button), so
+  // R18 raises the unconstrained ceiling to 320px/90vw. These cases confirm
+  // the raised ceiling actually takes effect wherever a zone doesn't force
+  // the hub smaller, while still honoring the R5 non-overlap guarantee.
+  it('reaches the new 320px preferred width when no zone constrains it', () => {
+    for (let playerCount = MIN_PLAYER_COUNT; playerCount <= MAX_PLAYER_COUNT; playerCount += 1) {
+      if (playerCount === 5) continue; // 5p's full-height left seat always constrains maxWidth.
+      const { maxWidth } = computeSetupHubMaxSize(playerCount, 2000, 2000);
+      expect(maxWidth).toBe(320);
+    }
+  });
+
+  it('caps preferred width at 90% of viewport width on narrow viewports, below the 320px ceiling', () => {
+    const { maxWidth } = computeSetupHubMaxSize(2, 300, 2000);
+    expect(maxWidth).toBeCloseTo(300 * 0.9, 5);
+  });
+
+  it('keeps the hub clear of every zone at 2-4 players on common phone widths at the new preferred width', () => {
+    for (const width of [360, 375, 390, 414, 430]) {
+      for (let playerCount = 2; playerCount <= 4; playerCount += 1) {
+        expectHubClearsEveryZone(playerCount, width, 844);
+      }
+    }
+  });
 });
 
 describe('zoneContentRect', () => {

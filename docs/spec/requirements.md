@@ -101,3 +101,11 @@ R17. On the pre-game setup screen, secondary table-wide settings
      and per-seat player configuration can be adjusted at the same time.
      While the panel is open, the seat-zone grid shall reflow to the
      remaining space rather than being covered.
+
+R18. The pre-game setup hub's unconstrained preferred width shall be no
+     narrower than 320px (or 90% of viewport width on narrower phones), so
+     its player-count and starting-life steppers and its Start Game button
+     are not visually cramped. The R5 non-overlap guarantee still applies:
+     `computeSetupHubMaxSize` (or its equivalent) shall continue to shrink
+     the hub below this preferred width, on a per-zone basis, whenever a
+     seat zone's control-cluster footprint would otherwise be covered.

@@ -68,8 +68,8 @@ export function rectsOverlap(a: Rect, b: Rect): boolean {
 // Matches the static `.setup-hub` width rule in setupScreen.ts's injected
 // stylesheet — the natural/preferred size the hub uses when no zone forces
 // it smaller.
-const HUB_PREFERRED_WIDTH = 240;
-const HUB_PREFERRED_WIDTH_VIEWPORT_RATIO = 0.78;
+const HUB_PREFERRED_WIDTH = 320;
+const HUB_PREFERRED_WIDTH_VIEWPORT_RATIO = 0.9;
 
 export interface SetupHubMaxSize {
   maxWidth: number;
