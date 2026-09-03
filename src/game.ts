@@ -284,6 +284,16 @@ const PULSE_MAX_WIDTH = 7;
 // full, ungapped rect so touch targets stay exactly as reachable as before.
 const ZONE_GRADIENT_GUTTER_PX = 4;
 
+// Hit-test-only margin (issue #231/R24) applied at seat-zone boundaries during
+// a zone-to-zone/self-target drag: released within this many px of the
+// boundary, past the zone the drag started in, still resolves to that
+// starting zone rather than flipping to the neighbor on a momentary few-px
+// crossing. Deliberately unrelated to ZONE_GRADIENT_GUTTER_PX above, which is
+// purely cosmetic and never affected hit-testing. Plain taps/long-presses
+// (onLongPress with no prior seat) are unaffected — only drag resolution
+// passes a prior seat.
+const ZONE_HIT_HYSTERESIS_PX = 6;
+
 // Floating "+N"/"-N" delta numeral drawn over the zone color wash on every
 // life/counter change (issue #202): rises this fraction of the zone's short
 // side over the wash's full ZONE_EFFECT_DURATION_S while fading out.
@@ -859,6 +869,20 @@ export class Game {
   }
 
   /**
+   * Same as onLongPress, but resolves with ZONE_HIT_HYSTERESIS_PX hysteresis
+   * relative to `priorSeat` — the zone a zone-to-zone drag started in (issue
+   * #231/R24). Used by resolveZoneDrag's `to` end and by the live dragArrow
+   * preview so what's previewed during the drag matches what a release there
+   * would resolve to.
+   */
+  private resolveDragEndpoint(x: number, y: number, priorSeat: number): string | null {
+    if (this.isOverSharedControl(x, y)) {
+      return null;
+    }
+    return this.playerIdAt(x, y, priorSeat);
+  }
+
+  /**
    * Resolves a zone-to-zone drag gesture: `from`/`to` are the pointer-down
    * and pointer-up positions, in the same coordinate space as resize().
    * Returns the attacking and target player ids when the press started in
@@ -868,8 +892,12 @@ export class Game {
    * — this is what lets a player log self-damage/healing/poison. Returns
    * null for a same-zone press that never moved past that threshold (a
    * plain tap, which does nothing), when either end is outside every zone,
-   * or when either end is over a shared control. Never itself changes any
-   * life or damage total — the caller applies the confirmed damage via
+   * or when either end is over a shared control. The `to` end resolves with
+   * ZONE_HIT_HYSTERESIS_PX hysteresis relative to the `from` zone (issue
+   * #231/R24), so a release just past the boundary still resolves to the
+   * zone the drag started in, while a release well past it still resolves
+   * to the neighboring zone. Never itself changes any life or damage total
+   * — the caller applies the confirmed damage via
    * applyCommanderDamageDelta/applyPoisonDelta once the dragging player
    * picks a damage type.
    */
@@ -883,8 +911,12 @@ export class Game {
       return null;
     }
     const fromPlayerId = this.onLongPress(fromX, fromY);
-    const toPlayerId = this.onLongPress(toX, toY);
-    if (!fromPlayerId || !toPlayerId) {
+    if (!fromPlayerId) {
+      return null;
+    }
+    const fromSeat = this.playersList.findIndex((player) => player.id === fromPlayerId);
+    const toPlayerId = this.resolveDragEndpoint(toX, toY, fromSeat);
+    if (!toPlayerId) {
       return null;
     }
     if (fromPlayerId === toPlayerId && Math.hypot(toX - fromX, toY - fromY) <= LONG_PRESS_MOVE_TOLERANCE_PX) {
@@ -958,20 +990,41 @@ export class Game {
     }
     const color = this.playersList[fromSeat].color ?? PLAYER_COLORS[fromSeat % PLAYER_COLORS.length];
 
-    const pointedPlayerId = this.onLongPress(pointerX, pointerY);
+    const pointedPlayerId = this.resolveDragEndpoint(pointerX, pointerY, fromSeat);
     const targetPlayerId = pointedPlayerId && pointedPlayerId !== fromPlayerId ? pointedPlayerId : null;
 
     return { fromPlayerId, originX, originY, headX: pointerX, headY: pointerY, targetPlayerId, color };
   }
 
-  private seatAt(x: number, y: number): number {
-    return this.zoneRects.findIndex(
+  /**
+   * `priorSeat`, when given, is the seat a zone-to-zone drag most recently
+   * and clearly occupied (its starting zone). If (x, y) falls strictly
+   * outside every zone's rect but within ZONE_HIT_HYSTERESIS_PX of
+   * `priorSeat`'s rect, this still resolves to `priorSeat` instead of
+   * flipping to whichever neighboring zone the exact pixel happens to touch
+   * (issue #231/R24). Plain single-point lookups (no `priorSeat`) get the
+   * strict containment test, unchanged.
+   */
+  private seatAt(x: number, y: number, priorSeat = -1): number {
+    const strictSeat = this.zoneRects.findIndex(
       (rect) => x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height,
     );
+    if (priorSeat !== -1 && priorSeat !== strictSeat) {
+      const priorRect = this.zoneRects[priorSeat];
+      const withinHysteresis =
+        x >= priorRect.x - ZONE_HIT_HYSTERESIS_PX &&
+        x < priorRect.x + priorRect.width + ZONE_HIT_HYSTERESIS_PX &&
+        y >= priorRect.y - ZONE_HIT_HYSTERESIS_PX &&
+        y < priorRect.y + priorRect.height + ZONE_HIT_HYSTERESIS_PX;
+      if (withinHysteresis) {
+        return priorSeat;
+      }
+    }
+    return strictSeat;
   }
 
-  private playerIdAt(x: number, y: number): string | null {
-    const seat = this.seatAt(x, y);
+  private playerIdAt(x: number, y: number, priorSeat = -1): string | null {
+    const seat = this.seatAt(x, y, priorSeat);
     if (seat === -1) {
       return null;
     }
