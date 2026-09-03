@@ -754,7 +754,13 @@ export class Game {
     if (!this.turnHoldState) {
       return;
     }
-    if (Math.hypot(x - this.turnHoldState.originX, y - this.turnHoldState.originY) > LONG_PRESS_MOVE_TOLERANCE_PX) {
+    const movedPastTolerance =
+      Math.hypot(x - this.turnHoldState.originX, y - this.turnHoldState.originY) > LONG_PRESS_MOVE_TOLERANCE_PX;
+    // Also cancels the moment the pointer drifts onto a shared control (issue
+    // #220): staying within the move tolerance keeps the hold otherwise
+    // armed, but a control should never show turn-pass progress accumulating
+    // underneath it.
+    if (movedPastTolerance || this.isOverSharedControl(x, y)) {
       this.turnHoldState = null;
     }
   }
@@ -769,16 +775,26 @@ export class Game {
   }
 
   /**
+   * True when (x, y) is over any of the shared disc controls (Undo,
+   * Shortcut, Pause) — the single place that set is enumerated, so
+   * onLongPress and updateTurnHold can't drift out of sync on which points
+   * count as "over a control" (issue #220).
+   */
+  private isOverSharedControl(x: number, y: number): boolean {
+    return (
+      this.undoControl.containsPoint(x, y) ||
+      this.shortcutControl.containsPoint(x, y) ||
+      this.pauseControl.containsPoint(x, y)
+    );
+  }
+
+  /**
    * Returns the id of the player zone under (x, y), or null over a shared
    * control or outside any zone. Used both to target a long-press and, by
    * resolveZoneDrag() below, to resolve either end of a zone-to-zone drag.
    */
   onLongPress(x: number, y: number): string | null {
-    if (
-      this.undoControl.containsPoint(x, y) ||
-      this.shortcutControl.containsPoint(x, y) ||
-      this.pauseControl.containsPoint(x, y)
-    ) {
+    if (this.isOverSharedControl(x, y)) {
       return null;
     }
     return this.playerIdAt(x, y);

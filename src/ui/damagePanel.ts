@@ -51,6 +51,16 @@ export function attachTapAndLongPress(
   // resets it for every new press, so a stale true from a prior press can
   // never leak into this one.
   let longPressFired = false;
+  // The most recently seen pointer event for the in-progress press, kept
+  // fresh by onPointerMove. The long-press timeout below fires asynchronously,
+  // well after the original pointerdown — resolving it against that stale
+  // event let a press that starts just outside a control (arming the timer)
+  // but drifts onto it within LONG_PRESS_MOVE_TOLERANCE_PX (not enough
+  // movement to cancel the timer) still commit against the original
+  // off-control point, even though the pointer now visually rests on the
+  // control (issue #220). Resolving against the latest position instead
+  // makes the commit see exactly where the pointer is now.
+  let latestEvent: PointerEvent | null = null;
 
   const cancelTimer = (): void => {
     if (timer !== undefined) {
@@ -62,6 +72,7 @@ export function attachTapAndLongPress(
   const onPointerDown = (event: PointerEvent): void => {
     startX = event.clientX;
     startY = event.clientY;
+    latestEvent = event;
     longPressFired = false;
     cancelTimer();
     const shouldArmLongPress = handlers.onPressStart?.(event) !== false;
@@ -69,12 +80,13 @@ export function attachTapAndLongPress(
       timer = setTimeout(() => {
         timer = undefined;
         longPressFired = true;
-        handlers.onLongPress(event);
+        handlers.onLongPress(latestEvent ?? event);
       }, durationMs);
     }
   };
 
   const onPointerMove = (event: PointerEvent): void => {
+    latestEvent = event;
     const dx = event.clientX - startX;
     const dy = event.clientY - startY;
     if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE_PX) {

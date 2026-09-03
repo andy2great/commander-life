@@ -338,6 +338,28 @@ describe('Game', () => {
       expect(game.turnHoldRing).toBeNull();
     });
 
+    it('cancels the ring the moment the pointer drifts onto a shared control, even within the move tolerance (issue #220)', () => {
+      const game = new Game();
+      game.resize(400, 800);
+      // Just outside the undo control's hit-circle (radius ~31.6px around
+      // (200, 400) on this canvas), but still inside seat 0's zone.
+      const startX = 165;
+      const startY = 399;
+      expect(game.isOverUndoControl(startX, startY)).toBe(false);
+
+      game.beginTurnHold(startX, startY);
+      expect(game.turnHoldRing).not.toBeNull();
+
+      // Drifts 9px onto the undo control — within LONG_PRESS_MOVE_TOLERANCE_PX,
+      // so distance-from-origin alone wouldn't cancel the hold.
+      const driftedX = startX + 9;
+      expect(Math.hypot(driftedX - startX, 0)).toBeLessThanOrEqual(LONG_PRESS_MOVE_TOLERANCE_PX);
+      expect(game.isOverUndoControl(driftedX, startY)).toBe(true);
+
+      game.updateTurnHold(driftedX, startY);
+      expect(game.turnHoldRing).toBeNull();
+    });
+
     it('clears the ring the moment the hold commits and the turn passes, leaving the commit flash to play', () => {
       const game = new Game();
       game.resize(400, 800);
